@@ -341,6 +341,66 @@ je reimplementirana neposredno in testirana v izolaciji.
 
 ---
 
+## CLI Tool Tests — `adif-qrz-filter.test.js`
+
+A separate test suite covers the Node.js CLI tool. It also uses `node:test` with no external dependencies.
+
+**Tests:** 36 across 7 test groups
+
+### Running
+
+```bash
+node --test adif-qrz-filter.test.js
+node --test --test-reporter=spec adif-qrz-filter.test.js
+```
+
+### Test groups
+
+| # | Group | Tests | What is checked |
+|---|---|---|---|
+| 1 | `parseAdif` | 6 | ADIF parsing: header extraction, record splitting, `QSL_VIA` extraction, CRLF handling, missing `CALL` skipping |
+| 2 | `extractField` | 6 | Generic `<TAG:length>value` extraction for `CALL`, `QSL_VIA`, case-insensitivity, trimming, uppercasing |
+| 3 | `usesQslBuro` | 21 | Fuzzy logic: 5 positive cases (BURO/bureau/via), 13 negative cases (no/direct only/LOTW only/eQSL only), 3 edge cases (null/empty) |
+| 4 | `cache` | 3 | JSON cache save/load round-trip, 7-day TTL purge, missing file handling |
+
+### How the tests work
+
+The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `process`, and `console`. Pure functions (`parseAdif`, `extractField`, `usesQslBuro`, `loadCache`, `saveCache`) are extracted and tested directly.
+
+> **Note on `deepStrictEqual`:** As with the `edi2adif.html` vm tests, `assert.deepStrictEqual` on vm-created objects can fail even when properties are identical. The cache tests therefore use `assert.equal` on individual properties or `Object.keys().length` for empty-object checks.
+
+---
+
+## Testi CLI orodja — `adif-qrz-filter.test.js`
+
+Ločena testna zbirka pokriva Node.js CLI orodje. Tudi ta uporablja `node:test` brez zunanjih odvisnosti.
+
+**Testov:** 36 v 7 skupinah
+
+### Zaganjanje
+
+```bash
+node --test adif-qrz-filter.test.js
+node --test --test-reporter=spec adif-qrz-filter.test.js
+```
+
+### Skupine testov
+
+| # | Skupina | Testov | Kaj se preverja |
+|---|---|---|---|
+| 1 | `parseAdif` | 6 | Razčlenjevanje ADIF: ekstrakcija glave, razdelitev zapisov, izvleček `QSL_VIA`, obravnava CRLF, preskočitev manjkajočega `CALL` |
+| 2 | `extractField` | 6 | Generična ekstrakcija `<TAG:dolžina>vrednost` za `CALL`, `QSL_VIA`, neobčutljivost na velikost črk, obrezovanje, pretvorba v velike črke |
+| 3 | `usesQslBuro` | 21 | Fuzzy logika: 5 pozitivnih primerov (BURO/bureau/via), 13 negativnih primerov (no/direct only/LOTW only/eQSL only), 3 robni primeri (null/prazno) |
+| 4 | `cache` | 3 | Krog shranjevanja/nalaganja JSON predpomnilnika, čiščenje po 7 dneh, obravnava manjkajoče datoteke |
+
+### Kako testi delujejo
+
+CLI orodje se izvede znotraj konteksta `node:vm`, ki nadomesti `fs`, `https`, `process` in `console`. Čiste funkcije (`parseAdif`, `extractField`, `usesQslBuro`, `loadCache`, `saveCache`) se izvlečejo in testirajo neposredno.
+
+> **Opomba o `deepStrictEqual`:** Tako kot pri testih `edi2adif.html` v vm kontekstu lahko `assert.deepStrictEqual` na vm-ustvarjenih objektih ne uspe, čeprav so lastnosti identične. Testi predpomnilnika zato uporabljajo `assert.equal` na posameznih lastnostih ali `Object.keys().length` za preverjanje praznih objektov.
+
+---
+
 ## Kaj ni testirano
 
 | Področje | Razlog |

@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Current tools:**
 - `edi2adif.html` — Converts REG1TEST EDI v1 contest logs to ADIF and other formats
+- `adif-qrz-filter.js` — Node.js CLI tool that filters an ADIF log to keep only BURO-accepting stations by querying the QRZ.com XML API
 
 ## Development
 
@@ -65,6 +66,26 @@ Follow the same single-file pattern. Reuse the CSS custom properties (`:root` co
 - **Maidenhead locator case**: Received locator (`wwl`) is stored as first 4 chars uppercase + last 2 chars lowercase (e.g. `JN65ar`). My locator (`myLoc`) is kept fully uppercase. ADIF spec is case-insensitive but some tools break on all-uppercase 6-char grids.
 - **DARC QSL CSV** columns: `Callsign, QSL Via, Date Time, Band, Mode, RST_SENT, QSL received`.
 
+## Architecture of adif-qrz-filter.js
+
+Node.js CLI script, no external dependencies. Pure Node.js `https` client for QRZ.com XML API.
+
+| Layer | Responsibility |
+|---|---|
+| CLI parser (`parseArgs`) | `--username`, `--password`, `--key`, `--output`, `--delay`, `--cache`, `--include-unknown` |
+| ADIF parser (`parseAdif`, `extractField`) | Splits on `<EOH>` / `<EOR>`, extracts `CALL` and `QSL_VIA` by tag:length |
+| QRZ client (`qrzLogin`, `qrzLookup`) | XML over HTTPS, session-key auth, `qslmgr` text extraction |
+| Fuzzy logic (`usesQslBuro`) | 14 exclusion regexes + 3 inclusion regexes on lowercased `qslmgr` text |
+| Cache (`loadCache`, `saveCache`) | JSON file with 7-day TTL, keyed by callsign |
+| Main (`main`) | Deduplicate calls → query QRZ (with optional QSL managers) → filter → write ADIF |
+
+**Key data flow:**
+1. Parse ADIF → `{ header, records[] }` (each record has `call`, `qslVia`, `raw`)
+2. Build `uniqueCalls` + `managerCalls` from `QSL_VIA` fields
+3. Query QRZ for each (with cache + rate limit) → `buroMap: call → boolean`
+4. Filter: keep if `callBuro || mgrBuro`
+5. Write output ADIF with original header + kept raw records
+
 ---
 ---
 
@@ -74,6 +95,7 @@ Follow the same single-file pattern. Reuse the CSS custom properties (`:root` co
 
 **Trenutna orodja:**
 - `edi2adif.html` — Pretvori REG1TEST EDI v1 tekmovalne dnevnike v format ADIF in druge formate
+- `adif-qrz-filter.js` — Node.js CLI orodje, ki filtrira ADIF dnevnik in ohrani samo postaje, ki sprejemajo QSL preko biroja, s poizvedovanjem prek QRZ.com XML API
 
 ## Razvoj
 

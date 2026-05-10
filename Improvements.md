@@ -87,6 +87,39 @@
 
 ---
 
+## Release v1.2 — 2026-05-10
+
+### New tool: ADIF QRZ BURO Filter (`adif-qrz-filter.js`)
+
+Node.js CLI tool that filters an ADIF log to keep only stations that accept QSL cards via the QSL Bureau.
+
+**How it works:**
+1. Parse the input ADIF file (preserving original header and record format)
+2. Deduplicate callsigns — one QRZ.com API query per unique `CALL`, even if it appears in multiple QSOs
+3. If a QSO has a `QSL_VIA` field, also query the manager's callsign
+4. Apply fuzzy logic on the `qslmgr` text returned by QRZ to determine BURO acceptance
+5. Keep QSO if **either** the station itself OR its manager accepts BURO
+6. Write filtered ADIF with original header + kept records
+
+**Features:**
+- **QRZ.com XML API** integration with session-key auth (`--username`/`--password` or `--key`)
+- **Local JSON cache** (7-day TTL) keyed by callsign — avoids re-querying
+- **Rate limiting** — configurable delay (default 1200 ms) between API calls
+- **QSL manager support** — reads `QSL_VIA` from ADIF and checks the manager too
+- **Fuzzy logic** — 14 exclusion + 3 inclusion regexes on lowercased `qslmgr` text
+- **Terminal summary** — shows kept/discarded counts, cache hits, and manager-mediated QSOs
+
+**CLI usage:**
+```bash
+node adif-qrz-filter.js contest.adi --username=S59ABC --password=secret
+node adif-qrz-filter.js contest.adi --key=a1b2c3d4 --output=buro.adi --delay=800
+```
+
+### Tests
+- Added `adif-qrz-filter.test.js` with **36 tests** in 7 groups (`parseAdif`, `extractField`, `usesQslBuro`, `cache`).
+
+---
+
 ## Proposed New Features
 
 ### High Priority
@@ -234,6 +267,39 @@ Add a Service Worker and `manifest.json` so the tool can be installed and used f
 - Testna zbirka razširjena iz **109 → 120 testov** (9 skupin).
 - Dodana skupina `modeBadge` (8 testov), ki pokriva vseh 7 podprtih načinov plus rezervni način.
 - Dodani 3 testi `csvEsc` za ubežanje novih vrstic/zaključkov vrstic.
+
+---
+
+## Izdaja v1.2 — 10. 5. 2026
+
+### Novo orodje: ADIF QRZ BURO Filter (`adif-qrz-filter.js`)
+
+Node.js CLI orodje, ki filtrira ADIF dnevnik in ohrani samo postaje, ki sprejemajo QSL kartice preko QSL biroja.
+
+**Kako deluje:**
+1. Razčleni vhodno ADIF datoteko (ohrani izvirno glavo in format zapisov)
+2. Deduplicira klicne znake — en poizvedbeni klic QRZ.com API na unikaten `CALL`, tudi če se pojavi v več zvezah
+3. Če ima zapis polje `QSL_VIA`, poizvede tudi klicni znak managerja
+4. Uporabi fuzzy logiko na besedilu `qslmgr`, ki ga vrne QRZ, za določitev sprejetja BURO
+5. Ohrani zvezo, če **bodisi** sama postaja **bodisi** njen manager sprejema BURO
+6. Zapiše filtrirano ADIF z izvirno glavo + ohranjenimi zapisi
+
+**Lastnosti:**
+- **Integracija QRZ.com XML API** z avtentikacijo prek ključa seje (`--username`/`--password` ali `--key`)
+- **Lokalni JSON predpomnilnik** (7-dnevni TTL) s ključem po klicnem znaku — preprečuje ponovne poizvedbe
+- **Omejevanje hitrosti** — nastavljiv zamik (privzeto 1200 ms) med API klici
+- **Podpora QSL managerjem** — prebere `QSL_VIA` iz ADIF in preveri tudi managerja
+- **Fuzzy logika** — 14 izključitvenih + 3 vključitveni regex na malih črkah besedila `qslmgr`
+- **Povzetek v terminalu** — prikaže število ohranjenih/odstranjenih zvez, zadetkov predpomnilnika in QSO-jev preko managerja
+
+**Uporaba v terminalu:**
+```bash
+node adif-qrz-filter.js contest.adi --username=S59ABC --password=secret
+node adif-qrz-filter.js contest.adi --key=a1b2c3d4 --output=buro.adi --delay=800
+```
+
+### Testi
+- Dodana `adif-qrz-filter.test.js` z **36 testi** v 7 skupinah (`parseAdif`, `extractField`, `usesQslBuro`, `cache`).
 
 ---
 

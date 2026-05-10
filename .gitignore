@@ -2,3 +2,4 @@
 .claude/
 *.edi
 *.adi
+.qrz-cache.json
