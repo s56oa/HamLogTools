@@ -66,7 +66,7 @@ vm.runInContext(scriptSrc, ctx);
 
 // Function declarations are promoted to the vm context object.
 // let/const are lexical and not on ctx, but remain accessible inside closures.
-const { normBand, parseEDI, adifField, csvEsc, t, setLang } = ctx;
+const { normBand, parseEDI, adifField, csvEsc, t, setLang, modeBadge } = ctx;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Fixtures
@@ -311,10 +311,28 @@ describe('csvEsc', () => {
   it('null      → empty string',                    () => assert.equal(csvEsc(null),         ''));
   it('undefined → empty string',                    () => assert.equal(csvEsc(undefined),    ''));
   it('number coerced to string',                    () => assert.equal(csvEsc(144),          '144'));
+  it('string with newline is wrapped in quotes',     () => assert.equal(csvEsc('a\nb'),       '"a\nb"'));
+  it('string with carriage return is wrapped',       () => assert.equal(csvEsc('a\rb'),       '"a\rb"'));
+  it('newline + comma combined',                     () => assert.equal(csvEsc('a,\nb'),      '"a,\nb"'));
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  5. i18n — translation lookup
+//  5. modeBadge — mode → CSS class mapping (badge classes for UI rendering)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('modeBadge', () => {
+  it('SSB → badge-ssb',  () => assert.equal(modeBadge('SSB'),  'badge-ssb'));
+  it('AM  → badge-ssb',  () => assert.equal(modeBadge('AM'),   'badge-ssb'));
+  it('CW  → badge-cw',   () => assert.equal(modeBadge('CW'),   'badge-cw'));
+  it('FM  → badge-fm',   () => assert.equal(modeBadge('FM'),   'badge-fm'));
+  it('RTTY → badge-digi',() => assert.equal(modeBadge('RTTY'), 'badge-digi'));
+  it('SSTV → badge-digi',() => assert.equal(modeBadge('SSTV'), 'badge-digi'));
+  it('ATV  → badge-digi',() => assert.equal(modeBadge('ATV'),  'badge-digi'));
+  it('unknown mode → badge-digi fallback', () => assert.equal(modeBadge('PSK'), 'badge-digi'));
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  6. i18n — translation lookup
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('i18n (t / setLang)', () => {
@@ -336,11 +354,7 @@ describe('i18n (t / setLang)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  6. Duplicate detection algorithm
-//
-//  _all is a lexical (let) binding inside the vm scope and cannot be mutated
-//  from outside. The dedup algorithm is a pure 5-line transformation, so it
-//  is reimplemented inline here to test its logic directly.
+//  7. Duplicate detection algorithm
 // ─────────────────────────────────────────────────────────────────────────────
 
 function runDedup(qsos) {
@@ -422,11 +436,7 @@ describe('duplicate detection', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  7. CSV export row generation
-//
-//  exportCSV() is a stateful function that depends on _all (a lexical let
-//  binding, inaccessible from outside the vm). The CSV row-generation logic
-//  is replicated inline and tested against csvEsc for correctness.
+//  8. CSV export row generation
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Mirrors the row-building code inside exportCSV()
@@ -521,11 +531,7 @@ describe('CSV export row format', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  8. Inline edit — field validation and mutation
-//
-//  startEdit / commitEdit manipulate real DOM nodes and cannot be called from
-//  a vm context without full browser APIs. The core mutation logic (locator
-//  validation, field assignment) is replicated inline and tested directly.
+//  9. Inline edit — field validation and mutation
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Mirrors the save logic inside commitEdit()

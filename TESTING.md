@@ -11,7 +11,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external
 dependencies required.
 
 **Test file:** `edi2adif.test.js`
-**Tests:** 109 across 8 test groups
+**Tests:** 120 across 9 test groups
 
 ---
 
@@ -102,22 +102,30 @@ Verifies ADIF field serialisation: `<TAG:length>value `.
 - Numeric value `0` is serialised (not treated as falsy/empty).
 - Length field in output matches the actual string length of the value.
 
-### 4 · `csvEsc` (8 tests)
-Verifies CSV escaping for DARC QSL export.
+### 4 · `csvEsc` (11 tests)
+Verifies CSV escaping for DARC QSL and generic CSV export.
 
 - Plain strings returned unchanged.
-- Strings containing a comma or double-quote are wrapped in double-quotes.
+- Strings containing a comma, double-quote, newline (`\n`), or carriage return (`\r`) are wrapped in double-quotes.
 - Embedded double-quotes are doubled (`"` → `""`).
 - `null` and `undefined` coerced to `''`; numbers coerced to string.
 
-### 5 · `i18n` (5 tests)
+### 5 · `modeBadge` (8 tests)
+Verifies the mapping from mode string to CSS badge class used in the table renderer.
+
+- `SSB` and `AM` map to `badge-ssb` (analog voice modes).
+- `CW` maps to `badge-cw`.
+- `FM` maps to `badge-fm`.
+- `RTTY`, `SSTV`, `ATV`, and unknown modes fall back to `badge-digi`.
+
+### 6 · `i18n` (5 tests)
 Verifies the translation lookup function `t(key)` and `setLang(lang)`.
 
 - Default language is Slovenian (`sl`).
 - Switching to `en` and back to `sl` works correctly.
 - Unknown keys return the key string itself (safe fallback).
 
-### 6 · Duplicate detection (6 tests)
+### 7 · Duplicate detection (6 tests)
 Verifies the cross-file deduplication algorithm from `finishLoad`.
 
 The `_all` array is a lexical `let` binding inside the vm scope and cannot
@@ -134,7 +142,7 @@ inline and tested in isolation:
 
 ---
 
-### 7 · CSV export row format (9 tests)
+### 8 · CSV export row format (9 tests)
 Verifies the row-generation logic for the generic CSV export.
 
 - Header has exactly 19 columns; each data row has the same column count.
@@ -144,7 +152,7 @@ Verifies the row-generation logic for the generic CSV export.
 - Contest names containing commas are wrapped in double-quotes by `csvEsc`.
 - Distance `0` is treated as absent and produces an empty cell; distance `> 0` is kept.
 
-### 8 · Inline edit — field mutation (11 tests)
+### 9 · Inline edit — field mutation (11 tests)
 Verifies the save logic from `commitEdit()`.
 
 `startEdit`/`commitEdit` manipulate real DOM nodes and cannot be driven from
@@ -164,7 +172,7 @@ inline and tested in isolation.
 |---|---|
 | `handleFiles` | Requires async browser `FileReader`; not polyfillable in a pure vm context. |
 | `finishLoad` / DOM update functions | Call `document.getElementById(...).style`, `.innerHTML`, etc. on real DOM nodes; only meaningful in a browser. |
-| Export functions (`exportADIF`, `exportLoTW`, `exportDARC`) | Depend on `_all` state, DOM checkboxes, and `Blob`/`URL.createObjectURL`. End-to-end browser tests (e.g. Playwright) would be needed. |
+| Export functions (`exportADIF`, `exportDARC`, `exportCSV`) | Depend on `_all` state, DOM checkboxes, and `Blob`/`URL.createObjectURL`. End-to-end browser tests (e.g. Playwright) would be needed. |
 | Sorting (`sortFiltered`, `setSort`) | Depends on `_filtered` state; testable only with a full state setup. |
 
 ---
@@ -179,7 +187,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez
 zunanjih odvisnosti.
 
 **Testna datoteka:** `edi2adif.test.js`
-**Testov:** 109 v 8 skupinah
+**Testov:** 120 v 9 skupinah
 
 ---
 
@@ -269,22 +277,30 @@ Preverja serializacijo polj ADIF: `<OZNAKA:dolžina>vrednost `.
 - Numerična vrednost `0` je serializirana (ne obravnavana kot lažna/prazna).
 - Polje dolžine v izhodu ustreza dejanski dolžini vrednosti.
 
-### 4 · `csvEsc` (8 testov)
-Preverja ubežanje CSV za izvoz DARC QSL.
+### 4 · `csvEsc` (11 testov)
+Preverja ubežanje CSV za izvoz DARC QSL in generični CSV.
 
 - Navadni nizi vrnjeni nespremenjeni.
-- Nizi z vejico ali dvojnimi narekovaji so zaviti v dvojne narekovaje.
+- Nizi z vejico, dvojnimi narekovaji, novo vrstico (`\n`) ali zaključkom vrstice (`\r`) so zaviti v dvojne narekovaje.
 - Vdelani dvojni narekovaji se podvojijo (`"` → `""`).
 - `null` in `undefined` pretvorjeni v `''`; števila pretvorjena v niz.
 
-### 5 · `i18n` (5 testov)
+### 5 · `modeBadge` (8 testov)
+Preverja preslikavo niza načina v razred CSS značke, ki se uporablja v prikazu tabele.
+
+- `SSB` in `AM` preslikata v `badge-ssb` (analogni govorni načini).
+- `CW` preslika v `badge-cw`.
+- `FM` preslika v `badge-fm`.
+- `RTTY`, `SSTV`, `ATV` in neznani načini padejo na rezervno vrednost `badge-digi`.
+
+### 6 · `i18n` (5 testov)
 Preverja funkcijo za iskanje prevodov `t(ključ)` in `setLang(jezik)`.
 
 - Privzeti jezik je slovenščina (`sl`).
 - Preklop na `en` in nazaj na `sl` deluje pravilno.
 - Neznani ključi vrnejo sam ključ (varna rezervna vrednost).
 
-### 6 · Zaznavanje duplikatov (6 testov)
+### 7 · Zaznavanje duplikatov (6 testov)
 Preverja algoritem deduplikacije iz `finishLoad`.
 
 Polje `_all` je leksikalna vezava `let` znotraj obsega vm in je ni mogoče
@@ -301,7 +317,7 @@ in testiran v izolaciji:
 
 ---
 
-### 7 · Format vrstice CSV izvoza (9 testov)
+### 8 · Format vrstice CSV izvoza (9 testov)
 Preverja logiko generiranja vrstic za generični CSV izvoz.
 
 - Glava ima natanko 19 stolpcev; vsaka vrstica s podatki ima enako število stolpcev.
@@ -311,7 +327,7 @@ Preverja logiko generiranja vrstic za generični CSV izvoz.
 - Imena tekmovanj z vejicami so zavita v dvojne narekovaje prek `csvEsc`.
 - Razdalja `0` je obravnavana kot odsotna in ustvari prazno celico; razdalja `> 0` je ohranjena.
 
-### 8 · Urejanje v živo — mutacija polj (11 testov)
+### 9 · Urejanje v živo — mutacija polj (11 testov)
 Preverja logiko shranjevanja iz `commitEdit()`.
 
 `startEdit`/`commitEdit` manipulirata z resničnimi vozlišči DOM in ju ni mogoče
@@ -331,6 +347,6 @@ je reimplementirana neposredno in testirana v izolaciji.
 |---|---|
 | `handleFiles` | Zahteva asinhroni brskalniški `FileReader`; ni nadomestljiv v čistem vm kontekstu. |
 | `finishLoad` / funkcije za posodobitev DOM | Kličejo `.style`, `.innerHTML` itd. na resničnih vozliščih DOM; smiselno le v brskalniku. |
-| Izvozne funkcije (`exportADIF`, `exportLoTW`, `exportDARC`, `exportCSV`) | Odvisne od stanja `_all`, potrditvenih polj DOM in `Blob`/`URL.createObjectURL`. Potrebni bi bili celostni brskalniški testi (npr. Playwright). |
+| Izvozne funkcije (`exportADIF`, `exportDARC`, `exportCSV`) | Odvisne od stanja `_all`, potrditvenih polj DOM in `Blob`/`URL.createObjectURL`. Potrebni bi bili celostni brskalniški testi (npr. Playwright). |
 | `startEdit` / `restoreCell` / `commitEdit` (DOM del) | Upravljanje z dejanskimi vozlišči TD; testabilno le z jsdom ali Playwright. Logika validacije je testirana v skupini 8. |
 | Razvrščanje (`sortFiltered`, `setSort`) | Odvisno od stanja `_filtered`; testabilno le s celotno nastavitvijo stanja. |

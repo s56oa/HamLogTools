@@ -37,7 +37,7 @@ Single HTML file with three co-located layers (CSS → HTML → JavaScript). No 
 | Table render (`renderTable()`) | Rebuilds `<thead>` and `<tbody>` via string concatenation; row selection tracked in `_desel` Set. |
 | Export helpers (`getExportPool()`, `adifField()`, `csvEsc()`, `dl()`) | `getExportPool()` is the single source of truth for which QSOs go into any export. |
 | Render helpers (`htmlEsc()`, `modeBadge()`) | XSS-safe HTML escaping and mode → CSS badge class mapping; used by `renderTable()` and `restoreCell()`. |
-| Exporters (`exportADIF()`, `exportLoTW()`, `exportDARC()`, `exportCSV()`, `exportQSLShop()`) | Each produces a complete file and triggers download via `dl()`. |
+| Exporters (`exportADIF()`, `exportDARC()`, `exportCSV()`) | Each produces a complete file and triggers download via `dl()`. |
 
 **Key data flow:**
 1. Files → `handleFiles()` → `parseEDI()` → `_all[]`
@@ -63,7 +63,6 @@ Follow the same single-file pattern. Reuse the CSS custom properties (`:root` co
 - **ADIF**: Fields are `<TAG:length>value`. Records end with `<EOR>`. Header ends with `<EOH>`.
 - **Mode mapping** (EDI numeric → ADIF): `1=SSB, 2=CW, 3=CW, 4=SSB, 5=AM, 6=FM, 7=RTTY, 8=SSTV, 9=ATV`. Indices 3 and 4 are contest-specific sub-modes that map to the same ADIF mode.
 - **Maidenhead locator case**: Received locator (`wwl`) is stored as first 4 chars uppercase + last 2 chars lowercase (e.g. `JN65ar`). My locator (`myLoc`) is kept fully uppercase. ADIF spec is case-insensitive but some tools break on all-uppercase 6-char grids.
-- **LoTW** requires only: CALL, QSO_DATE, TIME_ON, BAND, MODE, STATION_CALLSIGN, MY_GRIDSQUARE.
 - **DARC QSL CSV** columns: `Callsign, QSL Via, Date Time, Band, Mode, RST_SENT, QSL received`.
 
 ---
@@ -102,7 +101,7 @@ Enojna HTML datoteka s tremi solociranimi plastmi (CSS → HTML → JavaScript).
 | Prikaz tabele (`renderTable()`) | Znova zgradi `<thead>` in `<tbody>` prek stikanja nizov; izbor vrstic sledimo v množici `_desel`. |
 | Pomožniki za izvoz (`getExportPool()`, `adifField()`, `csvEsc()`, `dl()`) | `getExportPool()` je edini vir resnice o tem, kateri QSO-ji gredo v kateri izvoz. |
 | Pomožniki za prikaz (`htmlEsc()`, `modeBadge()`) | Varno ubežanje HTML (XSS) in preslikava načina v razred CSS za značko; uporabljata ju `renderTable()` in `restoreCell()`. |
-| Izvozniki (`exportADIF()`, `exportLoTW()`, `exportDARC()`, `exportCSV()`, `exportQSLShop()`) | Vsak ustvari popolno datoteko in sproži prenos prek `dl()`. |
+| Izvozniki (`exportADIF()`, `exportDARC()`, `exportCSV()`) | Vsak ustvari popolno datoteko in sproži prenos prek `dl()`. |
 
 **Potek podatkov:**
 1. Datoteke → `handleFiles()` → `parseEDI()` → `_all[]`
@@ -120,5 +119,4 @@ Sledi enakemu vzorcu z eno datoteko. Za doslednost med orodji ponovno uporabi CS
 - **ADIF**: Polja so `<OZNAKA:dolžina>vrednost`. Zapisi se končajo z `<EOR>`. Glava se konča z `<EOH>`.
 - **Mapiranje načina** (EDI številka → ADIF): `1=SSB, 2=CW, 3=CW, 4=SSB, 5=AM, 6=FM, 7=RTTY, 8=SSTV, 9=ATV`. Indeksa 3 in 4 sta tekmovalna pod-načina, ki se preslikata v isti ADIF način.
 - **Velikost črk lokatorja**: Prejeti lokator (`wwl`) je shranjen z velikimi prvimi 4 znaki + malimi zadnjima 2 (npr. `JN65ar`). Moj lokator (`myLoc`) ostane v celoti z velikimi črkami. Specifikacija ADIF ne razlikuje velikosti, nekatera orodja pa se zatravnejo na 6-znakovnih lokatorjih z vsemi velikimi črkami.
-- **LoTW** zahteva le: CALL, QSO_DATE, TIME_ON, BAND, MODE, STATION_CALLSIGN, MY_GRIDSQUARE.
 - **DARC QSL CSV** stolpci: `Callsign, QSL Via, Date Time, Band, Mode, RST_SENT, QSL received`.

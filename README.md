@@ -25,11 +25,9 @@ Open the file in any modern browser — that's all it takes.
 - **Filters** by band, mode, and source file
 - **Duplicate detection** — cross-file duplicates flagged automatically (same call + date + time + band); hide them with one click
 - **Row selection** — cherry-pick QSOs to include in the export
-- **Five export formats:**
+- **Three export formats:**
   - **ADIF** — full export with all available fields (call, date/time, band, mode, RST sent/received, serial numbers, locator, distance, my callsign, my locator, power, contest name, operators, equipment)
-  - **LoTW ADIF** — trimmed to the fields required by Logbook of the World
   - **DARC QSL CSV** — for the DARC QSL bureau online service
-  - **qslshop.de ADIF** — compatible with the qslshop.de online QSL printing service
   - **Generic CSV** — 19 columns with all parsed fields, for spreadsheet import or further analysis
 - **Bilingual UI** — Slovenian and English
 
@@ -56,7 +54,7 @@ Open the file in any modern browser — that's all it takes.
 
 ## How to Use
 
-1. Download `edi2adif.html` (single file, ~25 KB)
+1. Download `edi2adif.html` (single file, ~42 KB)
 2. Open it in any modern browser (Chrome, Firefox, Edge, Safari)
 3. Drag one or more `.edi` files onto the drop zone, or click **Choose files**
 4. Review the QSO table — sort columns, filter, search, hide duplicates
@@ -82,7 +80,7 @@ Business-logic unit tests run in Node.js (v18+), no extra dependencies:
 node --test --test-reporter=spec edi2adif.test.js
 ```
 
-109 tests · 8 groups: `normBand`, `parseEDI`, `adifField`, `csvEsc`, i18n, duplicate detection.
+120 tests · 9 groups: `normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicate detection.
 See [TESTING.md](TESTING.md) for full documentation.
 
 ---
@@ -125,11 +123,9 @@ Datoteko odpri v katerem koli sodobnem brskalniku — to je vse.
 - **Filtri** po pasu, načinu in izvorni datoteki
 - **Zaznavanje duplikatov** — medDatotečni duplikati so samodejno označeni (enak klicni znak + datum + čas + pas); z enim klikom jih skriješ
 - **Izbor vrstic** — ročno izberi QSO-je, ki jih vključiš v izvoz
-- **Pet izvoznih formatov:**
+- **Trije izvozni formati:**
   - **ADIF** — celoten izvoz z vsemi razpoložljivimi polji (klicni znak, datum/čas, pas, način, RST oddano/sprejeto, serijske številke, lokator, razdalja, moj klicni znak, moj lokator, moč, ime tekmovanja, operaterji, oprema)
-  - **LoTW ADIF** — okrnjen na polja, ki jih zahteva Logbook of the World
   - **DARC QSL CSV** — za spletno storitev QSL urada DARC
-  - **qslshop.de ADIF** — združljiv s spletno storitvijo tiskanja QSL qslshop.de
   - **Splošni CSV** — 19 stolpcev z vsemi razčlenjenimi polji, za uvoz v pregledničarje ali nadaljnjo analizo
 - **Dvojezični vmesnik** — slovenščina in angleščina
 
@@ -156,7 +152,7 @@ Datoteko odpri v katerem koli sodobnem brskalniku — to je vse.
 
 ## Navodila za uporabo
 
-1. Prenesi `edi2adif.html` (ena datoteka, ~25 KB)
+1. Prenesi `edi2adif.html` (ena datoteka, ~42 KB)
 2. Odpri jo v katerem koli sodobnem brskalniku (Chrome, Firefox, Edge, Safari)
 3. Povleci eno ali več `.edi` datotek na območje za spuščanje ali klikni **Izberi datoteke**
 4. Preglej tabelo QSO — razvrščaj stolpce, filtriraj, išči, skrij duplikate
@@ -182,7 +178,7 @@ Enotni testi poslovne logike tečejo v Node.js (v18+), brez dodatnih odvisnosti:
 node --test --test-reporter=spec edi2adif.test.js
 ```
 
-109 testov · 8 skupin: `normBand`, `parseEDI`, `adifField`, `csvEsc`, i18n, zaznavanje duplikatov.
+120 testov · 9 skupin: `normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, zaznavanje duplikatov.
 Celotna dokumentacija je v [TESTING.md](TESTING.md).
 
 ---

@@ -105,8 +105,6 @@ main{max-width:1500px;margin:0 auto;padding:1.25rem 1.5rem 3rem}
 .btn-primary:hover{opacity:.85}
 .btn-secondary{background:var(--bg4);color:var(--text);border:1px solid var(--border2)}
 .btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
-.btn-green{background:var(--accent2);color:#0a0e14}
-.btn-green:hover{opacity:.85}
 .btn-orange{background:var(--accent3);color:#0a0e14}
 .btn-orange:hover{opacity:.85}
 .btn-sm{padding:.3rem .8rem;font-size:.75rem}
@@ -219,7 +217,7 @@ td.editing{background:rgba(77,157,224,.1)!important;outline:1px solid var(--acce
 
 <header>
   <div class="logo">EDI<span class="arr">→</span>ADIF<span class="fmt"> converter</span></div>
-  <span class="version">v1.0</span>
+  <span class="version">v1.1</span>
   <div class="stats-bar" id="statsBar" style="display:none">
     <div class="stat"><span class="stat-val" id="sSrc">0</span><span data-i18n="statFiles">datotek</span></div>
     <div class="stat"><span class="stat-val" id="sQso">0</span>QSO</div>
@@ -265,9 +263,7 @@ td.editing{background:rgba(77,157,224,.1)!important;outline:1px solid var(--acce
   <div class="export-bar">
     <span class="export-label" data-i18n="exportLabel">Izvoz</span>
     <button class="btn btn-primary btn-sm" onclick="exportADIF()" data-i18n="btnAdif">⬇ ADIF (.adi)</button>
-    <button class="btn btn-green btn-sm" onclick="exportLoTW()" data-i18n="btnLotw">⬇ LoTW ADIF</button>
     <button class="btn btn-orange btn-sm" onclick="exportDARC()" data-i18n="btnDarc">⬇ DARC QSL CSV</button>
-    <button class="btn btn-orange btn-sm" onclick="exportQSLShop()" data-i18n="btnQslShop">⬇ qslshop.de</button>
     <button class="btn btn-secondary btn-sm" onclick="exportCSV()" data-i18n="btnCsv">⬇ CSV</button>
     <div class="toolbar-sep"></div>
     <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
@@ -285,7 +281,7 @@ td.editing{background:rgba(77,157,224,.1)!important;outline:1px solid var(--acce
   </div>
 </main>
 
-<div id="toast"></div>
+<div id="toast" aria-live="polite"></div>
 
 <script>
 // ════════════════════════════════════════
@@ -298,14 +294,13 @@ sl:{
   statFiles:'datotek', statBands:'pasovi', statDates:'obdobje',
   btnAdd:'+ Dodaj datoteke', btnReset:'↩ Ponastavi',
   hideDups:'Skrij duplikate', exportLabel:'Izvoz',
-  btnAdif:'⬇ ADIF (.adi)', btnLotw:'⬇ LoTW ADIF', btnDarc:'⬇ DARC QSL CSV',
+  btnAdif:'⬇ ADIF (.adi)', btnDarc:'⬇ DARC QSL CSV',
   onlySel:'Samo označene',
   thNum:'#', thDate:'Datum', thTime:'Čas', thCall:'Klicni znak',
   thBand:'Pas', thMode:'Način', thRstS:'RST oddano', thRstR:'RST sprejeto',
   thLoc:'Spr. lok.', thMyLoc:'Odd. lok.', thDist:'Razdalja', thSrc:'Datoteka',
   btnCsv:'⬇ CSV', toastCsv:'CSV izvožen',
-  btnQslShop:'⬇ qslshop.de', toastQslShop:'qslshop.de ADIF izvožen',
-  toastAdif:'ADIF izvožen', toastLotw:'LoTW ADIF izvožen', toastDarc:'DARC CSV izvožen',
+  toastAdif:'ADIF izvožen', toastDarc:'DARC CSV izvožen',
   toastNoQso:'Ni zvez za izvoz', errEdi:'Napaka pri branju EDI',
   dupLabel:'DUP', editHint:'Klikni za urejanje',
   errDate:'Napačen datum (PP.MM.LLLL)', errTime:'Napačen čas (HH:MM)',
@@ -317,14 +312,13 @@ en:{
   statFiles:'files', statBands:'bands', statDates:'period',
   btnAdd:'+ Add files', btnReset:'↩ Reset',
   hideDups:'Hide duplicates', exportLabel:'Export',
-  btnAdif:'⬇ ADIF (.adi)', btnLotw:'⬇ LoTW ADIF', btnDarc:'⬇ DARC QSL CSV',
+  btnAdif:'⬇ ADIF (.adi)', btnDarc:'⬇ DARC QSL CSV',
   onlySel:'Selected only',
   thNum:'#', thDate:'Date', thTime:'Time', thCall:'Callsign',
   thBand:'Band', thMode:'Mode', thRstS:'RST Sent', thRstR:'RST Rcvd',
   thLoc:'Rcvd Loc.', thMyLoc:'Sent Loc.', thDist:'Distance', thSrc:'File',
   btnCsv:'⬇ CSV', toastCsv:'CSV exported',
-  btnQslShop:'⬇ qslshop.de', toastQslShop:'qslshop.de ADIF exported',
-  toastAdif:'ADIF exported', toastLotw:'LoTW ADIF exported', toastDarc:'DARC CSV exported',
+  toastAdif:'ADIF exported', toastDarc:'DARC CSV exported',
   toastNoQso:'No QSOs to export', errEdi:'EDI read error',
   dupLabel:'DUP', editHint:'Click to edit',
   errDate:'Invalid date (DD.MM.YYYY)', errTime:'Invalid time (HH:MM)',
@@ -352,8 +346,7 @@ const BAND_MAP = [
   [/3[,.]4[0-9]*\s*GHz|3400|^9\s*cm$/i,         '9cm',    3400.1 ],
   [/5[,.]7[0-9]*\s*GHz|5760|^6\s*cm$/i,         '6cm',    5760.1 ],
   [/^10\s*GHz$|10[,.]3[0-9]*\s*GHz|10368|^3\s*cm$/i, '3cm', 10368.1],
-  [/24[,.]0[0-9]*\s*GHz|24048|1[,.]25?\s*cm/i,  '1.25cm', 24048.1],
-  [/^24\s*GHz$/i,                                '1.25cm', 24048.1],
+  [/24([,.]0[0-9]*)?\s*GHz|24048|1[,.]25?\s*cm/i,  '1.25cm', 24048.1],
   [/47\s*GHz/i,                                  '6mm',    47000.1],
 ];
 const BANDS=BAND_MAP.map(e=>e[1]);
@@ -497,10 +490,12 @@ function finishLoad(){
   applyFilters();
 }
 
+function getUniqueBands(){ return [...new Set(_all.map(q=>q.band).filter(Boolean))].sort(); }
+
 function updateStats(){
   document.getElementById('sSrc').textContent=_sources.length;
   document.getElementById('sQso').textContent=_all.length;
-  const bands=[...new Set(_all.map(q=>q.band).filter(Boolean))].join(' · ');
+  const bands=getUniqueBands().join(' · ');
   document.getElementById('sBands').textContent=bands||'—';
   if(_all.length){
     const dates=_all.map(q=>q.date).sort();
@@ -511,7 +506,7 @@ function updateStats(){
 }
 
 function buildFilters(){
-  const bands=[...new Set(_all.map(q=>q.band).filter(Boolean))].sort();
+  const bands=getUniqueBands();
   const modes=[...new Set(_all.map(q=>q.mode).filter(Boolean))].sort();
   const srcs=[...new Set(_all.map(q=>q.src))];
   const bSel=document.getElementById('filterBand');
@@ -669,169 +664,99 @@ function getExportPool(){
 }
 
 // ════════════════════════════════════════
-//  EXPORT: FULL ADIF
+//  EXPORT HELPERS
 // ════════════════════════════════════════
-function exportADIF(){
+function runExport(makeContent, filename, mime, toastKey){
   const pool=getExportPool();
   if(!pool.length){showToast(t('toastNoQso'),true);return;}
-  const ts=adifTimestamp();
-  const lines=[
-    `EDI -> ADIF ${ts}`,
-    adifField('adif_ver','3.1.0'),
-    adifField('created_timestamp',ts),
-    adifField('programid','EDI-ADIF-Converter'),
-    adifField('programversion','1.0'),
-    '<EOH>',''
-  ];
-  pool.forEach(q=>{
-    let rec='';
-    rec+=adifField('CALL',q.call);
-    rec+=adifField('QSO_DATE',q.date);
-    rec+=adifField('TIME_ON',q.time);
-    rec+=adifField('BAND',q.band);
-    if(q.freq) rec+=adifField('FREQ',q.freq);
-    rec+=adifField('MODE',q.mode);
-    rec+=adifField('RST_SENT',q.rstS);
-    rec+=adifField('RST_RCVD',q.rstR);
-    if(q.stx) rec+=adifField('STX',q.stx.replace(/^0+/,'')||q.stx);
-    if(q.srx) rec+=adifField('SRX',q.srx.replace(/^0+/,'')||q.srx);
-    if(q.wwl) rec+=adifField('GRIDSQUARE',q.wwl);
-    if(q.dist) rec+=adifField('DISTANCE',q.dist);
-    if(q.myCall) rec+=adifField('STATION_CALLSIGN',q.myCall);
-    if(q.myLoc)  rec+=adifField('MY_GRIDSQUARE',q.myLoc);
-    if(q.pwr)    rec+=adifField('TX_PWR',q.pwr);
-    if(q.contest)rec+=adifField('APP_EDIADIF_CONTEST',q.contest);
-    if(q.ops){
-      const firstOp=q.ops.split(/[;,]+/)[0].trim();
-      if(firstOp) rec+=adifField('OPERATOR',firstOp);
-    }
-    const cmt=[q.txeq,q.rxeq,q.ant].filter(Boolean).join(' | ');
-    if(cmt) rec+=adifField('COMMENT',cmt);
-    if(q.exch) rec+=adifField('SRX_STRING',q.exch);
-    rec+=adifField('APP_EDIADIF_SRC',q.src);
-    lines.push(rec.trimEnd()+' <EOR>');
-  });
-  dl(lines.join('\n'), buildFilename('adif','adi'), 'text/plain');
-  showToast(`${t('toastAdif')} (${pool.length} QSO)`);
+  const content=makeContent(pool);
+  dl(content, filename, mime);
+  showToast(`${t(toastKey)} (${pool.length} QSO)`);
 }
 
 // ════════════════════════════════════════
-//  EXPORT: LoTW ADIF
+//  EXPORT: FULL ADIF
 // ════════════════════════════════════════
-function exportLoTW(){
-  const pool=getExportPool();
-  if(!pool.length){showToast(t('toastNoQso'),true);return;}
-  const ts=adifTimestamp();
-  const lines=[
-    `LoTW ADIF ${ts}`,
-    adifField('adif_ver','3.1.0'),
-    adifField('created_timestamp',ts),
-    adifField('programid','EDI-ADIF-Converter'),
-    adifField('programversion','1.0'),
-    '<EOH>',''
-  ];
-  pool.forEach(q=>{
-    let rec='';
-    rec+=adifField('CALL',q.call);
-    rec+=adifField('QSO_DATE',q.date);
-    rec+=adifField('TIME_ON',q.time);
-    rec+=adifField('BAND',q.band);
-    if(q.freq) rec+=adifField('FREQ',q.freq);
-    rec+=adifField('MODE',q.mode);
-    if(q.myCall) rec+=adifField('STATION_CALLSIGN',q.myCall);
-    if(q.myLoc)  rec+=adifField('MY_GRIDSQUARE',q.myLoc);
-    if(q.wwl)    rec+=adifField('GRIDSQUARE',q.wwl);
-    lines.push(rec.trimEnd()+' <EOR>');
-  });
-  dl(lines.join('\n'), buildFilename('lotw','adi'), 'text/plain');
-  showToast(`${t('toastLotw')} (${pool.length} QSO)`);
+function exportADIF(){
+  runExport(pool=>{
+    const ts=adifTimestamp();
+    const lines=[
+      `EDI -> ADIF ${ts}`,
+      adifField('adif_ver','3.1.0'),
+      adifField('created_timestamp',ts),
+      adifField('programid','EDI-ADIF-Converter'),
+      adifField('programversion','1.1'),
+      '<EOH>',''
+    ];
+    pool.forEach(q=>{
+      let rec='';
+      rec+=adifField('CALL',q.call);
+      rec+=adifField('QSO_DATE',q.date);
+      rec+=adifField('TIME_ON',q.time);
+      rec+=adifField('BAND',q.band);
+      if(q.freq) rec+=adifField('FREQ',q.freq);
+      rec+=adifField('MODE',q.mode);
+      rec+=adifField('RST_SENT',q.rstS);
+      rec+=adifField('RST_RCVD',q.rstR);
+      if(q.stx) rec+=adifField('STX',q.stx.replace(/^0+/,'')||q.stx);
+      if(q.srx) rec+=adifField('SRX',q.srx.replace(/^0+/,'')||q.srx);
+      if(q.wwl) rec+=adifField('GRIDSQUARE',q.wwl);
+      if(q.dist) rec+=adifField('DISTANCE',q.dist);
+      if(q.myCall) rec+=adifField('STATION_CALLSIGN',q.myCall);
+      if(q.myLoc)  rec+=adifField('MY_GRIDSQUARE',q.myLoc);
+      if(q.pwr)    rec+=adifField('TX_PWR',q.pwr);
+      if(q.contest)rec+=adifField('APP_EDIADIF_CONTEST',q.contest);
+      if(q.ops){
+        const firstOp=q.ops.split(/[;,]+/)[0].trim();
+        if(firstOp) rec+=adifField('OPERATOR',firstOp);
+      }
+      const cmt=[q.txeq,q.rxeq,q.ant].filter(Boolean).join(' | ');
+      if(cmt) rec+=adifField('COMMENT',cmt);
+      if(q.exch) rec+=adifField('SRX_STRING',q.exch);
+      rec+=adifField('APP_EDIADIF_SRC',q.src);
+      lines.push(rec.trimEnd()+' <EOR>');
+    });
+    return lines.join('\n');
+  }, buildFilename('adif','adi'), 'text/plain', 'toastAdif');
 }
 
 // ════════════════════════════════════════
 //  EXPORT: DARC QSL CSV
 // ════════════════════════════════════════
 function exportDARC(){
-  const pool=getExportPool();
-  if(!pool.length){showToast(t('toastNoQso'),true);return;}
-  const rows=['Callsign,QSL Via,Date Time,Band,Mode,RST_SENT,QSL received'];
-  pool.forEach(q=>{
-    const dateTime=`${q.dateDisp} ${q.timeDisp}`;
-    rows.push([q.call,'',dateTime,q.band,q.mode,q.rstS,'N'].map(csvEsc).join(','));
-  });
-  dl(rows.join('\n'), buildFilename('darc','csv'), 'text/csv');
-  showToast(`${t('toastDarc')} (${pool.length} QSO)`);
-}
-
-// ════════════════════════════════════════
-//  EXPORT: qslshop.de ADIF
-//  Format modelled on the M1GEO+DH5YM EDI-ADIF Converter output that
-//  qslshop.de accepted. Key constraints derived from byte-level inspection
-//  of the reference file: LF endings, NO spaces between fields (fields
-//  directly concatenated with no trailing whitespace), ADIF_VERS (with S),
-//  version 3.1, integer FREQ, TIME_OFF=TIME_ON.
-// ════════════════════════════════════════
-function exportQSLShop(){
-  // No trailing space — qslshop.de parser expects '<' immediately after value bytes.
-  function f(tag,val){
-    if(val===null||val===undefined||val==='') return '';
-    const s=String(val);
-    return `<${tag.toUpperCase()}:${s.length}>${s}`;
-  }
-  const pool=getExportPool();
-  if(!pool.length){showToast(t('toastNoQso'),true);return;}
-  const lines=[
-    '<ADIF_VERS:3>3.1',
-    '<EOH>',''
-  ];
-  pool.forEach(q=>{
-    let rec='';
-    rec+=f('CALL',q.call);
-    rec+=f('BAND',q.band);
-    if(q.freq) rec+=f('FREQ',String(Math.round(q.freq)));
-    rec+=f('MODE',q.mode);
-    rec+=f('QSO_DATE',q.date);
-    rec+=f('TIME_ON',q.time);
-    rec+=f('TIME_OFF',q.time);
-    rec+=f('RST_RCVD',q.rstR);
-    rec+=f('RST_SENT',q.rstS);
-    if(q.srx) rec+=f('SRX',q.srx);
-    if(q.stx) rec+=f('STX',q.stx);
-    if(q.myLoc) rec+=f('MY_GRIDSQUARE',q.myLoc);
-    if(q.wwl)   rec+=f('GRIDSQUARE',q.wwl);
-    if(q.wwl){
-      const cmt=q.dist?`${q.wwl} ${q.dist} km`:q.wwl;
-      rec+=f('COMMENT',cmt);
-    }
-    lines.push(rec+'<EOR>');
-  });
-  dl(lines.join('\n'), buildFilename('qslshop','adi'), 'text/plain');
-  showToast(`${t('toastQslShop')} (${pool.length} QSO)`);
+  runExport(pool=>{
+    const rows=['Callsign,QSL Via,Date Time,Band,Mode,RST_SENT,QSL received'];
+    pool.forEach(q=>{
+      const dateTime=`${q.dateDisp} ${q.timeDisp}`;
+      rows.push([q.call,'',dateTime,q.band,q.mode,q.rstS,'N'].map(csvEsc).join(','));
+    });
+    return rows.join('\n');
+  }, buildFilename('darc','csv'), 'text/csv', 'toastDarc');
 }
 
 // ════════════════════════════════════════
 //  EXPORT: Generic CSV
 // ════════════════════════════════════════
 function exportCSV(){
-  const pool=getExportPool();
-  if(!pool.length){showToast(t('toastNoQso'),true);return;}
-  const header=['#','Date','Time','Callsign','Band','Mode',
-    'RST Sent','RST Rcvd','Ser Sent','Ser Rcvd','Exchange',
-    'Locator','Distance (km)','My Callsign','My Locator',
-    'Power (W)','Contest','Operators','Source File'];
-  const rows=[header.map(csvEsc).join(',')];
-  pool.forEach((q,i)=>{
-    rows.push([
-      i+1, q.dateDisp, q.timeDisp, q.call, q.band, q.mode,
-      q.rstS, q.rstR,
-      q.stx?q.stx.replace(/^0+/,''):'',
-      q.srx?q.srx.replace(/^0+/,''):'',
-      q.exch||'', q.wwl||'', q.dist||'',
-      q.myCall||'', q.myLoc||'', q.pwr||'',
-      q.contest||'', q.ops||'', q.src,
-    ].map(csvEsc).join(','));
-  });
-  dl(rows.join('\n'), buildFilename('log','csv'), 'text/csv;charset=utf-8');
-  showToast(`${t('toastCsv')} (${pool.length} QSO)`);
+  runExport(pool=>{
+    const header=['#','Date','Time','Callsign','Band','Mode',
+      'RST Sent','RST Rcvd','Ser Sent','Ser Rcvd','Exchange',
+      'Locator','Distance (km)','My Callsign','My Locator',
+      'Power (W)','Contest','Operators','Source File'];
+    const rows=[header.map(csvEsc).join(',')];
+    pool.forEach((q,i)=>{
+      rows.push([
+        i+1, q.dateDisp, q.timeDisp, q.call, q.band, q.mode,
+        q.rstS, q.rstR,
+        q.stx?q.stx.replace(/^0+/,''):'',
+        q.srx?q.srx.replace(/^0+/,''):'',
+        q.exch||'', q.wwl||'', q.dist||'',
+        q.myCall||'', q.myLoc||'', q.pwr||'',
+        q.contest||'', q.ops||'', q.src,
+      ].map(csvEsc).join(','));
+    });
+    return rows.join('\n');
+  }, buildFilename('log','csv'), 'text/csv;charset=utf-8', 'toastCsv');
 }
 
 // ════════════════════════════════════════
@@ -983,13 +908,16 @@ function restoreCell(td,field,qso){
 
 function csvEsc(v){
   const s=String(v??'');
-  return (s.includes(',')||s.includes('"'))?`"${s.replace(/"/g,'""')}"`:s;
+  if(s.includes(',')||s.includes('"')||s.includes('\n')||s.includes('\r')){
+    return `"${s.replace(/"/g,'""')}"`;
+  }
+  return s;
 }
 function htmlEsc(s){
   return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function modeBadge(mode){
-  if(mode==='SSB') return 'badge-ssb';
+  if(mode==='SSB'||mode==='AM') return 'badge-ssb';
   if(mode==='CW')  return 'badge-cw';
   if(mode==='FM')  return 'badge-fm';
   return 'badge-digi';

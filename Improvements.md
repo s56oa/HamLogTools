@@ -64,6 +64,29 @@
 
 ---
 
+## Release v1.1 — 2026-05-10
+
+### Removed redundant export formats
+- **`exportLoTW()`** removed — LoTW ADIF was a strict subset of the full ADIF export. Users can import the full ADIF into LoTW directly; the LoTW-specific field subset provided no advantage.
+- **`exportQSLShop()`** removed — qslshop.de accepts standard ADIF 3.1; the custom format (no inter-field spaces, `ADIF_VERS`, integer `FREQ`, `TIME_OFF`) was only needed because the previous broken ADIF output was rejected. With the ADIF fixes in v1.0, the generic `exportADIF()` now produces valid ADIF that qslshop.de accepts.
+
+### Refactoring
+- Introduced **`runExport(makeContent, filename, mime, toastKey)`** helper — eliminates the repeated `getExportPool()` → empty-check → `dl()` → `showToast()` pattern that existed in every export function.
+- Extracted **`getUniqueBands()`** to remove duplication between `updateStats()` and `buildFilters()`.
+
+### Fixes
+- **`csvEsc()`** now escapes strings containing newlines (`\n`) and carriage returns (`\r`), preventing corrupted CSV rows when fields contain line breaks.
+- **`modeBadge()`** corrected: `AM` now maps to `badge-ssb` (analog voice) instead of the generic `badge-digi` fallback.
+- **`BAND_MAP`** deduplicated: the redundant `24 GHz` regex entry was merged into the existing `1.25cm` pattern.
+- **Accessibility**: Toast notification container now has `aria-live="polite"` for screen-reader announcements.
+
+### Tests
+- Test suite expanded from **109 → 120 tests** (9 groups).
+- Added `modeBadge` test group (8 tests) covering all 7 supported modes plus unknown fallback.
+- Added 3 `csvEsc` tests for newline/carriage-return escaping.
+
+---
+
 ## Proposed New Features
 
 ### High Priority
@@ -188,6 +211,29 @@ Add a Service Worker and `manifest.json` so the tool can be installed and used f
 
 16. **Imena polj ADIF nestandardna**
     `MY_CALL` ni veljavno polje ADIF 3.1.7; nadomeščeno z `STATION_CALLSIGN`. `CONTEST_ID` je naštevano polje ADIF z zahtevano specifično vrednostjo iz specifikacije; nadomeščeno z `APP_EDIADIF_CONTEST` (polje, ki ga definira aplikacija) za prosto-tekstovna imena tekmovanj.
+
+---
+
+## Izdaja v1.1 — 10. 5. 2026
+
+### Odstranjeni odvečni izvozni formati
+- **`exportLoTW()`** odstranjen — LoTW ADIF je bila stroga podmnožica polnega ADIF izvoza. Uporabniki lahko polni ADIF uvozijo v LoTW neposredno; LoTW-specifična podmnožica polj ni prinesla nobene prednosti.
+- **`exportQSLShop()`** odstranjen — qslshop.de sprejema standardni ADIF 3.1; posebni format (brez presledkov med polji, `ADIF_VERS`, celo število `FREQ`, `TIME_OFF`) je bil potreben le zaradi prejšnjega pokvarjenega ADIF izvoza. S popravki ADIF v v1.0 generični `exportADIF()` zdaj ustvarja veljaven ADIF, ki ga qslshop.de sprejema.
+
+### Refaktor
+- Uveden pomožnik **`runExport(makeContent, filename, mime, toastKey)`** — odpravi ponavljajoč se vzorec `getExportPool()` → preverjanje praznosti → `dl()` → `showToast()`, ki je obstajal v vsaki izvozni funkciji.
+- Izvlečena **`getUniqueBands()`** — odstrani podvojitev med `updateStats()` in `buildFilters()`.
+
+### Popravki
+- **`csvEsc()`** zdaj ubeža tudi nize z novimi vrsticami (`\n`) in zaključki vrstic (`\r`), kar preprečuje pokvarjene CSV vrstice, če polja vsebujejo prelome vrstic.
+- **`modeBadge()`** popravljen: `AM` se zdaj preslika v `badge-ssb` (analogni govor) namesto generičnega rezervnega `badge-digi`.
+- **`BAND_MAP`** dedupliciran: odvečen vnos za `24 GHz` je bil združen v obstoječi vzorec `1.25cm`.
+- **Dostopnost**: vsebnik obvestil `toast` ima zdaj `aria-live="polite"` za napovedi bralnikom zaslonov.
+
+### Testi
+- Testna zbirka razširjena iz **109 → 120 testov** (9 skupin).
+- Dodana skupina `modeBadge` (8 testov), ki pokriva vseh 7 podprtih načinov plus rezervni način.
+- Dodani 3 testi `csvEsc` za ubežanje novih vrstic/zaključkov vrstic.
 
 ---
 
