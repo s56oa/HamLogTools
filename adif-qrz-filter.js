@@ -195,7 +195,6 @@ function usesQslBuro(qslmgrText) {
   const inclusions = [
     /\bburo\b/,
     /\bbureau\b/,
-    /\bqsl\s+via\b/,            // generic “via” — weak signal, but if not excluded above
   ];
   for (const re of inclusions) {
     if (re.test(t)) return true;
@@ -339,8 +338,12 @@ async function main() {
   }
 
   // Save cache
-  saveCache(cacheFile, cache);
-  console.log(`\nCache saved to ${cacheFile}\n`);
+  try {
+    saveCache(cacheFile, cache);
+    console.log(`\nCache saved to ${cacheFile}\n`);
+  } catch (err) {
+    console.error(`Warning: could not save cache to ${cacheFile}: ${err.message}\n`);
+  }
 
   // Filter records: keep if the station itself OR its QSL manager accepts BURO
   const kept = [];

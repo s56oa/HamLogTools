@@ -149,12 +149,12 @@ describe('usesQslBuro', () => {
     it('DARC QSL Bureau', () => {
       assert.ok(usesQslBuro('QSL via DARC QSL Bureau'));
     });
-    it('generic QSL via (weak signal)', () => {
-      assert.ok(usesQslBuro('QSL via OK1ABC'));
-    });
   });
 
   describe('negative cases (NO BURO)', () => {
+    it('QSL via manager — check manager separately, not BURO confirmation', () => {
+      assert.ok(!usesQslBuro('QSL via OK1ABC'));
+    });
     it('NO BURO — direct only', () => {
       assert.ok(!usesQslBuro('NO BURO — direct only'));
     });

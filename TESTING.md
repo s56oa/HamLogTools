@@ -345,7 +345,7 @@ je reimplementirana neposredno in testirana v izolaciji.
 
 A separate test suite covers the Node.js CLI tool. It also uses `node:test` with no external dependencies.
 
-**Tests:** 36 across 7 test groups
+**Tests:** 38 across 7 test groups
 
 ### Running
 
@@ -359,8 +359,8 @@ node --test --test-reporter=spec adif-qrz-filter.test.js
 | # | Group | Tests | What is checked |
 |---|---|---|---|
 | 1 | `parseAdif` | 6 | ADIF parsing: header extraction, record splitting, `QSL_VIA` extraction, CRLF handling, missing `CALL` skipping |
-| 2 | `extractField` | 6 | Generic `<TAG:length>value` extraction for `CALL`, `QSL_VIA`, case-insensitivity, trimming, uppercasing |
-| 3 | `usesQslBuro` | 21 | Fuzzy logic: 5 positive cases (BURO/bureau/via), 13 negative cases (no/direct only/LOTW only/eQSL only), 3 edge cases (null/empty) |
+| 2 | `extractField` | 8 | Generic `<TAG:length>value` extraction for `CALL`, `QSL_VIA`, case-insensitivity, trimming, uppercasing, ADIF type specifier (`<TAG:len:TYPE>`) |
+| 3 | `usesQslBuro` | 21 | Fuzzy logic: 4 positive cases (BURO/bureau explicit), 14 negative cases (no/direct only/LOTW only/eQSL only/"QSL via CALL"), 3 edge cases (null/empty) |
 | 4 | `cache` | 3 | JSON cache save/load round-trip, 7-day TTL purge, missing file handling |
 
 ### How the tests work
@@ -375,7 +375,7 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 Ločena testna zbirka pokriva Node.js CLI orodje. Tudi ta uporablja `node:test` brez zunanjih odvisnosti.
 
-**Testov:** 36 v 7 skupinah
+**Testov:** 38 v 7 skupinah
 
 ### Zaganjanje
 
@@ -389,8 +389,8 @@ node --test --test-reporter=spec adif-qrz-filter.test.js
 | # | Skupina | Testov | Kaj se preverja |
 |---|---|---|---|
 | 1 | `parseAdif` | 6 | Razčlenjevanje ADIF: ekstrakcija glave, razdelitev zapisov, izvleček `QSL_VIA`, obravnava CRLF, preskočitev manjkajočega `CALL` |
-| 2 | `extractField` | 6 | Generična ekstrakcija `<TAG:dolžina>vrednost` za `CALL`, `QSL_VIA`, neobčutljivost na velikost črk, obrezovanje, pretvorba v velike črke |
-| 3 | `usesQslBuro` | 21 | Fuzzy logika: 5 pozitivnih primerov (BURO/bureau/via), 13 negativnih primerov (no/direct only/LOTW only/eQSL only), 3 robni primeri (null/prazno) |
+| 2 | `extractField` | 8 | Generična ekstrakcija `<TAG:dolžina>vrednost` za `CALL`, `QSL_VIA`, neobčutljivost na velikost črk, obrezovanje, pretvorba v velike črke, ADIF type specifier (`<TAG:len:TYPE>`) |
+| 3 | `usesQslBuro` | 21 | Fuzzy logika: 4 pozitivni primeri (eksplicitno BURO/bureau), 14 negativnih primerov (no/direct only/LOTW only/eQSL only/"QSL via KLICNI_ZNAK"), 3 robni primeri (null/prazno) |
 | 4 | `cache` | 3 | Krog shranjevanja/nalaganja JSON predpomnilnika, čiščenje po 7 dneh, obravnava manjkajoče datoteke |
 
 ### Kako testi delujejo

@@ -116,7 +116,7 @@ node adif-qrz-filter.js contest.adi --key=a1b2c3d4 --output=buro.adi --delay=800
 ```
 
 ### Tests
-- Added `adif-qrz-filter.test.js` with **36 tests** in 7 groups (`parseAdif`, `extractField`, `usesQslBuro`, `cache`).
+- Added `adif-qrz-filter.test.js` with **38 tests** in 7 groups (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`).
 
 ---
 
