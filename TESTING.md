@@ -6,23 +6,24 @@
 
 ## Overview
 
-The test suite covers the pure business-logic functions of `edi2adif.html`.
-All tests run in Node.js using the built-in `node:test` runner — no external
-dependencies required.
+All tests run in Node.js using the built-in `node:test` runner — no external dependencies required.
 
-**Test file:** `edi2adif.test.js`
-**Tests:** 120 across 9 test groups
+| Test file | Tool | Tests | Groups |
+|---|---|---|---|
+| `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
+| `edi-crosscheck.test.js` | `edi-crosscheck.html` | 41 | 5 |
+| `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
+
+The sections below document each test file in detail.
 
 ---
 
 ## Running the tests
 
 ```bash
-# Quick run (compact output)
-node --test edi2adif.test.js
-
-# Full spec output (group tree, timing)
 node --test --test-reporter=spec edi2adif.test.js
+node --test --test-reporter=spec edi-crosscheck.test.js
+node --test --test-reporter=spec adif-qrz-filter.test.js
 ```
 
 Requires **Node.js v18 or later** (`node:test` was stabilised in v18;
@@ -182,23 +183,24 @@ inline and tested in isolation.
 
 ## Pregled
 
-Testna zbirka pokriva čiste funkcije poslovne logike v `edi2adif.html`.
-Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez
-zunanjih odvisnosti.
+Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih odvisnosti.
 
-**Testna datoteka:** `edi2adif.test.js`
-**Testov:** 120 v 9 skupinah
+| Testna datoteka | Orodje | Testov | Skupin |
+|---|---|---|---|
+| `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
+| `edi-crosscheck.test.js` | `edi-crosscheck.html` | 41 | 5 |
+| `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
+
+Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 
 ---
 
 ## Zaganjanje testov
 
 ```bash
-# Hiter zagon (strnjeni izpis)
-node --test edi2adif.test.js
-
-# Celoten spec izpis (drevo skupin, časi)
 node --test --test-reporter=spec edi2adif.test.js
+node --test --test-reporter=spec edi-crosscheck.test.js
+node --test --test-reporter=spec adif-qrz-filter.test.js
 ```
 
 Zahteva **Node.js v18 ali novejši** (`node:test` je bil stabiliziran v v18;
@@ -341,11 +343,77 @@ je reimplementirana neposredno in testirana v izolaciji.
 
 ---
 
+## `edi-crosscheck.test.js` — 41 tests · 5 groups
+
+Covers the pure logic of `edi-crosscheck.html`: suffix stripping, edit distance, EDI parsing, and both crosscheck algorithms.
+
+### How the tests work
+
+`edi-crosscheck.html` is evaluated inside a `node:vm` context, the same pattern as `edi2adif.html`. Unlike that tool, no code is stripped — instead a Proxy-based DOM mock absorbs all property access and method calls silently, so the startup event-wiring runs without error.
+
+Module-level state (`_histDB`, `_results`) is `const`/`let` and therefore not accessible as ctx properties. Tests route all state through function declarations:
+- `clearHist()` — resets the DB and result set between tests
+- `addToHistDB(qsos)` — populates the historical database
+- `runCrosscheck(qsos)` — runs the check and **returns** the results array
+
+### Test groups
+
+#### 1 · `baseCall` (9 tests)
+Verifies portable/mobile suffix stripping.
+
+- `/P`, `/M`, `/MM`, `/AM`, `/QRP`, `/R`, `/A`, `/B` stripped from trailing position.
+- Prefix-slash callsigns (`OE/S59DGO`) left unchanged — they represent a different operating location.
+- Plain callsigns unchanged. Result always uppercased.
+
+#### 2 · `levenshtein` (9 tests)
+Verifies the Levenshtein distance function with `maxDist=2` early-exit.
+
+- Distance 0 for identical strings.
+- Distance 1 for single substitution, insertion, or deletion.
+- Distance 2 for two substitutions.
+- Returns `maxDist+1` when the length difference alone exceeds `maxDist` (early exit).
+- Handles empty strings correctly.
+
+#### 3 · `parseEDI` (9 tests)
+Verifies QSO extraction from an EDI file fragment.
+
+- Two-record file parsed correctly; callsigns and portable suffixes preserved.
+- Band resolved from `PBand` header and applied to all QSOs.
+- Locator stored in mixed-case convention (`JN65ar`); invalid locators cleared to `''`.
+- Date formatted as `DD.MM.YYYY`; two-digit year expanded.
+- `ERROR` callsigns skipped; CRLF line endings handled.
+
+#### 4 · `runCrosscheck — locator mismatch` (6 tests)
+
+| Test | What is verified |
+|---|---|
+| Clean match | No issue when locator equals historical mode |
+| High severity | `LOC_MISMATCH` severity `high` when mode confidence ≥ 60% and new locator never seen |
+| Medium severity | `LOC_MISMATCH` severity `med` when new locator appeared before (e.g. portable operation) |
+| Threshold | No flag when callsign has fewer than 3 historical appearances |
+| No locator | No flag when QSO has no locator (`wwl = ''`) |
+| allLocs order | Historical locator list in the issue is sorted by count descending |
+
+#### 5 · `runCrosscheck — callsign check` (8 tests)
+
+| Test | What is verified |
+|---|---|
+| CALL_SIMILAR d=1 | Call not in history; distance-1 match found and ranked first |
+| CALL_UNKNOWN | Call not in history; no similar found within distance 2 |
+| In history | No call issue when base call exists in DB |
+| Portable normalisation | `S59ABC/P` matched against `S59ABC` history — no call flag |
+| Sort order | Similar suggestions sorted by distance ASC, then count DESC |
+| Distance 2 | Distance-2 matches also flagged (`CALL_SIMILAR`) |
+| Combined issues | Unknown call produces only `CALL_SIMILAR`; no spurious LOC issue without history |
+| Deduplication | Repeated unknown call in new log reuses precomputed similar-call list |
+
+---
+
 ## CLI Tool Tests — `adif-qrz-filter.test.js`
 
 A separate test suite covers the Node.js CLI tool. It also uses `node:test` with no external dependencies.
 
-**Tests:** 48 across 7 test groups
+**Tests:** 48 across 4 test groups
 
 ### Running
 
@@ -371,11 +439,77 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 ---
 
+## `edi-crosscheck.test.js` — 41 testov · 5 skupin
+
+Pokriva čisto logiko `edi-crosscheck.html`: odstranjevanje pripon, razdalja urejanja, razčlenjevanje EDI in oba algoritma crosschecka.
+
+### Kako testi delujejo
+
+`edi-crosscheck.html` se izvede znotraj konteksta `node:vm` po enakem vzorcu kot `edi2adif.html`. Za razliko od tega orodja kode ne odstranjujemo — namesto tega nadomestek DOM na osnovi `Proxy` tiho absorbira vse dostope do lastnosti in klice metod, tako da se začetno priklapljanje poslušalcev dogodkov izvede brez napak.
+
+Stanje na ravni modula (`_histDB`, `_results`) je `const`/`let` in zato ni dostopno kot lastnost ctx. Testi upravljajo z vsem stanjem prek deklaracij funkcij:
+- `clearHist()` — ponastavi bazo in rezultate med testi
+- `addToHistDB(qsos)` — polni zgodovinsko bazo
+- `runCrosscheck(qsos)` — izvede crosscheck in **vrne** polje rezultatov
+
+### Skupine testov
+
+#### 1 · `baseCall` (9 testov)
+Preverja odstranjevanje prenosnih/mobilnih pripon.
+
+- `/P`, `/M`, `/MM`, `/AM`, `/QRP`, `/R`, `/A`, `/B` se odstranijo z zadnjega mesta.
+- Klicni znaki z priponsko poševnico (`OE/S59DGO`) ostanejo nespremenjeni — predstavljajo drugačno lokacijo delovanja.
+- Navadni klicni znaki nespremenjeni. Rezultat je vedno z velikimi črkami.
+
+#### 2 · `levenshtein` (9 testov)
+Preverja funkcijo Levenshteinove razdalje z zgodnjim izhodom pri `maxDist=2`.
+
+- Razdalja 0 za enake nize.
+- Razdalja 1 za eno zamenjavo, vstavljanje ali brisanje.
+- Razdalja 2 za dve zamenjavi.
+- Vrne `maxDist+1`, ko razlika v dolžini sama presega `maxDist` (zgodnji izhod).
+- Pravilno obravnava prazne nize.
+
+#### 3 · `parseEDI` (9 testov)
+Preverja ekstrakcijo QSO iz fragmenta EDI datoteke.
+
+- Datoteka z dvema zapisoma razčlenjena pravilno; klicni znaki in prenosne pripone ohranjeni.
+- Pas razrešen iz glave `PBand` in apliciran na vse QSO-je.
+- Lokator shranjen po konvenciji mešanih črk (`JN65ar`); neveljavni lokatorji počiščeni na `''`.
+- Datum formatiran kot `DD.MM.YYYY`; dvo-cifreno leto razvito.
+- Klicni znaki `ERROR` preskočeni; obravnavani zaključki vrstic CRLF.
+
+#### 4 · `runCrosscheck — neskladje lokatorja` (6 testov)
+
+| Test | Kaj se preverja |
+|---|---|
+| Čisto ujemanje | Brez težave, ko se lokator ujema z zgodovinskim modusom |
+| Visoka resnost | `LOC_MISMATCH` resnost `high`, ko zaupanje v modus ≥ 60% in nov lokator še nikoli ni bil viden |
+| Srednja resnost | `LOC_MISMATCH` resnost `med`, ko je bil nov lokator že viden (npr. prenosna postaja) |
+| Prag | Brez zastavice, ko ima klicni znak manj kot 3 zgodovinska pojavitev |
+| Brez lokatorja | Brez zastavice, ko QSO nima lokatorja (`wwl = ''`) |
+| Vrstni red allLocs | Seznam zgodovinskih lokatorjev v težavi je razvrščen po številu padajoče |
+
+#### 5 · `runCrosscheck — preverjanje klicnega znaka` (8 testov)
+
+| Test | Kaj se preverja |
+|---|---|
+| CALL_SIMILAR d=1 | Klicni znak ni v zgodovini; ujemanje z razdaljo 1 najdeno in razvrščeno na vrhu |
+| CALL_UNKNOWN | Klicni znak ni v zgodovini; ni podobnega v razdalji 2 |
+| V zgodovini | Brez težave z klicnim znakom, ko bazni klicni znak obstaja v bazi |
+| Normalizacija prenosnih | `S59ABC/P` se primerja z zgodovino `S59ABC` — brez zastavice klicnega znaka |
+| Vrstni red | Podobni predlogi razvrščeni po razdalji naraščajoče, nato po številu padajoče |
+| Razdalja 2 | Ujemanja z razdaljo 2 so prav tako označena (`CALL_SIMILAR`) |
+| Kombinacija težav | Neznani klicni znak ustvari samo `CALL_SIMILAR`; brez napačne LOC težave brez zgodovine |
+| Deduplikacija | Ponavljajoči se neznani klicni znak v novem dnevniku ponovno uporabi preračunan seznam podobnih |
+
+---
+
 ## Testi CLI orodja — `adif-qrz-filter.test.js`
 
 Ločena testna zbirka pokriva Node.js CLI orodje. Tudi ta uporablja `node:test` brez zunanjih odvisnosti.
 
-**Testov:** 48 v 7 skupinah
+**Testov:** 48 v 4 skupinah
 
 ### Zaganjanje
 

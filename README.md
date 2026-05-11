@@ -11,6 +11,7 @@ Tools for amateur radio log processing and format conversion.
 | Tool | Type | Purpose |
 |---|---|---|
 | [`edi2adif.html`](edi2adif.html) | Browser app | Convert REG1TEST EDI v1 contest logs to ADIF and CSV formats |
+| [`edi-crosscheck.html`](edi-crosscheck.html) | Browser app | Crosscheck a new EDI log against historical logs — flags locator mismatches and callsign typos |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filter an ADIF log to keep only QSOs with BURO-accepting stations |
 
 ---
@@ -65,6 +66,43 @@ Open the file in any modern browser — no installation required.
 
 No internet connection required after the page loads (except for Google Fonts).
 All processing happens in your browser — no files or QSO data are uploaded anywhere.
+
+---
+
+## EDI Crosscheck (`edi-crosscheck.html`)
+
+Browser tool that compares a new EDI contest log against a statistical database built from
+historical EDI logs. Helps catch locator mismatches and callsign typos before submitting the log.
+Open the file in any modern browser — no installation required.
+
+**[➜ Open edi-crosscheck.html](edi-crosscheck.html)**
+
+### How it works
+
+1. **Phase 1 — build database:** Drag any number of past EDI logs (1–50+) onto the tool. It builds a statistical map of which locator each callsign has historically used.
+2. **Phase 2 — crosscheck:** Drag the new EDI log. Every QSO is checked against the database.
+
+### What is flagged
+
+| Badge | Colour | Condition |
+|---|---|---|
+| `LOC!` | Red | Locator differs from historical mode; mode confidence ≥ 60% and new locator was never seen before |
+| `LOC?` | Amber | Locator differs from historical mode; lower confidence or new locator appeared before (operator moved) |
+| `CALL?` | Amber | Callsign not in history; similar callsign found (Levenshtein distance 1–2) |
+| `?` | Grey | Callsign not in history; no similar callsign found |
+| `✓` | Green | Callsign in history, locator matches historical mode |
+
+Portable and mobile suffixes (`/P`, `/M`, `/MM`, etc.) are stripped before lookup — `S59DGO/P` is matched against `S59DGO` history. The locator check requires at least 3 historical appearances for the callsign.
+
+### How to Use
+
+1. Download `edi-crosscheck.html` (single file, ~25 KB)
+2. Open it in any modern browser (Chrome, Firefox, Edge, Safari)
+3. Drag historical EDI logs onto the first drop zone — the database builds instantly
+4. Drag the new EDI log onto the second drop zone
+5. Review the results table — filter by "flagged only" or search by callsign
+
+No internet connection required. All processing is local in your browser.
 
 ---
 
@@ -130,6 +168,9 @@ Business-logic unit tests run in Node.js (v18+), no extra dependencies:
 # EDI → ADIF converter
 node --test --test-reporter=spec edi2adif.test.js
 
+# EDI Crosscheck
+node --test --test-reporter=spec edi-crosscheck.test.js
+
 # ADIF QRZ BURO filter
 node --test --test-reporter=spec adif-qrz-filter.test.js
 ```
@@ -137,7 +178,8 @@ node --test --test-reporter=spec adif-qrz-filter.test.js
 | Test file | Tests | Groups |
 |---|---|---|
 | `edi2adif.test.js` | 120 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit) |
-| `adif-qrz-filter.test.js` | 38 | 7 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
+| `edi-crosscheck.test.js` | 41 | 5 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` locator ×6, `runCrosscheck` callsign ×8) |
+| `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 
 See [TESTING.md](TESTING.md) for full test documentation.
 
@@ -167,6 +209,7 @@ Orodja za obdelavo in pretvorbo formatov radioamaterskih dnevnikov.
 | Orodje | Vrsta | Namen |
 |---|---|---|
 | [`edi2adif.html`](edi2adif.html) | Brskalniška app | Pretvorba REG1TEST EDI v1 tekmovalnih dnevnikov v ADIF in CSV formate |
+| [`edi-crosscheck.html`](edi-crosscheck.html) | Brskalniška app | Crosscheck novega EDI dnevnika glede na zgodovinske dnevnike — zaznava napake lokatorjev in klicnih znakov |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filtriranje ADIF dnevnika — ohrani samo zveze s postajami, ki sprejemajo biro |
 
 ---
@@ -221,6 +264,43 @@ Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
 
 Po nalaganju strani internetna povezava ni potrebna (razen za Google Fonts).
 Vsa obdelava poteka v brskalniku — nobene datoteke ali podatki o zvezah niso nikamor naloženi.
+
+---
+
+## EDI Crosscheck (`edi-crosscheck.html`)
+
+Brskalniško orodje, ki primerja nov EDI tekmovalni dnevnik z bazo, zgrajeno iz zgodovinskih EDI dnevnikov.
+Pomaga odkriti verjetne napake v lokatorjih in klicnih znakih pred oddajo dnevnika.
+Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
+
+**[➜ Odpri edi-crosscheck.html](edi-crosscheck.html)**
+
+### Kako deluje
+
+1. **Faza 1 — zgradi bazo:** Na orodje povleci poljubno število preteklih EDI dnevnikov (1–50+). Orodje zgradi statistično mapo, kateri lokator je kateri klicni znak zgodovinsko uporabljal.
+2. **Faza 2 — crosscheck:** Povleci nov EDI dnevnik. Vsaka zveza se preveri glede na bazo.
+
+### Kaj se zaznava
+
+| Oznaka | Barva | Pogoj |
+|---|---|---|
+| `LOC!` | Rdeča | Lokator se razlikuje od zgodovinskega modusa; zaupanje v modus ≥ 60% in nov lokator še nikoli ni bil viden |
+| `LOC?` | Rumena | Lokator se razlikuje od zgodovinskega modusa; nižje zaupanje ali nov lokator je bil že viden (prenosna postaja) |
+| `CALL?` | Rumena | Klicni znak ni v zgodovini; najden je podoben klicni znak (Levenshteinova razdalja 1–2) |
+| `?` | Siva | Klicni znak ni v zgodovini; ni podobnega klicnega znaka |
+| `✓` | Zelena | Klicni znak je v zgodovini, lokator ustreza modusu |
+
+Prenosne in mobilne pripone (`/P`, `/M`, `/MM` itd.) so odstranjene pred iskanjem — `S59DGO/P` se primerja z zgodovino `S59DGO`. Preverjanje lokatorja zahteva vsaj 3 zgodovinska pojavitev klicnega znaka.
+
+### Navodila za uporabo
+
+1. Prenesi `edi-crosscheck.html` (ena datoteka, ~25 KB)
+2. Odpri jo v katerem koli sodobnem brskalniku (Chrome, Firefox, Edge, Safari)
+3. Povleci zgodovinske EDI dnevnike na prvo območje za spuščanje — baza se zgradi takoj
+4. Povleci nov EDI dnevnik na drugo območje za spuščanje
+5. Preglej tabelo rezultatov — filtriraj po "samo označeni" ali išči po klicnem znaku
+
+Internetna povezava ni potrebna. Vsa obdelava poteka lokalno v brskalniku.
 
 ---
 
@@ -286,6 +366,9 @@ Enotni testi poslovne logike tečejo v Node.js (v18+), brez dodatnih odvisnosti:
 # EDI → ADIF pretvornik
 node --test --test-reporter=spec edi2adif.test.js
 
+# EDI Crosscheck
+node --test --test-reporter=spec edi-crosscheck.test.js
+
 # ADIF QRZ BURO filter
 node --test --test-reporter=spec adif-qrz-filter.test.js
 ```
@@ -293,7 +376,8 @@ node --test --test-reporter=spec adif-qrz-filter.test.js
 | Testna datoteka | Testov | Skupin |
 |---|---|---|
 | `edi2adif.test.js` | 120 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplikati, CSV izvoz, urejanje v živo) |
-| `adif-qrz-filter.test.js` | 38 | 7 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
+| `edi-crosscheck.test.js` | 41 | 5 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` lokator ×6, `runCrosscheck` klicni znak ×8) |
+| `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 
 Celotna dokumentacija je v [TESTING.md](TESTING.md).
 
