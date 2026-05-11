@@ -133,6 +133,29 @@ node adif-qrz-filter.js contest.adi --key=a1b2c3d4 --output=buro.adi --delay=800
 
 ---
 
+## edi-crosscheck.html Improvements — 2026-05-11
+
+### Missing locator suggestions (`LOC_MISSING`)
+When a QSO in the new log has no locator but the callsign exists in the historical database, the tool now raises a `LOC_MISSING` issue suggesting the historical mode locator. Severity is `high` when mode confidence ≥ threshold, otherwise `med`. Empty historical locators are skipped and do not affect mode calculation.
+
+### Configurable thresholds (toolbar sliders)
+Two slider controls added to the results toolbar:
+- **Min. pojavitev / Min. appearances** — range 1–10, default 3. Callsigns with fewer historical appearances than this value are not checked for locator issues.
+- **Confidence** — range 10–100%, default 60%. Determines the `high` vs `med` severity cutoff for both `LOC_MISMATCH` and `LOC_MISSING`.
+
+Changing either slider reveals a **Ponovi / Re-run** button that re-runs the crosscheck on the last loaded new log without requiring a file reload.
+
+### HTML export of flagged QSOs
+A new **Izvoz problemov / Export issues** button generates a self-contained HTML file with all flagged QSOs, including:
+- Original callsign, band, mode, date
+- Correction suggestions (`LOC_MISMATCH` → suggested locator, `LOC_MISSING` → suggested locator, `CALL_SIMILAR` → similar callsigns)
+- Summary header showing flag count, percentage, and active threshold values
+
+### Accessibility
+- Toast notification container now has `aria-live="polite"` for screen-reader announcements.
+
+---
+
 ## Proposed New Features
 
 ### High Priority
@@ -313,6 +336,29 @@ node adif-qrz-filter.js contest.adi --key=a1b2c3d4 --output=buro.adi --delay=800
 
 ### Testi
 - Dodana `adif-qrz-filter.test.js` z **36 testi** v 7 skupinah (`parseAdif`, `extractField`, `usesQslBuro`, `cache`).
+
+---
+
+## Izboljšave edi-crosscheck.html — 11. 5. 2026
+
+### Predlogi za manjkajoče lokatorje (`LOC_MISSING`)
+Ko zveza v novem dnevniku nima lokatorja, a klicni znak obstaja v zgodovinski bazi, orodje zdaj sproži težavo `LOC_MISSING` s predlaganim zgodovinskim modus lokatorjem. Resnost je `high`, ko je zaupanje v modus ≥ pragu, sicer `med`. Prazni zgodovinski lokatorji so preskočeni in ne vplivajo na izračun modusa.
+
+### Nastavljivi pragovi (drsniki v orodni vrstici)
+Dodana sta dva drsnika v orodno vrstico rezultatov:
+- **Min. pojavitev** — razpon 1–10, privzeto 3. Klicni znaki z manj zgodovinskimi pojavitvami se ne preverjajo za težave z lokatorjem.
+- **Confidence** — razpon 10–100%, privzeto 60%. Določa mejo med resnostjo `high` in `med` za `LOC_MISMATCH` in `LOC_MISSING`.
+
+Sprememba katerega koli drsnika razkrije gumb **Ponovi**, ki ponovi crosscheck na zadnjem naloženem novem dnevniku brez ponovnega nalaganja datoteke.
+
+### HTML izvoz označenih QSO
+Nov gumb **Izvoz problemov** ustvari samostojno HTML datoteko z vsemi označenimi QSO, vključno z:
+- izvirnim klicnim znakom, pasom, načinom, datumom
+- predlogi popravkov (`LOC_MISMATCH` → predlagan lokator, `LOC_MISSING` → predlagan lokator, `CALL_SIMILAR` → podobni klicni znaki)
+- povzetkom v glavi s številom označenih, deležem in vrednostmi aktivnih pragov
+
+### Dostopnost
+- Vsebnik obvestil `toast` ima zdaj `aria-live="polite"` za napovedi bralnikom zaslonov.
 
 ---
 

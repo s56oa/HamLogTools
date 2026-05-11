@@ -140,9 +140,11 @@ tr.sev-loc-med  td{background:rgba(240,165,0,.09)}
 tr.sev-call-d1  td{background:rgba(240,165,0,.07)}
 tr.sev-call-d2  td{background:rgba(99,126,150,.07)}
 tr.sev-unknown  td{background:rgba(99,126,150,.04)}
+tr.sev-loccall  td{background:rgba(77,157,224,.07)}
+tr.sev-loccall2 td{background:rgba(99,126,150,.05)}
 tr.sev-loc-high:hover td,tr.sev-loc-med:hover td,
 tr.sev-call-d1:hover td,tr.sev-call-d2:hover td,
-tr.sev-unknown:hover td{filter:brightness(1.12)}
+tr.sev-unknown:hover td,tr.sev-loccall:hover td,tr.sev-loccall2:hover td{filter:brightness(1.12)}
 
 .badge{display:inline-block;font-size:9px;padding:1px 5px;border-radius:2px;
   font-family:'Space Mono',monospace;vertical-align:middle;margin-right:2px}
@@ -152,6 +154,8 @@ tr.sev-unknown:hover td{filter:brightness(1.12)}
 .badge-call {background:rgba(240,165,0,.22);color:var(--accent3)}
 .badge-call2{background:rgba(99,126,150,.2);color:var(--muted)}
 .badge-unk  {background:rgba(99,126,150,.15);color:var(--dim)}
+.badge-loccall {background:rgba(77,157,224,.22);color:var(--accent)}
+.badge-loccall2{background:rgba(99,126,150,.18);color:var(--muted)}
 
 .chip{
   display:inline-block;font-family:'Space Mono',monospace;font-size:10px;
@@ -264,6 +268,17 @@ tr.sev-unknown:hover td{filter:brightness(1.12)}
         <option value="flagged" data-i18n="fFlagged">Samo označene</option>
         <option value="clean"   data-i18n="fClean">Samo čiste</option>
       </select>
+      <div class="toolbar-sep"></div>
+      <label style="font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px;white-space:nowrap">
+        <span data-i18n="lblMinApp">Min. pojavitev:</span> <span id="valMinApp">3</span>
+        <input type="range" id="rngMinApp" min="1" max="10" value="3" style="width:60px;cursor:pointer" onchange="updatePrag()">
+      </label>
+      <label style="font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px;white-space:nowrap">
+        <span data-i18n="lblConf">Confidence:</span> <span id="valConf">60</span>%
+        <input type="range" id="rngConf" min="10" max="100" value="60" style="width:60px;cursor:pointer" onchange="updatePrag()">
+      </label>
+      <button class="btn btn-secondary btn-sm" id="btnRerun" onclick="rerunCrosscheck()" style="display:none">⟳ Ponovi</button>
+      <button class="btn btn-secondary btn-sm" id="btnExport" onclick="exportIssues()" style="display:none" data-i18n="btnExport">⬇ Izvoz problemov</button>
       <div class="row-count" id="rowCount"></div>
     </div>
     <div class="tbl-wrap">
@@ -276,7 +291,7 @@ tr.sev-unknown:hover td{filter:brightness(1.12)}
 
 </main>
 
-<div id="toast"></div>
+<div id="toast" aria-live="polite"></div>
 
 <script>
 // ════════════════════════════════════════
@@ -299,13 +314,29 @@ sl:{
   thNum:'#', thStatus:'Status', thCall:'Klicni znak', thBase:'Norm.',
   thLoc:'Lokator', thBand:'Pas', thMode:'Način', thDate:'Datum', thDetail:'Ugotovitve',
   sumTotal:'skupaj QSO', sumClean:'čistih', sumFlagged:'označenih',
-  sumLocH:'LOC! (visoka)', sumLocM:'LOC? (srednja)', sumCall:'CALL?', sumUnk:'neznani',
+  sumLocH:'LOC! (visoka)', sumLocM:'LOC? (srednja)', sumCall:'CALL?', sumCallLoc:'CALL? lok.', sumUnk:'neznani',
   clean:'Čisto — v zgodovinski bazi',
   histMode:'Hist. mod:',
   similar:'Podoben:',
+  fromLocator:'Iz lokatorja:',
   noSimilar:'Ni podobnih v zgodovini',
   errEdi:'Napaka pri branju EDI',
+  exportTitle:'EDI Crosscheck — Problematične zveze',
+  exportMeta:'${flagged} od ${total} QSO (${pct}%) | Min. pojavitev: ${minApp} | Confidence: ${conf}%',
+  exportCols:['#','Klicni znak','Pas','Način','Datum','Predlogi popravkov'],
   srchPlaceholder:'Išči klicni znak…',
+  btnExport:'⬇ Izvoz problemov',
+  rerunToast:'Crosscheck ponovljen z novimi pragovi',
+  lblMinApp:'Min. pojavitev:',
+  lblConf:'Confidence:',
+  expNoIssues:'Ni problematičnih zvez za izvoz',
+  expToast:'Izvoz: ${n} problematičnih zvez',
+  expLocPrefix:'Lokator:',
+  expSuggest:'→ predlagaj',
+  expMissingLoc:'Manjkajoč lokator',
+  expSimilarCall:'Podoben klicni znak:',
+  expCallByLoc:'Klicni znak iz lokatorja:',
+  expUnknownCall:'Neznan klicni znak — ni podobnih v zgodovini',
 },
 en:{
   stepTitle1:'Load historical logs',
@@ -323,13 +354,29 @@ en:{
   thNum:'#', thStatus:'Status', thCall:'Callsign', thBase:'Norm.',
   thLoc:'Locator', thBand:'Band', thMode:'Mode', thDate:'Date', thDetail:'Findings',
   sumTotal:'total QSOs', sumClean:'clean', sumFlagged:'flagged',
-  sumLocH:'LOC! (high)', sumLocM:'LOC? (med)', sumCall:'CALL?', sumUnk:'unknown',
+  sumLocH:'LOC! (high)', sumLocM:'LOC? (med)', sumCall:'CALL?', sumCallLoc:'CALL? loc.', sumUnk:'unknown',
   clean:'Clean — found in history',
   histMode:'Hist. mode:',
   similar:'Similar:',
+  fromLocator:'From locator:',
   noSimilar:'No similar found in history',
   errEdi:'EDI read error',
+  exportTitle:'EDI Crosscheck — Flagged QSOs',
+  exportMeta:'${flagged} of ${total} QSOs (${pct}%) | Min. appearances: ${minApp} | Confidence: ${conf}%',
+  exportCols:['#','Callsign','Band','Mode','Date','Correction suggestions'],
   srchPlaceholder:'Search callsign…',
+  btnExport:'⬇ Export issues',
+  rerunToast:'Crosscheck re-run with new thresholds',
+  lblMinApp:'Min. appearances:',
+  lblConf:'Confidence:',
+  expNoIssues:'No flagged QSOs to export',
+  expToast:'Exported: ${n} flagged QSOs',
+  expLocPrefix:'Locator:',
+  expSuggest:'→ suggest',
+  expMissingLoc:'Missing locator',
+  expSimilarCall:'Similar callsign:',
+  expCallByLoc:'Callsign from locator:',
+  expUnknownCall:'Unknown callsign — no similar found in history',
 }};
 let _lang = 'sl';
 function t(k){ return (S[_lang]||S.sl)[k] || (S.sl[k]||k); }
@@ -339,7 +386,10 @@ function setLang(l){
   document.getElementById('btnEN').classList.toggle('active', l==='en');
   document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.dataset.i18n));
   document.getElementById('searchInp').placeholder = t('srchPlaceholder');
-  if(_results.length){ renderSummaryBar(); renderResults(); }
+  // Update slider value labels to match current language
+  updatePrag();
+  renderSummaryBar();
+  renderResults();
 }
 
 // ════════════════════════════════════════
@@ -410,7 +460,13 @@ function parseEDI(text, filename){
 //  UTILITIES
 // ════════════════════════════════════════
 function baseCall(call){
-  return call.toUpperCase().replace(/\/(P|M|MM|AM|QRP|R|A|B)$/i, '');
+  const upper = call.toUpperCase();
+  const i = upper.lastIndexOf('/');
+  if(i <= 0) return upper;
+  // If the part before the slash contains a digit, it's a callsign+suffix pattern → strip suffix
+  if(/\d/.test(upper.slice(0, i))) return upper.slice(0, i);
+  // Otherwise it's a prefix+call pattern (e.g. OE/S59DGO, F/ON4AAA) → keep as-is
+  return upper;
 }
 
 function levenshtein(a, b, maxDist){
@@ -440,8 +496,12 @@ function htmlEsc(s){
 //  Map<baseCall, { locators: Map<locUPPER, count>, total: int }>
 // ════════════════════════════════════════
 const _histDB = new Map();
+const _locToCalls = new Map(); // Map<locatorUpper → Map<baseCall, count>>
 let _histFiles = [];   // [{name, size}]
 let _histQsoCount = 0;
+let _lastQsos = [];    // last new-log QSOs for re-run
+let _minAppearances = 3;
+let _minConfidence  = 0.6;
 
 function addToHistDB(qsos){
   for(const q of qsos){
@@ -452,12 +512,15 @@ function addToHistDB(qsos){
     if(q.wwl){
       const loc = q.wwl.toUpperCase();
       entry.locators.set(loc, (entry.locators.get(loc)||0)+1);
+      if(!_locToCalls.has(loc)) _locToCalls.set(loc, new Map());
+      _locToCalls.get(loc).set(base, (_locToCalls.get(loc).get(base)||0)+1);
     }
   }
 }
 
 function clearHist(){
   _histDB.clear();
+  _locToCalls.clear();
   _histFiles = [];
   _histQsoCount = 0;
   _results = [];
@@ -492,16 +555,20 @@ function updateDbCard(){
 //  CROSSCHECK ALGORITHM
 // ════════════════════════════════════════
 function getModeLocator(entry){
-  let best = null;
-  for(const [loc, count] of entry.locators)
-    if(!best || count > best.count) best = { loc, count };
-  return best;
+  if(!entry.locators.size) return null;
+  const sorted = [...entry.locators.entries()].sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]));
+  return { loc: sorted[0][0], count: sorted[0][1] };
 }
 
-function findSimilar(base, histCalls){
+function findSimilar(base, histCalls, distCache){
   const similar = [];
   for(const hcall of histCalls){
-    const d = levenshtein(base, hcall, 2);
+    const cacheKey = base + '\n' + hcall;
+    let d = distCache ? distCache.get(cacheKey) : undefined;
+    if(d === undefined){
+      d = levenshtein(base, hcall, 2);
+      if(distCache) distCache.set(cacheKey, d);
+    }
     if(d > 0 && d <= 2){
       similar.push({ call: hcall, dist: d, count: _histDB.get(hcall).total });
     }
@@ -517,9 +584,11 @@ function runCrosscheck(qsos){
 
   // Pre-compute similar calls for each unique unknown base call
   const similarCache = new Map();
+  // Levenshtein distance cache to avoid recomputing the same pair
+  const distCache = new Map();
   const seenBases = new Set(qsos.map(q => baseCall(q.call)));
   for(const base of seenBases){
-    if(!_histDB.has(base)) similarCache.set(base, findSimilar(base, histCalls));
+    if(!_histDB.has(base)) similarCache.set(base, findSimilar(base, histCalls, distCache));
   }
 
   _results = qsos.map((qso, idx) => {
@@ -527,34 +596,70 @@ function runCrosscheck(qsos){
     const histEntry = _histDB.get(base);
     const issues = [];
 
-    // Locator mismatch: only if call is in history with >= 3 appearances and QSO has a locator
-    if(histEntry && histEntry.total >= 3 && qso.wwl){
+    // Locator check
+    if(histEntry && histEntry.total >= _minAppearances && histEntry.locators.size > 0){
       const modeLoc = getModeLocator(histEntry);
-      const newLocUp = qso.wwl.toUpperCase();
-      if(modeLoc && modeLoc.loc !== newLocUp){
-        const newLocCount = histEntry.locators.get(newLocUp) || 0;
-        const modeConf = modeLoc.count / histEntry.total;
-        // Sort all locators by count descending for display
-        const allLocs = [...histEntry.locators.entries()].sort((a,b) => b[1]-a[1]);
-        issues.push({
-          type: 'LOC_MISMATCH',
-          historicalMode: modeLoc.loc,
-          historicalModeCount: modeLoc.count,
-          newLocCount,
-          total: histEntry.total,
-          allLocs,
-          severity: (modeConf >= 0.6 && newLocCount === 0) ? 'high' : 'med',
-        });
+      if(modeLoc){
+        if(qso.wwl){
+          const newLocUp = qso.wwl.toUpperCase();
+          if(modeLoc.loc !== newLocUp){
+            const newLocCount = histEntry.locators.get(newLocUp) || 0;
+            const modeConf = modeLoc.count / histEntry.total;
+            const allLocs = [...histEntry.locators.entries()].sort((a,b) => b[1]-a[1]);
+            issues.push({
+              type: 'LOC_MISMATCH',
+              historicalMode: modeLoc.loc,
+              historicalModeCount: modeLoc.count,
+              newLocCount,
+              total: histEntry.total,
+              allLocs,
+              severity: (modeConf >= _minConfidence && newLocCount === 0) ? 'high' : 'med',
+            });
+          }
+        } else {
+          // Missing locator in new log — suggest historical mode
+          const modeConf = modeLoc.count / histEntry.total;
+          const allLocs = [...histEntry.locators.entries()].sort((a,b) => b[1]-a[1]);
+          issues.push({
+            type: 'LOC_MISSING',
+            historicalMode: modeLoc.loc,
+            historicalModeCount: modeLoc.count,
+            total: histEntry.total,
+            allLocs,
+            severity: modeConf >= _minConfidence ? 'high' : 'med',
+          });
+        }
       }
     }
 
     // Callsign check: only if not in history at all
     if(!histEntry){
-      const similar = similarCache.get(base) || [];
-      issues.push(similar.length > 0
-        ? { type: 'CALL_SIMILAR', similar }
+      const globalSimilar = similarCache.get(base) || [];
+      issues.push(globalSimilar.length > 0
+        ? { type: 'CALL_SIMILAR', similar: globalSimilar }
         : { type: 'CALL_UNKNOWN' }
       );
+
+      // Locator-filtered callsign suggestion (composite heuristic)
+      if(qso.wwl){
+        const locCalls = _locToCalls.get(qso.wwl.toUpperCase());
+        if(locCalls && locCalls.size > 0){
+          const candidates = [];
+          for(const [hcall, count] of locCalls){
+            const cacheKey = base + '\n' + hcall;
+            let d = distCache.get(cacheKey);
+            if(d === undefined){
+              d = levenshtein(base, hcall, 2);
+              distCache.set(cacheKey, d);
+            }
+            if(d > 0 && d <= 2) candidates.push({ call: hcall, dist: d, count });
+          }
+          if(candidates.length > 0){
+            candidates.sort((a,b) => a.dist-b.dist || b.count-a.count);
+            issues.push({ type: 'CALL_BY_LOC', similar: candidates.slice(0,5) });
+          }
+        }
+      }
     }
 
     return { qso, issues, base, idx: idx+1 };
@@ -567,12 +672,14 @@ function runCrosscheck(qsos){
 // ════════════════════════════════════════
 function renderSummaryBar(){
   if(!_results.length){ document.getElementById('summaryBar').innerHTML=''; return; }
-  let nClean=0, nLocH=0, nLocM=0, nCall=0, nUnk=0;
+  let nClean=0, nLocH=0, nLocM=0, nLocMiss=0, nCall=0, nCallLoc=0, nUnk=0;
   for(const r of _results){
     if(!r.issues.length){ nClean++; continue; }
     for(const iss of r.issues){
       if(iss.type==='LOC_MISMATCH')  iss.severity==='high' ? nLocH++ : nLocM++;
+      else if(iss.type==='LOC_MISSING') nLocMiss++;
       else if(iss.type==='CALL_SIMILAR') nCall++;
+      else if(iss.type==='CALL_BY_LOC') nCallLoc++;
       else nUnk++;
     }
   }
@@ -586,7 +693,9 @@ function renderSummaryBar(){
     stat(nFlagged, nFlagged?'warn':'ok', t('sumFlagged')) +
     (nLocH ? stat(nLocH, 'err',  t('sumLocH')) : '') +
     (nLocM ? stat(nLocM, 'warn', t('sumLocM')) : '') +
+    (nLocMiss ? stat(nLocMiss, 'warn', t('sumLocM')) : '') +
     (nCall ? stat(nCall, 'warn', t('sumCall'))  : '') +
+    (nCallLoc ? stat(nCallLoc, 'warn', t('sumCallLoc')) : '') +
     (nUnk  ? stat(nUnk,  'dim',  t('sumUnk'))   : '');
 }
 
@@ -596,8 +705,11 @@ function rowSevClass(issues){
     if(iss.type==='LOC_MISMATCH' && iss.severity==='high') return 'sev-loc-high';
   for(const iss of issues){
     if(iss.type==='LOC_MISMATCH') return 'sev-loc-med';
+    if(iss.type==='LOC_MISSING') return 'sev-loc-med';
     if(iss.type==='CALL_SIMILAR' && iss.similar[0]?.dist===1) return 'sev-call-d1';
     if(iss.type==='CALL_SIMILAR') return 'sev-call-d2';
+    if(iss.type==='CALL_BY_LOC'  && iss.similar[0]?.dist===1) return 'sev-loccall';
+    if(iss.type==='CALL_BY_LOC') return 'sev-loccall2';
     if(iss.type==='CALL_UNKNOWN') return 'sev-unknown';
   }
   return '';
@@ -608,9 +720,15 @@ function renderBadges(issues){
   return issues.map(iss => {
     if(iss.type==='LOC_MISMATCH')
       return `<span class="badge ${iss.severity==='high'?'badge-loc-h':'badge-loc-m'}">LOC?</span>`;
+    if(iss.type==='LOC_MISSING')
+      return `<span class="badge badge-loc-m">LOC?</span>`;
     if(iss.type==='CALL_SIMILAR'){
       const minD = iss.similar[0]?.dist || 2;
       return `<span class="badge ${minD===1?'badge-call':'badge-call2'}">CALL?</span>`;
+    }
+    if(iss.type==='CALL_BY_LOC'){
+      const minD = iss.similar[0]?.dist || 2;
+      return `<span class="badge ${minD===1?'badge-loccall':'badge-loccall2'}">LOC-CALL?</span>`;
     }
     return `<span class="badge badge-unk">?</span>`;
   }).join('');
@@ -631,6 +749,12 @@ function renderDetail(issues){
         `<span class="chip ${s.dist===1?'d1':''}">${htmlEsc(s.call)}<span class="cnt">d=${s.dist} · ${s.count}×</span></span>`
       ).join('');
       return `<span style="color:var(--muted)">${htmlEsc(t('similar'))}</span> ${chips}`;
+    }
+    if(iss.type === 'CALL_BY_LOC'){
+      const chips = iss.similar.map(s =>
+        `<span class="chip ${s.dist===1?'d1':''}">${htmlEsc(s.call)}<span class="cnt">d=${s.dist} · ${s.count}×</span></span>`
+      ).join('');
+      return `<span style="color:var(--muted)">${htmlEsc(t('fromLocator'))}</span> ${chips}`;
     }
     return `<span style="color:var(--dim);font-size:10px">${htmlEsc(t('noSimilar'))}</span>`;
   }).join('<br>');
@@ -685,9 +809,82 @@ function showResults(){
   document.getElementById('divResults').style.display = 'block';
   document.getElementById('panelC').style.display = 'block';
   document.getElementById('numB').className = 'phase-num done';
+  document.getElementById('btnExport').style.display = 'inline-block';
   renderSummaryBar();
   renderResults();
   document.getElementById('panelC').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function exportIssues(){
+  const flagged = _results.filter(r => r.issues.length > 0);
+  if(!flagged.length){ showToast(t('expNoIssues')); return; }
+
+  const rows = flagged.map(r => {
+    const q = r.qso;
+    const issues = r.issues.map(iss => {
+      if(iss.type === 'LOC_MISMATCH'){
+        return `${t('expLocPrefix')} <b>${htmlEsc(q.wwl||'—')}</b> ${t('expSuggest')} <b>${htmlEsc(iss.historicalMode)}</b> (mode ${iss.historicalModeCount}/${iss.total} = ${Math.round(iss.historicalModeCount/iss.total*100)}%)`;
+      }
+      if(iss.type === 'LOC_MISSING'){
+        return `${t('expMissingLoc')} ${t('expSuggest')} <b>${htmlEsc(iss.historicalMode)}</b> (mode ${iss.historicalModeCount}/${iss.total} = ${Math.round(iss.historicalModeCount/iss.total*100)}%)`;
+      }
+      if(iss.type === 'CALL_SIMILAR'){
+        const sug = iss.similar.slice(0,3).map(s => `${htmlEsc(s.call)} (d=${s.dist})`).join(', ');
+        return `${t('expSimilarCall')} ${sug}`;
+      }
+      if(iss.type === 'CALL_BY_LOC'){
+        const sug = iss.similar.slice(0,3).map(s => `${htmlEsc(s.call)} (d=${s.dist})`).join(', ');
+        return `${t('expCallByLoc')} ${sug}`;
+      }
+      return t('expUnknownCall');
+    }).join('<br>');
+
+    return `<tr>
+      <td>${r.idx}</td>
+      <td><b>${htmlEsc(q.call)}</b></td>
+      <td>${htmlEsc(q.band||'')}</td>
+      <td>${htmlEsc(q.mode||'')}</td>
+      <td>${htmlEsc(q.dateDisp||'')}</td>
+      <td>${issues}</td>
+    </tr>`;
+  }).join('');
+
+  const cols = t('exportCols');
+  const meta = t('exportMeta')
+    .replaceAll('${flagged}', flagged.length)
+    .replaceAll('${total}', _results.length)
+    .replaceAll('${pct}', Math.round(flagged.length/_results.length*100))
+    .replaceAll('${minApp}', _minAppearances)
+    .replaceAll('${conf}', Math.round(_minConfidence*100));
+  const html = `<!DOCTYPE html>
+<html lang="${_lang}">
+<head><meta charset="UTF-8"><title>${htmlEsc(t('exportTitle'))}</title>
+<style>
+body{font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:#18273a;background:#f0f4f8;padding:2rem}
+h1{font-size:1.4rem;margin-bottom:.5rem}
+h2{font-size:1rem;color:#4a6275;margin-bottom:1.5rem;font-weight:400}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+th{background:#e4ecf3;padding:.6rem .8rem;text-align:left;font-size:11px;text-transform:uppercase;color:#4a6275;font-weight:600}
+td{padding:.5rem .8rem;border-bottom:1px solid #e4ecf3;vertical-align:top}
+tr:hover td{background:#f8fafc}
+b{color:#c03030}
+</style></head>
+<body>
+<h1>${htmlEsc(t('exportTitle'))}</h1>
+<h2>${htmlEsc(meta)}</h2>
+<table>
+  <thead><tr>${cols.map(c => '<th>' + htmlEsc(c) + '</th>').join('')}</tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+</body></html>`;
+
+  const blob = new Blob([html], {type:'text/html'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'crosscheck-issues.html';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 0);
+  showToast(t('expToast').replaceAll('${n}', flagged.length));
 }
 
 // ════════════════════════════════════════
@@ -718,15 +915,22 @@ function loadHistFiles(files){
       done++;
       if(done === arr.length) updateDbCard();
     };
+    r.onerror = () => {
+      showToast(t('errEdi') + ': ' + f.name, true);
+      done++;
+      if(done === arr.length) updateDbCard();
+    };
     r.readAsText(f, 'utf-8');
   });
 }
 
 function loadNewFile(file){
+  _results = []; // clear previous results while loading
   const r = new FileReader();
   r.onload = e => {
     try {
       const { qsos } = parseEDI(e.target.result, file.name);
+      _lastQsos = qsos;
       runCrosscheck(qsos);
       showResults();
     } catch(err) {
@@ -734,6 +938,24 @@ function loadNewFile(file){
     }
   };
   r.readAsText(file, 'utf-8');
+}
+
+function updatePrag(){
+  _minAppearances = parseInt(document.getElementById('rngMinApp').value, 10);
+  _minConfidence  = parseInt(document.getElementById('rngConf').value, 10) / 100;
+  document.getElementById('valMinApp').textContent = _minAppearances;
+  document.getElementById('valConf').textContent = Math.round(_minConfidence * 100);
+  if(_lastQsos.length){
+    document.getElementById('btnRerun').style.display = 'inline-block';
+  }
+}
+
+function rerunCrosscheck(){
+  if(!_lastQsos.length) return;
+  runCrosscheck(_lastQsos);
+  renderSummaryBar();
+  renderResults();
+  showToast(t('rerunToast'));
 }
 
 function setNewDropEnabled(enabled){

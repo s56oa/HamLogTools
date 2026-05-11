@@ -11,7 +11,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | Test file | Tool | Tests | Groups |
 |---|---|---|---|
 | `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
-| `edi-crosscheck.test.js` | `edi-crosscheck.html` | 41 | 5 |
+| `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 
 The sections below document each test file in detail.
@@ -188,7 +188,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | Testna datoteka | Orodje | Testov | Skupin |
 |---|---|---|---|
 | `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
-| `edi-crosscheck.test.js` | `edi-crosscheck.html` | 41 | 5 |
+| `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 
 Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
@@ -343,9 +343,9 @@ je reimplementirana neposredno in testirana v izolaciji.
 
 ---
 
-## `edi-crosscheck.test.js` — 41 tests · 5 groups
+## `edi-crosscheck.test.js` — 56 tests · 8 groups
 
-Covers the pure logic of `edi-crosscheck.html`: suffix stripping, edit distance, EDI parsing, and both crosscheck algorithms.
+Covers the pure logic of `edi-crosscheck.html`: suffix stripping, edit distance, EDI parsing, and all crosscheck algorithms including configurable thresholds and missing-locator suggestions.
 
 ### How the tests work
 
@@ -358,11 +358,14 @@ Module-level state (`_histDB`, `_results`) is `const`/`let` and therefore not ac
 
 ### Test groups
 
-#### 1 · `baseCall` (9 tests)
-Verifies portable/mobile suffix stripping.
+#### 1 · `baseCall` (13 tests)
+Verifies suffix stripping for crosscheck matching.
 
-- `/P`, `/M`, `/MM`, `/AM`, `/QRP`, `/R`, `/A`, `/B` stripped from trailing position.
-- Prefix-slash callsigns (`OE/S59DGO`) left unchanged — they represent a different operating location.
+- **Portable/mobile suffixes** (`/P`, `/M`, `/MM`, `/AM`, `/QRP`, `/R`, `/A`, `/B`) stripped from trailing position.
+- **Italian regional suffixes** (`/IV3`, `/I1`, etc.) stripped — treated the same as `/P` because they indicate the same station operating from a different region.
+- **Numerical district suffixes** (`/1`, `/2`, etc.) stripped.
+- **Prefix-slash callsigns** (`OE/S59DGO`, `F/ON4AAA`) left unchanged — they represent a different operating location (prefix is a country/region prefix, not a suffix).
+- Heuristic: if the part *before* the slash contains a digit, it's a `callsign/suffix` pattern and the suffix is stripped; otherwise it's a `prefix/call` pattern and kept as-is.
 - Plain callsigns unchanged. Result always uppercased.
 
 #### 2 · `levenshtein` (9 tests)
@@ -391,7 +394,7 @@ Verifies QSO extraction from an EDI file fragment.
 | High severity | `LOC_MISMATCH` severity `high` when mode confidence ≥ 60% and new locator never seen |
 | Medium severity | `LOC_MISMATCH` severity `med` when new locator appeared before (e.g. portable operation) |
 | Threshold | No flag when callsign has fewer than 3 historical appearances |
-| No locator | No flag when QSO has no locator (`wwl = ''`) |
+| No locator | No `LOC_MISMATCH` when QSO has no locator (`wwl = ''`) — instead `LOC_MISSING` may be raised |
 | allLocs order | Historical locator list in the issue is sorted by count descending |
 
 #### 5 · `runCrosscheck — callsign check` (8 tests)
@@ -406,6 +409,32 @@ Verifies QSO extraction from an EDI file fragment.
 | Distance 2 | Distance-2 matches also flagged (`CALL_SIMILAR`) |
 | Combined issues | Unknown call produces only `CALL_SIMILAR`; no spurious LOC issue without history |
 | Deduplication | Repeated unknown call in new log reuses precomputed similar-call list |
+
+#### 6 · `runCrosscheck — missing locator suggestion` (4 tests)
+
+| Test | What is verified |
+|---|---|
+| Suggests mode locator | `LOC_MISSING` raised when new log QSO has no locator but history exists |
+| Medium severity | `LOC_MISSING` severity `med` when mode confidence is below the threshold |
+| Threshold | No `LOC_MISSING` when fewer than `_minAppearances` historical entries |
+| Empty history locators | No `LOC_MISSING` when all historical entries have empty locators |
+
+#### 7 · `runCrosscheck — configurable thresholds` (3 tests)
+
+| Test | What is verified |
+|---|---|
+| `_minAppearances` | No flag when historical count is below the slider threshold |
+| `_minConfidence` | Severity respects the confidence slider (high vs med) |
+| Empty locators ignored | Empty historical locators do not affect mode calculation |
+
+#### 8 · `runCrosscheck — callsign by locator` (4 tests)
+
+| Test | What is verified |
+|---|---|
+| CALL_BY_LOC basic | Suggests calls historically seen from the same locator and within Levenshtein ≤ 2 |
+| No match | No `CALL_BY_LOC` when no historical calls from that locator are within distance 2 |
+| Separate from CALL_SIMILAR | `CALL_BY_LOC` and `CALL_SIMILAR` appear as distinct issues in the result |
+| Redundant coexistence | `CALL_BY_LOC` is raised even when its candidates overlap with `CALL_SIMILAR` — both signals are shown as corroborating evidence |
 
 ---
 
@@ -439,9 +468,9 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 ---
 
-## `edi-crosscheck.test.js` — 41 testov · 5 skupin
+## `edi-crosscheck.test.js` — 56 testov · 8 skupin
 
-Pokriva čisto logiko `edi-crosscheck.html`: odstranjevanje pripon, razdalja urejanja, razčlenjevanje EDI in oba algoritma crosschecka.
+Pokriva čisto logiko `edi-crosscheck.html`: odstranjevanje pripon, razdalja urejanja, razčlenjevanje EDI in vse algoritme crosschecka, vključno z nastavljivimi pragovi in predlogi za manjkajoče lokatorje.
 
 ### Kako testi delujejo
 
@@ -454,11 +483,14 @@ Stanje na ravni modula (`_histDB`, `_results`) je `const`/`let` in zato ni dosto
 
 ### Skupine testov
 
-#### 1 · `baseCall` (9 testov)
-Preverja odstranjevanje prenosnih/mobilnih pripon.
+#### 1 · `baseCall` (13 testov)
+Preverja odstranjevanje pripon za ujemanje pri crosschecku.
 
-- `/P`, `/M`, `/MM`, `/AM`, `/QRP`, `/R`, `/A`, `/B` se odstranijo z zadnjega mesta.
-- Klicni znaki z priponsko poševnico (`OE/S59DGO`) ostanejo nespremenjeni — predstavljajo drugačno lokacijo delovanja.
+- **Prenosne/mobilne pripone** (`/P`, `/M`, `/MM`, `/AM`, `/QRP`, `/R`, `/A`, `/B`) se odstranijo z zadnjega mesta.
+- **Italijanski regionalni sufiksi** (`/IV3`, `/I1` itd.) se odstranijo — obravnavani so enako kot `/P`, ker gre za isto postajo, ki oddaja iz druge regije.
+- **Številčni sufiksi okrajev** (`/1`, `/2` itd.) se odstranijo.
+- **Klicni znaki z predponsko poševnico** (`OE/S59DGO`, `F/ON4AAA`) ostanejo nespremenjeni — predstavljajo drugačno lokacijo delovanja (predpona je državna/regionalna, ne sufiks).
+- Hevristika: če del *pred* poševnico vsebuje številko, gre za vzorec `klicniZnak/sufiks` in sufiks se odstrani; sicer gre za `predpona/klicniZnak` in se ohrani nespremenjeno.
 - Navadni klicni znaki nespremenjeni. Rezultat je vedno z velikimi črkami.
 
 #### 2 · `levenshtein` (9 testov)
@@ -487,7 +519,7 @@ Preverja ekstrakcijo QSO iz fragmenta EDI datoteke.
 | Visoka resnost | `LOC_MISMATCH` resnost `high`, ko zaupanje v modus ≥ 60% in nov lokator še nikoli ni bil viden |
 | Srednja resnost | `LOC_MISMATCH` resnost `med`, ko je bil nov lokator že viden (npr. prenosna postaja) |
 | Prag | Brez zastavice, ko ima klicni znak manj kot 3 zgodovinska pojavitev |
-| Brez lokatorja | Brez zastavice, ko QSO nima lokatorja (`wwl = ''`) |
+| Brez lokatorja | Ni `LOC_MISMATCH`, ko QSO nima lokatorja (`wwl = ''`) — namesto tega se lahko pojavi `LOC_MISSING` |
 | Vrstni red allLocs | Seznam zgodovinskih lokatorjev v težavi je razvrščen po številu padajoče |
 
 #### 5 · `runCrosscheck — preverjanje klicnega znaka` (8 testov)
@@ -502,6 +534,32 @@ Preverja ekstrakcijo QSO iz fragmenta EDI datoteke.
 | Razdalja 2 | Ujemanja z razdaljo 2 so prav tako označena (`CALL_SIMILAR`) |
 | Kombinacija težav | Neznani klicni znak ustvari samo `CALL_SIMILAR`; brez napačne LOC težave brez zgodovine |
 | Deduplikacija | Ponavljajoči se neznani klicni znak v novem dnevniku ponovno uporabi preračunan seznam podobnih |
+
+#### 6 · `runCrosscheck — predlog za manjkajoč lokator` (4 testa)
+
+| Test | Kaj se preverja |
+|---|---|
+| Predlagaj modus | `LOC_MISSING` se sproži, ko nov dnevnik nima lokatorja, a zgodovina obstaja |
+| Srednja resnost | `LOC_MISSING` resnost `med`, ko je zaupanje v modus pod pragom |
+| Prag | Ni `LOC_MISSING`, ko je zgodovinskih pojavitev manj kot `_minAppearances` |
+| Prazni lokatorji v zgodovini | Ni `LOC_MISSING`, ko imajo vsi zgodovinski vnosi prazne lokatorje |
+
+#### 7 · `runCrosscheck — nastavljivi pragovi` (3 teste)
+
+| Test | Kaj se preverja |
+|---|---|
+| `_minAppearances` | Ni zastavice, ko je zgodovinsko število pod pragom drsnika |
+| `_minConfidence` | Resnost upošteva prag zaupanja drsnika (high vs med) |
+| Prazni lokatorji prezrti | Prazni zgodovinski lokatorji ne vplivajo na izračun modusa |
+
+#### 8 · `runCrosscheck — klicni znak po lokatorju` (4 testi)
+
+| Test | Kaj se preverja |
+|---|---|
+| CALL_BY_LOC osnovno | Predlaga klicne znake, ki so bili zgodovinsko videni z istega lokatorja in so v razdalji Levenshtein ≤ 2 |
+| Brez ujemanja | Ni `CALL_BY_LOC`, ko noben zgodovinski klicni znak z istega lokatorja ni v razdalji 2 |
+| Ločeno od CALL_SIMILAR | `CALL_BY_LOC` in `CALL_SIMILAR` se pojavita kot ločeni težavi v rezultatu |
+| Redundantno soobstajanje | `CALL_BY_LOC` se sproži tudi, ko se kandidati prekrivajo s `CALL_SIMILAR` — oba signala se prikažeta kot potrjevalni dokaz |
 
 ---
 

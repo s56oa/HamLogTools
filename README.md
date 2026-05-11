@@ -86,21 +86,34 @@ Open the file in any modern browser — no installation required.
 
 | Badge | Colour | Condition |
 |---|---|---|
-| `LOC!` | Red | Locator differs from historical mode; mode confidence ≥ 60% and new locator was never seen before |
+| `LOC!` | Red | Locator differs from historical mode; mode confidence ≥ threshold and new locator was never seen before |
 | `LOC?` | Amber | Locator differs from historical mode; lower confidence or new locator appeared before (operator moved) |
-| `CALL?` | Amber | Callsign not in history; similar callsign found (Levenshtein distance 1–2) |
+| `LOC?` | Amber | QSO has no locator but the callsign exists in history — suggests the historical mode locator |
+| `CALL?` | Amber | Callsign not in history; similar callsign found globally (Levenshtein distance 1–2) |
+| `LOC-CALL?` | Blue | Callsign not in history; similar callsign found *from the same locator* (composite heuristic) |
 | `?` | Grey | Callsign not in history; no similar callsign found |
 | `✓` | Green | Callsign in history, locator matches historical mode |
 
-Portable and mobile suffixes (`/P`, `/M`, `/MM`, etc.) are stripped before lookup — `S59DGO/P` is matched against `S59DGO` history. The locator check requires at least 3 historical appearances for the callsign.
+Portable and mobile suffixes (`/P`, `/M`, `/MM`, etc.) are stripped before lookup — `S59DGO/P` is matched against `S59DGO` history. Italian regional suffixes (`/IV3`, `/I2`, etc.) and numerical district suffixes (`/1`, `/2`) are also stripped. Prefix-slash callsigns (`OE/S59DGO`) are kept unchanged.
+
+The locator check requires at least **3** historical appearances by default, but this is configurable via the **Min. appearances** slider (1–10). The **Confidence** slider (10–100%) controls the `high` vs `medium` severity cutoff. Both sliders can be adjusted after loading a new log — click **Re-run** to apply the new thresholds without reloading the file.
+
+### Features
+
+- **Configurable thresholds** — adjust minimum historical appearances (1–10) and mode-confidence cutoff (10–100%) via toolbar sliders; re-run crosscheck without reloading the file
+- **Missing-locator suggestion** — flags QSOs that have no locator but whose callsign exists in history, suggesting the most common historical locator
+- **Composite callsign check** — when a callsign is unknown globally, also checks callsigns that have historically operated from the *same locator* (catches typos like `IK3GOY` → `IW3GOA` when both are from `JN65DM`)
+- **HTML export** — download a self-contained HTML report of all flagged QSOs with correction suggestions
 
 ### How to Use
 
-1. Download `edi-crosscheck.html` (single file, ~25 KB)
+1. Download `edi-crosscheck.html` (single file, ~30 KB)
 2. Open it in any modern browser (Chrome, Firefox, Edge, Safari)
 3. Drag historical EDI logs onto the first drop zone — the database builds instantly
 4. Drag the new EDI log onto the second drop zone
 5. Review the results table — filter by "flagged only" or search by callsign
+6. Optionally adjust the sliders and click **Re-run** to change sensitivity
+7. Click **Export issues** to download an HTML report
 
 No internet connection required. All processing is local in your browser.
 
@@ -178,7 +191,7 @@ node --test --test-reporter=spec adif-qrz-filter.test.js
 | Test file | Tests | Groups |
 |---|---|---|
 | `edi2adif.test.js` | 120 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit) |
-| `edi-crosscheck.test.js` | 41 | 5 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` locator ×6, `runCrosscheck` callsign ×8) |
+| `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` locator mismatch ×6, `runCrosscheck` callsign ×8, missing locator ×4, thresholds ×3, callsign by locator ×4) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 
 See [TESTING.md](TESTING.md) for full test documentation.
@@ -284,21 +297,34 @@ Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
 
 | Oznaka | Barva | Pogoj |
 |---|---|---|
-| `LOC!` | Rdeča | Lokator se razlikuje od zgodovinskega modusa; zaupanje v modus ≥ 60% in nov lokator še nikoli ni bil viden |
+| `LOC!` | Rdeča | Lokator se razlikuje od zgodovinskega modusa; zaupanje v modus ≥ prag in nov lokator še nikoli ni bil viden |
 | `LOC?` | Rumena | Lokator se razlikuje od zgodovinskega modusa; nižje zaupanje ali nov lokator je bil že viden (prenosna postaja) |
-| `CALL?` | Rumena | Klicni znak ni v zgodovini; najden je podoben klicni znak (Levenshteinova razdalja 1–2) |
+| `LOC?` | Rumena | Zveza nima lokatorja, a klicni znak obstaja v zgodovini — predlaga zgodovinski modus lokator |
+| `CALL?` | Rumena | Klicni znak ni v zgodovini; najden je podoben klicni znak globalno (Levenshteinova razdalja 1–2) |
+| `LOC-CALL?` | Modra | Klicni znak ni v zgodovini; najden je podoben klicni znak *z istega lokatorja* (kompozitna hevristika) |
 | `?` | Siva | Klicni znak ni v zgodovini; ni podobnega klicnega znaka |
 | `✓` | Zelena | Klicni znak je v zgodovini, lokator ustreza modusu |
 
-Prenosne in mobilne pripone (`/P`, `/M`, `/MM` itd.) so odstranjene pred iskanjem — `S59DGO/P` se primerja z zgodovino `S59DGO`. Preverjanje lokatorja zahteva vsaj 3 zgodovinska pojavitev klicnega znaka.
+Prenosne in mobilne pripone (`/P`, `/M`, `/MM` itd.) se odstranijo pred iskanjem — `S59DGO/P` se primerja z zgodovino `S59DGO`. Italijanski regionalni sufiksi (`/IV3`, `/I2` itd.) in številčni sufiksi okrajev (`/1`, `/2`) se prav tako odstranijo. Klicni znaki s predponsko poševnico (`OE/S59DGO`) ostanejo nespremenjeni.
+
+Preverjanje lokatorja zahteva privzeto vsaj **3** zgodovinske pojavitve, a je to nastavljivo prek drsnika **Min. pojavitev** (1–10). Drsnik **Confidence** (10–100%) določa mejo med resnostjo `high` in `medium`. Oba drsnika lahko spremeniš po nalaganju novega dnevnika — klikni **Ponovi**, da se pragovi uveljavijo brez ponovnega nalaganja datoteke.
+
+### Funkcionalnosti
+
+- **Nastavljivi pragovi** — nastavi najmanjše zgodovinske pojavitve (1–10) in prag zaupanja v modus (10–100%) prek drsnikov v orodni vrstici; ponovi crosscheck brez ponovnega nalaganja datoteke
+- **Predlog za manjkajoč lokator** — označi zveze brez lokatorja, če klicni znak obstaja v zgodovini, in predlaga najpogostejši zgodovinski lokator
+- **Kompozitno preverjanje klicnega znaka** — ko je klicni znak neznan globalno, orodje preveri tudi klicne znake, ki so zgodovinsko delovali z *istega lokatorja* (uje napake kot `IK3GOY` → `IW3GOA`, ko sta oba iz `JN65DM`)
+- **HTML izvoz** — prenesi samostojno HTML poročilo vseh označenih zvez s predlogi popravkov
 
 ### Navodila za uporabo
 
-1. Prenesi `edi-crosscheck.html` (ena datoteka, ~25 KB)
+1. Prenesi `edi-crosscheck.html` (ena datoteka, ~30 KB)
 2. Odpri jo v katerem koli sodobnem brskalniku (Chrome, Firefox, Edge, Safari)
 3. Povleci zgodovinske EDI dnevnike na prvo območje za spuščanje — baza se zgradi takoj
 4. Povleci nov EDI dnevnik na drugo območje za spuščanje
 5. Preglej tabelo rezultatov — filtriraj po "samo označeni" ali išči po klicnem znaku
+6. Po želji prilagodi drsnika in klikni **Ponovi**, da spremeniš občutljivost
+7. Klikni **Izvoz problemov**, da preneseš HTML poročilo
 
 Internetna povezava ni potrebna. Vsa obdelava poteka lokalno v brskalniku.
 
@@ -376,7 +402,7 @@ node --test --test-reporter=spec adif-qrz-filter.test.js
 | Testna datoteka | Testov | Skupin |
 |---|---|---|
 | `edi2adif.test.js` | 120 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplikati, CSV izvoz, urejanje v živo) |
-| `edi-crosscheck.test.js` | 41 | 5 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` lokator ×6, `runCrosscheck` klicni znak ×8) |
+| `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` lokator ×6, `runCrosscheck` klicni znak ×8, manjkajoč lokator ×4, pragovi ×3, klicni znak po lokatorju ×4) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 
 Celotna dokumentacija je v [TESTING.md](TESTING.md).

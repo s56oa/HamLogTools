@@ -68,8 +68,18 @@ describe('baseCall', () => {
   it('strips /AM',   () => assert.equal(baseCall('DK3AB/AM'),  'DK3AB'));
   it('strips /QRP',  () => assert.equal(baseCall('S59DGO/QRP'),'S59DGO'));
   it('strips /R',    () => assert.equal(baseCall('DL1AA/R'),   'DL1AA'));
+  it('strips Italian regional suffix /IV3', () =>
+    assert.equal(baseCall('IK6ABC/IV3'), 'IK6ABC'));
+  it('strips numerical district suffix /1', () =>
+    assert.equal(baseCall('S59DGO/1'), 'S59DGO'));
+  it('strips /A and /B (rare in contests)', () => {
+    assert.equal(baseCall('DL1AA/A'), 'DL1AA');
+    assert.equal(baseCall('DL1AA/B'), 'DL1AA');
+  });
   it('leaves prefix slash intact (OE/S59DGO)', () =>
     assert.equal(baseCall('OE/S59DGO'), 'OE/S59DGO'));
+  it('leaves prefix slash intact (F/ON4AAA)', () =>
+    assert.equal(baseCall('F/ON4AAA'), 'F/ON4AAA'));
   it('plain call unchanged', () => assert.equal(baseCall('S59DGO'), 'S59DGO'));
   it('uppercases result',    () => assert.equal(baseCall('s59dgo/p'), 'S59DGO'));
 });
@@ -265,5 +275,141 @@ describe('runCrosscheck — callsign check', () => {
     const res = runCrosscheck(qsos);
     assert.equal(res[0].issues[0].type, 'CALL_SIMILAR');
     assert.equal(res[1].issues[0].type, 'CALL_SIMILAR');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  runCrosscheck — missing locator suggestion
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runCrosscheck — missing locator suggestion', () => {
+  function hist(call, wwl, n=1){ return Array.from({length:n}, ()=>({call, wwl})); }
+  function check(call, wwl){ return [{call, wwl, dateDisp:'02.09.2023', mode:'SSB', band:'2m'}]; }
+
+  it('suggests historical mode when new log has no locator', () => {
+    clearHist();
+    addToHistDB(hist('S59ABC','JN65ar',8));
+    const res = runCrosscheck(check('S59ABC',''));
+    const iss = res[0].issues[0];
+    assert.equal(iss.type, 'LOC_MISSING');
+    assert.equal(iss.historicalMode, 'JN65AR');
+    assert.equal(iss.severity, 'high'); // 8/8 = 100% >= 0.6
+  });
+
+  it('LOC_MISSING severity is med when confidence below threshold', () => {
+    clearHist();
+    addToHistDB(hist('S59ABC','JN65ar',4));
+    addToHistDB(hist('S59ABC','JN76bc',4));
+    // mode = 4/8 = 50%, below 60% threshold
+    const res = runCrosscheck(check('S59ABC',''));
+    const iss = res[0].issues[0];
+    assert.equal(iss.type, 'LOC_MISSING');
+    assert.equal(iss.severity, 'med');
+  });
+
+  it('no suggestion when fewer than minAppearances', () => {
+    clearHist(); addToHistDB(hist('S59ABC','JN65ar',2));
+    const res = runCrosscheck(check('S59ABC',''));
+    const locIss = res[0].issues.filter(i=>i.type==='LOC_MISSING');
+    assert.equal(locIss.length, 0);
+  });
+
+  it('no suggestion when all historical entries have no locator', () => {
+    clearHist(); addToHistDB(hist('S59ABC','',5));
+    const res = runCrosscheck(check('S59ABC',''));
+    const locIss = res[0].issues.filter(i=>i.type==='LOC_MISSING');
+    assert.equal(locIss.length, 0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  runCrosscheck — configurable thresholds
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runCrosscheck — configurable thresholds', () => {
+  function hist(call, wwl, n=1){ return Array.from({length:n}, ()=>({call, wwl})); }
+  function check(call, wwl){ return [{call, wwl, dateDisp:'02.09.2023', mode:'SSB', band:'2m'}]; }
+
+  it('respects _minAppearances: no flag with lower threshold', () => {
+    clearHist(); addToHistDB(hist('S59ABC','JN65ar',2));
+    // Default _minAppearances = 3, so no flag
+    let res = runCrosscheck(check('S59ABC','JN76bc'));
+    assert.equal(res[0].issues.filter(i=>i.type==='LOC_MISMATCH').length, 0);
+  });
+
+  it('respects _minConfidence: high vs med severity', () => {
+    clearHist();
+    addToHistDB(hist('S59ABC','JN65ar',7));
+    addToHistDB(hist('S59ABC','JN76bc',3));
+    // mode = 7/10 = 70%, newLocCount = 3
+    // With default _minConfidence = 0.6: modeConf >= 0.6 → high (but newLocCount > 0, so med)
+    // Actually: severity = (modeConf >= 0.6 && newLocCount === 0) ? high : med
+    // newLocCount = 3 > 0, so severity = med
+    let res = runCrosscheck(check('S59ABC','JN76bc'));
+    let iss = res[0].issues[0];
+    assert.equal(iss.severity, 'med');
+  });
+
+  it('empty historical locators are ignored in getModeLocator', () => {
+    clearHist();
+    // 5 entries with empty locator + 3 with real locator
+    addToHistDB(Array.from({length:5}, ()=>({call:'S59ABC', wwl:''})));
+    addToHistDB(hist('S59ABC','JN65ar',3));
+    const res = runCrosscheck(check('S59ABC','JN76bc'));
+    const iss = res[0].issues[0];
+    assert.equal(iss.historicalMode, 'JN65AR'); // mode should be JN65AR, not empty
+    assert.equal(iss.total, 8); // total includes all entries (with and without locator)
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  runCrosscheck — callsign by locator (composite heuristic)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runCrosscheck — callsign by locator', () => {
+  function hist(call, wwl, n=1){ return Array.from({length:n}, ()=>({call, wwl})); }
+
+  it('suggests calls from same locator within Levenshtein <= 2', () => {
+    clearHist();
+    addToHistDB([...hist('IW3GOA','JN65DM',5), ...hist('IW3GOB','JN65DM',3)]);
+    const res = runCrosscheck([{call:'IK3GOY', wwl:'JN65DM', dateDisp:'', mode:'SSB', band:'2m'}]);
+    const byLoc = res[0].issues.find(i => i.type === 'CALL_BY_LOC');
+    assert.ok(byLoc, 'expected CALL_BY_LOC');
+    assert.equal(byLoc.similar[0].call, 'IW3GOA');
+    assert.equal(byLoc.similar[0].dist, 2);
+  });
+
+  it('no CALL_BY_LOC when no calls from locator within distance 2', () => {
+    clearHist();
+    addToHistDB(hist('S59DGO','JN65DM',10)); // S59DGO is far from IK3GOY
+    const res = runCrosscheck([{call:'IK3GOY', wwl:'JN65DM', dateDisp:'', mode:'SSB', band:'2m'}]);
+    const byLoc = res[0].issues.find(i => i.type === 'CALL_BY_LOC');
+    assert.equal(byLoc, undefined);
+  });
+
+  it('shows CALL_SIMILAR and CALL_BY_LOC separately when different', () => {
+    clearHist();
+    // IW3GOB from JN76aa — closer globally (d=1), different locator
+    addToHistDB(hist('IW3GOB','JN76AA',10));
+    // IW3GOA from JN65DM — d=2, from target locator
+    addToHistDB(hist('IW3GOA','JN65DM',5));
+    const res = runCrosscheck([{call:'IK3GOY', wwl:'JN65DM', dateDisp:'', mode:'SSB', band:'2m'}]);
+    const sim = res[0].issues.find(i => i.type === 'CALL_SIMILAR');
+    const byLoc = res[0].issues.find(i => i.type === 'CALL_BY_LOC');
+    assert.ok(sim, 'expected CALL_SIMILAR');
+    assert.ok(byLoc, 'expected CALL_BY_LOC');
+    assert.equal(sim.similar[0].call, 'IW3GOB');   // global top
+    assert.equal(byLoc.similar[0].call, 'IW3GOA'); // locator top
+  });
+
+  it('CALL_BY_LOC present even when redundant with global CALL_SIMILAR', () => {
+    clearHist();
+    addToHistDB(hist('IW3GOA','JN65DM',5));
+    const res = runCrosscheck([{call:'IK3GOY', wwl:'JN65DM', dateDisp:'', mode:'SSB', band:'2m'}]);
+    const sim = res[0].issues.find(i => i.type === 'CALL_SIMILAR');
+    const byLoc = res[0].issues.find(i => i.type === 'CALL_BY_LOC');
+    assert.ok(sim, 'expected CALL_SIMILAR');
+    assert.ok(byLoc, 'expected CALL_BY_LOC even when top candidate matches global');
+    assert.equal(byLoc.similar[0].call, 'IW3GOA');
   });
 });
