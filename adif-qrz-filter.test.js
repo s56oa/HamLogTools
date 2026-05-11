@@ -149,6 +149,30 @@ describe('usesQslBuro', () => {
     it('DARC QSL Bureau', () => {
       assert.ok(usesQslBuro('QSL via DARC QSL Bureau'));
     });
+    it('buero — German spelling', () => {
+      assert.ok(usesQslBuro('Buero'));
+    });
+    it('büro — German/Austrian', () => {
+      assert.ok(usesQslBuro('via Büro'));
+    });
+    it('buerau — common English typo', () => {
+      assert.ok(usesQslBuro('VIA BUERAU, eQSL'));
+    });
+    it('boureau — French-influenced spelling', () => {
+      assert.ok(usesQslBuro('via boureau'));
+    });
+    it('burea — partial typo', () => {
+      assert.ok(usesQslBuro('VIA BUREA OR DIRECT'));
+    });
+    it('buiro — typo of buro', () => {
+      assert.ok(usesQslBuro('QSL BUIRO, DIRECT'));
+    });
+    it('bureau alongside direct — bureau wins', () => {
+      assert.ok(usesQslBuro('Via Direct or Bureau'));
+    });
+    it('bureau after QSL DIRECT — bureau wins', () => {
+      assert.ok(usesQslBuro('QSL DIRECT. LOTW. BUREAU (on request)'));
+    });
   });
 
   describe('negative cases (NO BURO)', () => {
@@ -167,6 +191,9 @@ describe('usesQslBuro', () => {
     it('direct only', () => {
       assert.ok(!usesQslBuro('direct only'));
     });
+    it('only direct', () => {
+      assert.ok(!usesQslBuro('only direct'));
+    });
     it('no QSL', () => {
       assert.ok(!usesQslBuro('no QSL'));
     });
@@ -175,6 +202,9 @@ describe('usesQslBuro', () => {
     });
     it('LOTW only', () => {
       assert.ok(!usesQslBuro('LOTW only'));
+    });
+    it('only via LoTW', () => {
+      assert.ok(!usesQslBuro('only via LoTW'));
     });
     it('no paper', () => {
       assert.ok(!usesQslBuro('no paper'));

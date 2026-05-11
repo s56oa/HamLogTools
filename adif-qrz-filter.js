@@ -170,31 +170,39 @@ function usesQslBuro(qslmgrText) {
   if (!qslmgrText) return false;
   const t = qslmgrText.toLowerCase();
 
-  // Exclusion phrases — strong signals against bureau
-  const exclusions = [
+  // Hard negations — explicit denial of bureau; checked first and override any bureau keyword
+  const hardNegations = [
     /\bno\s+buro\b/,
     /\bno\s+bureau\b/,
     /\bnot?\s+(via\s+)?buro\b/,
     /\bnot?\s+(via\s+)?bureau\b/,
     /\bburo\s+not?\b/,
     /\bbureau\s+not?\b/,
-    /\bdirect\s+only\b/,
     /\bno\s+qsl\b/,
     /\be[-\s]?qsl\s+only\b/,
-    /\blotw\s+only\b/,
-    /\bno\s+paper\b/,
-    /\bqsl\s+(via\s+)?direct\b/,
-    /\bvia\s+direct\b/,
     /\b(eqsl|e-qsl)\s+only\b/,
+    /\blotw\s+only\b/,
+    /\bonly\s+via\s+lotw\b/,
+    /\bno\s+paper\b/,
+    /\bdirect\s+only\b/,
+    /\bonly\s+direct\b/,
   ];
-  for (const re of exclusions) {
+  for (const re of hardNegations) {
     if (re.test(t)) return false;
   }
 
-  // Inclusion phrases
+  // Bureau keyword — includes common European variants and misspellings
+  // Note: /\bvia\s+direct\b/ and /\bqsl\s+(via\s+)?direct\b/ were removed as exclusions:
+  // without a bureau keyword they already fall through to false; with a bureau keyword
+  // (e.g. "Via Direct or Bureau") the bureau mention should take precedence.
   const inclusions = [
     /\bburo\b/,
     /\bbureau\b/,
+    /\bb[uü]e?ro\b/,  // buero, büro (German/Austrian)
+    /\bbuerau\b/,      // common typo of bureau
+    /\bboureau\b/,     // French-influenced spelling
+    /\bburea\b/,       // partial typo (burea)
+    /\bbuiro\b/,       // typo of buro
   ];
   for (const re of inclusions) {
     if (re.test(t)) return true;

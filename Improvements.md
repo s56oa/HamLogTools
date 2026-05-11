@@ -106,7 +106,7 @@ Node.js CLI tool that filters an ADIF log to keep only stations that accept QSL 
 - **Local JSON cache** (7-day TTL) keyed by callsign — avoids re-querying
 - **Rate limiting** — configurable delay (default 1200 ms) between API calls
 - **QSL manager support** — reads `QSL_VIA` from ADIF and checks the manager too
-- **Fuzzy logic** — 14 exclusion + 3 inclusion regexes on lowercased `qslmgr` text
+- **Fuzzy logic** — hard negations (explicit bureau denial) + 7 bureau inclusion patterns incl. European variants
 - **Terminal summary** — shows kept/discarded counts, cache hits, and manager-mediated QSOs
 
 **CLI usage:**
@@ -116,7 +116,20 @@ node adif-qrz-filter.js contest.adi --key=a1b2c3d4 --output=buro.adi --delay=800
 ```
 
 ### Tests
-- Added `adif-qrz-filter.test.js` with **38 tests** in 7 groups (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`).
+- Added `adif-qrz-filter.test.js` with **48 tests** in 7 groups (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`).
+
+---
+
+## Bug Fixes — Session 2026-05-11
+
+17. **`usesQslBuro` — false negatives for European bureau spellings**
+    Cache analysis (736 real QRZ entries) revealed 11 false negatives from unrecognised bureau spellings. Added inclusion patterns: `buero`, `büro` (German/Austrian), `buerau` (common typo), `boureau` (French-influenced), `burea` (partial typo), `buiro` (typo of buro).
+
+18. **`usesQslBuro` — false negatives when "bureau" follows "via direct"**
+    Exclusion patterns `/\bvia\s+direct\b/` and `/\bqsl\s+(via\s+)?direct\b/` were applied before checking for bureau keywords, causing entries like "Via Direct or Bureau" and "QSL DIRECT. BUREAU (on request)" to return false. These patterns were redundant (strings without bureau already return false) and removed. Net effect: 2 additional false negatives fixed (IU7EDW, IZ6JPK).
+
+19. **`usesQslBuro` — 2 false positives from removed `/\bqsl\s+via\b/` inclusion**
+    Removing the "QSL via" inclusion pattern (done in prior session) also correctly fixed: OE8IDK "QSL VIA DK3ID DARC CLUB" (manager reference, not bureau) and 9A2RI "QSL VIA E-mail" (email QSL, not bureau).
 
 ---
 
