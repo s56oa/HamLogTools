@@ -156,6 +156,36 @@ A new **Izvoz problemov / Export issues** button generates a self-contained HTML
 
 ---
 
+## Release v1.4 — 2026-05-13
+
+### Prebuilt OEVSV IARU R1 baseline
+
+`edi-crosscheck.html` now auto-loads a prebuilt baseline database on startup (`./crosscheck-baseline.json`) when served over HTTP. The baseline contains ~3 240 IARU R1 contest callsigns with their declared locators, sourced from public OEVSV CSV exports (<https://iaru.oevsv.at/v_upld/prg_list.php>).
+
+Behaviour:
+- **Authoritative source.** Each baseline entry weighs `BASELINE_WEIGHT` (= 3) × a single EDI QSO. Robotically-validated own-locator declarations outweigh partner-reported locators in user EDI logs.
+- **Silent fallback.** If `fetch('./crosscheck-baseline.json')` fails (most commonly `file://` CORS, or missing file), the tool runs with EDI-only history exactly like v1.3 — no error shown.
+- **Persistent.** The "Clear history" button now clears only the user's EDI contributions; baseline is re-injected from the cached JSON.
+- **dbCard shows baseline tag** with version date (`v2026-05-13`) and call count alongside the existing EDI stats.
+
+### New tool: `build-baseline.js`
+
+Node.js CLI that builds `crosscheck-baseline.json` from a directory of OEVSV CSV exports. No external dependencies. Output: ~220 KB compact JSON with per-call, per-band locator histograms (16 bands from 50 MHz to 300 GHz). Recommended rebuild cadence: quarterly or after major IARU R1 contests.
+
+### Weighted vs. raw counts
+
+The `_histDB` entry was extended with parallel `locatorsRaw` / `totalRaw` maps. Algorithmic decisions (threshold, mode locator selection, severity) continue to use weighted counts; display surfaces (chips, exports, HTML export) now show **raw counts** to remain intuitive. Without this split, baseline-derived chips would show inflated counts like `IK3GHY × 144` instead of the actual `× 48`.
+
+The `modeConf` ratio is invariant under uniform weighting (weighted/weighted = raw/raw), so threshold semantics remain stable.
+
+### Files
+
+- New: `build-baseline.js`, `crosscheck-baseline.json` (output), `iaru_oevsv_csv/` (input directory convention)
+- Modified: `edi-crosscheck.html` (v1.0 → v1.4)
+- All 56 existing unit tests still pass; no algorithmic changes.
+
+---
+
 ## Proposed New Features
 
 ### High Priority
@@ -359,6 +389,36 @@ Nov gumb **Izvoz problemov** ustvari samostojno HTML datoteko z vsemi označenim
 
 ### Dostopnost
 - Vsebnik obvestil `toast` ima zdaj `aria-live="polite"` za napovedi bralnikom zaslonov.
+
+---
+
+## Izdaja v1.4 — 13. 5. 2026
+
+### Pred-zgrajen OEVSV IARU R1 baseline
+
+`edi-crosscheck.html` zdaj samodejno naloži pred-zgrajeno bazo ob zagonu (`./crosscheck-baseline.json`), ko je strežena preko HTTP-ja. Baseline vsebuje ~3 240 IARU R1 tekmovalnih klicnih znakov z deklariranimi lokatorji, izpeljano iz javnih OEVSV CSV exportov (<https://iaru.oevsv.at/v_upld/prg_list.php>).
+
+Vedenje:
+- **Avtoritativen vir.** Vsak baseline vnos šteje `BASELINE_WEIGHT` (= 3) × en EDI QSO. Robotsko-validirane deklaracije lastnega lokatorja prevladajo nad lokatorji, ki jih je v EDI dnevniku zapisal partner.
+- **Tih fallback.** Če `fetch('./crosscheck-baseline.json')` ne uspe (najpogosteje `file://` CORS ali manjkajoča datoteka), orodje deluje samo z EDI zgodovino natanko kot v1.3 — brez prikaza napake.
+- **Trajen.** Gumb "Počisti zgodovino" zdaj počisti samo uporabnikove EDI prispevke; baseline se re-injecta iz cache-ranega JSON.
+- **dbCard kaže baseline tag** z datumom verzije (`v2026-05-13`) in številom klicnih znakov ob obstoječi EDI statistiki.
+
+### Novo orodje: `build-baseline.js`
+
+Node.js CLI, ki gradi `crosscheck-baseline.json` iz mape OEVSV CSV exportov. Brez zunanjih odvisnosti. Izhod: ~220 KB kompakten JSON z per-call, per-band histogrami lokatorjev (16 pasov od 50 MHz do 300 GHz). Priporočen interval obnavljanja: kvartalno ali po večjih IARU R1 tekmovanjih.
+
+### Weighted vs. raw števec
+
+Zapis `_histDB` je razširjen z vzporednima `locatorsRaw` / `totalRaw` mapama. Algoritmične odločitve (prag, izbira modus lokatorja, severity) še naprej uporabljajo weighted števec; prikazne površine (chip-i, izvozi, HTML izvoz) zdaj kažejo **raw števec**, da ostanejo intuitivni. Brez te razdelitve bi baseline-izhajajoči chip-i kazali napihnjena števila kot `IK3GHY × 144` namesto dejanskega `× 48`.
+
+Razmerje `modeConf` je invariantno pod uniformnim weighting-om (weighted/weighted = raw/raw), tako da threshold semantika ostane stabilna.
+
+### Datoteke
+
+- Nove: `build-baseline.js`, `crosscheck-baseline.json` (izhod), `iaru_oevsv_csv/` (konvencija za vhodno mapo)
+- Spremenjene: `edi-crosscheck.html` (v1.0 → v1.4)
+- Vseh 56 obstoječih unit testov še gre; brez algoritmičnih sprememb.
 
 ---
 

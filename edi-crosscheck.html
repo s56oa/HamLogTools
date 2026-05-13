@@ -87,6 +87,10 @@ main{max-width:1400px;margin:0 auto;padding:1.5rem 1.5rem 3rem}
 .db-stat{display:flex;flex-direction:column;gap:2px}
 .db-stat-val{font-family:'Space Mono',monospace;font-size:1.15rem;font-weight:700;color:var(--accent)}
 .db-stat-lbl{font-size:11px;color:var(--muted)}
+.db-stat.base .db-stat-val{color:var(--accent2)}
+.db-sep{width:1px;align-self:stretch;background:var(--border)}
+.db-ver{font-family:'Space Mono',monospace;font-size:9px;color:var(--dim);
+  padding:1px 5px;border:1px solid var(--border);border-radius:3px;white-space:nowrap}
 #dbFileList{font-size:10px;color:var(--dim);line-height:1.5;max-width:260px;margin-left:auto}
 
 .divider{border:none;border-top:1px solid var(--border);margin:1.4rem 0}
@@ -188,7 +192,7 @@ tr.sev-unknown:hover td,tr.sev-loccall:hover td,tr.sev-loccall2:hover td{filter:
 
 <header>
   <div class="logo">EDI<span class="icon">⟨×⟩</span>Crosscheck<span class="fmt"> tool</span></div>
-  <span class="version">v1.0</span>
+  <span class="version">v1.4</span>
   <div class="lang-wrap">
     <button class="theme-btn" id="btnTheme" onclick="toggleTheme()">☀</button>
     <button class="lang-btn active" id="btnSL" onclick="setLang('sl')">SL</button>
@@ -212,6 +216,11 @@ tr.sev-unknown:hover td,tr.sev-loccall:hover td,tr.sev-loccall2:hover td{filter:
         <button class="btn btn-secondary btn-sm" onclick="document.getElementById('histInput').click()" data-i18n="histBtn">Izberi datoteke</button>
       </div>
       <div id="dbCard" style="display:none">
+        <div class="db-stat base" id="dbBaseStat" style="display:none">
+          <span class="db-stat-val" id="dbBaseCalls">0</span>
+          <span class="db-stat-lbl"><span data-i18n="dbBaseLbl">baseline znakov</span> <span class="db-ver" id="dbBaseVer"></span></span>
+        </div>
+        <div class="db-sep" id="dbBaseSep" style="display:none"></div>
         <div class="db-stat">
           <span class="db-stat-val" id="dbStatCalls">0</span>
           <span class="db-stat-lbl" data-i18n="dbLblCalls">klicnih znakov</span>
@@ -308,6 +317,7 @@ sl:{
   newDropSub:'en dnevnik za crosscheck',
   newBtn:'Izberi datoteko',
   dbLblCalls:'klicnih znakov', dbLblFiles:'datotek', dbLblLocs:'unik. lokatorjev',
+  dbBaseLbl:'baseline znakov',
   btnClearHist:'↩ Počisti zgodovino',
   btnNewLog:'↩ Nov dnevnik',
   fAll:'— vse —', fFlagged:'Samo označene', fClean:'Samo čiste',
@@ -348,6 +358,7 @@ en:{
   newDropSub:'one log for crosschecking',
   newBtn:'Choose file',
   dbLblCalls:'callsigns', dbLblFiles:'files', dbLblLocs:'unique locators',
+  dbBaseLbl:'baseline calls',
   btnClearHist:'↩ Clear history',
   btnNewLog:'↩ New log',
   fAll:'— all —', fFlagged:'Flagged only', fClean:'Clean only',
@@ -493,56 +504,150 @@ function htmlEsc(s){
 
 // ════════════════════════════════════════
 //  HISTORICAL DB
-//  Map<baseCall, { locators: Map<locUPPER, count>, total: int }>
+//  Map<baseCall, {
+//    locators:    Map<locUPPER, count>,  // weighted (algorithmic decisions)
+//    locatorsRaw: Map<locUPPER, count>,  // raw counts (UI display)
+//    total:       int,                    // weighted sum
+//    totalRaw:    int,                    // raw sum
+//  }>
+//  Weighting: EDI QSO = 1, baseline entry = BASELINE_WEIGHT (3).
+//  All algorithmic decisions (threshold, mode locator, confidence ratio)
+//  use weighted counts. All numbers shown to the user (chips, exports)
+//  come from raw counts to remain intuitive.
 // ════════════════════════════════════════
 const _histDB = new Map();
-const _locToCalls = new Map(); // Map<locatorUpper → Map<baseCall, count>>
+const _locToCalls    = new Map(); // Map<locatorUpper → Map<baseCall, weighted>>
+const _locToCallsRaw = new Map(); // Map<locatorUpper → Map<baseCall, raw>>
 let _histFiles = [];   // [{name, size}]
 let _histQsoCount = 0;
 let _lastQsos = [];    // last new-log QSOs for re-run
 let _minAppearances = 3;
 let _minConfidence  = 0.6;
 
+// Baseline: prebuilt OEVSV IARU R1 contest stats (call → loc → count*weight)
+// Each baseline entry weighs BASELINE_WEIGHT × an EDI QSO (authoritative
+// own-locator declaration vs. partner-reported locator).
+const BASELINE_WEIGHT = 3;
+let _baselineRaw = null;     // parsed JSON, kept for re-injection after clearHist
+let _baselineCalls = 0;      // # of calls contributed by baseline
+let _baselineVer   = '';     // version tag, e.g. "2026-05-13"
+
 function addToHistDB(qsos){
   for(const q of qsos){
     const base = baseCall(q.call);
-    if(!_histDB.has(base)) _histDB.set(base, { locators: new Map(), total: 0 });
+    if(!_histDB.has(base)) _histDB.set(base, { locators: new Map(), locatorsRaw: new Map(), total: 0, totalRaw: 0 });
     const entry = _histDB.get(base);
     entry.total++;
+    entry.totalRaw++;
     if(q.wwl){
       const loc = q.wwl.toUpperCase();
       entry.locators.set(loc, (entry.locators.get(loc)||0)+1);
-      if(!_locToCalls.has(loc)) _locToCalls.set(loc, new Map());
-      _locToCalls.get(loc).set(base, (_locToCalls.get(loc).get(base)||0)+1);
+      entry.locatorsRaw.set(loc, (entry.locatorsRaw.get(loc)||0)+1);
+      if(!_locToCalls.has(loc))    _locToCalls.set(loc, new Map());
+      if(!_locToCallsRaw.has(loc)) _locToCallsRaw.set(loc, new Map());
+      _locToCalls.get(loc)   .set(base, (_locToCalls.get(loc)   .get(base)||0)+1);
+      _locToCallsRaw.get(loc).set(base, (_locToCallsRaw.get(loc).get(base)||0)+1);
     }
+  }
+}
+
+// Inject pre-built baseline (OEVSV CSV-derived call→band→locator stats) into
+// _histDB. Bands are aggregated to flat locator counts to fit the current
+// algorithm's data shape; per-band data remains in _baselineRaw for future use.
+// Weight applied: BASELINE_WEIGHT × the count from baseline.
+function applyBaseline(json){
+  if(!json || !json.c) return;
+  const calls = json.c;
+  let cCount = 0;
+  for(const call of Object.keys(calls)){
+    cCount++;
+    const byBandIdx = calls[call];
+    if(!_histDB.has(call)) _histDB.set(call, { locators: new Map(), locatorsRaw: new Map(), total: 0, totalRaw: 0 });
+    const entry = _histDB.get(call);
+    for(const idxStr of Object.keys(byBandIdx)){
+      for(const locInfo of byBandIdx[idxStr]){
+        const loc   = locInfo[0];
+        const count = locInfo[1];
+        const w     = count * BASELINE_WEIGHT;
+        const locUp = loc.toUpperCase();
+        entry.total    += w;
+        entry.totalRaw += count;
+        entry.locators   .set(locUp, (entry.locators   .get(locUp)||0) + w);
+        entry.locatorsRaw.set(locUp, (entry.locatorsRaw.get(locUp)||0) + count);
+        if(!_locToCalls.has(locUp))    _locToCalls.set(locUp, new Map());
+        if(!_locToCallsRaw.has(locUp)) _locToCallsRaw.set(locUp, new Map());
+        _locToCalls.get(locUp)   .set(call, (_locToCalls.get(locUp)   .get(call)||0) + w);
+        _locToCallsRaw.get(locUp).set(call, (_locToCallsRaw.get(locUp).get(call)||0) + count);
+      }
+    }
+  }
+  _baselineCalls = cCount;
+  _baselineVer   = json.v || '';
+}
+
+async function loadBaseline(){
+  try {
+    const r = await fetch('./crosscheck-baseline.json');
+    if(!r.ok) return;
+    const j = await r.json();
+    _baselineRaw = j;
+    applyBaseline(j);
+    updateDbCard();
+  } catch(e) {
+    // Silent fallback: file:// CORS, missing file, or parse error.
+    // Tool keeps working with user-supplied EDI history only.
   }
 }
 
 function clearHist(){
   _histDB.clear();
   _locToCalls.clear();
+  _locToCallsRaw.clear();
   _histFiles = [];
   _histQsoCount = 0;
   _results = [];
-  document.getElementById('dbCard').style.display = 'none';
-  document.getElementById('btnClearHist').style.display = 'none';
-  document.getElementById('numA').className = 'phase-num active';
+  // Baseline is persistent — re-inject after clear.
+  if(_baselineRaw) applyBaseline(_baselineRaw);
   document.getElementById('divResults').style.display = 'none';
   document.getElementById('panelC').style.display = 'none';
-  document.getElementById('numB').className = 'phase-num';
-  setNewDropEnabled(false);
+  if(_baselineRaw){
+    // Baseline alone enables phase 2; show card with baseline stats only.
+    updateDbCard();
+  } else {
+    document.getElementById('dbCard').style.display = 'none';
+    document.getElementById('btnClearHist').style.display = 'none';
+    document.getElementById('numA').className = 'phase-num active';
+    document.getElementById('numB').className = 'phase-num';
+    setNewDropEnabled(false);
+  }
 }
 
 function updateDbCard(){
+  const hasBaseline = _baselineCalls > 0;
+  const hasEdi     = _histFiles.length > 0;
+  if(!hasBaseline && !hasEdi){
+    document.getElementById('dbCard').style.display = 'none';
+    return;
+  }
   document.getElementById('dbCard').style.display = 'flex';
-  document.getElementById('btnClearHist').style.display = 'inline-block';
+  document.getElementById('btnClearHist').style.display = hasEdi ? 'inline-block' : 'none';
+
+  // Baseline tag (shown only if loaded)
+  document.getElementById('dbBaseStat').style.display = hasBaseline ? 'flex' : 'none';
+  document.getElementById('dbBaseSep').style.display  = hasBaseline ? 'block' : 'none';
+  if(hasBaseline){
+    document.getElementById('dbBaseCalls').textContent = _baselineCalls;
+    document.getElementById('dbBaseVer').textContent   = _baselineVer ? 'v'+_baselineVer : '';
+  }
+
+  // Combined stats — these reflect the full DB used for crosscheck.
+  const totalLocs = new Set();
+  for(const e of _histDB.values()) for(const l of e.locators.keys()) totalLocs.add(l);
   document.getElementById('dbStatCalls').textContent = _histDB.size;
   document.getElementById('dbStatQso').textContent = _histQsoCount;
   document.getElementById('dbStatFiles').textContent = _histFiles.length;
-  const locs = new Set();
-  for(const e of _histDB.values()) for(const l of e.locators.keys()) locs.add(l);
-  document.getElementById('dbStatLocs').textContent = locs.size;
-  // File list: show first 5, then "…+N"
+  document.getElementById('dbStatLocs').textContent = totalLocs.size;
+
   const names = _histFiles.map(f => f.name);
   const shown = names.slice(0,6).join(', ');
   document.getElementById('dbFileList').textContent =
@@ -570,7 +675,11 @@ function findSimilar(base, histCalls, distCache){
       if(distCache) distCache.set(cacheKey, d);
     }
     if(d > 0 && d <= 2){
-      similar.push({ call: hcall, dist: d, count: _histDB.get(hcall).total });
+      const e = _histDB.get(hcall);
+      // Display: raw count; falls back to weighted total if raw not tracked
+      // (defensive for old-shape entries during partial migrations).
+      const count = e.totalRaw != null ? e.totalRaw : e.total;
+      similar.push({ call: hcall, dist: d, count });
     }
   }
   similar.sort((a,b) => a.dist-b.dist || b.count-a.count);
@@ -597,35 +706,39 @@ function runCrosscheck(qsos){
     const issues = [];
 
     // Locator check
+    // Decisions use weighted counts (entry.total / entry.locators);
+    // display fields (historicalModeCount, total, allLocs, newLocCount)
+    // use raw counts so chips remain intuitive.
     if(histEntry && histEntry.total >= _minAppearances && histEntry.locators.size > 0){
       const modeLoc = getModeLocator(histEntry);
       if(modeLoc){
+        const modeConf       = modeLoc.count / histEntry.total;             // ratio invariant under uniform weighting
+        const modeRawCount   = histEntry.locatorsRaw.get(modeLoc.loc) || 0; // for display
+        const totalRaw       = histEntry.totalRaw;
+        const allLocsRaw     = [...histEntry.locatorsRaw.entries()].sort((a,b) => b[1]-a[1]);
         if(qso.wwl){
           const newLocUp = qso.wwl.toUpperCase();
           if(modeLoc.loc !== newLocUp){
-            const newLocCount = histEntry.locators.get(newLocUp) || 0;
-            const modeConf = modeLoc.count / histEntry.total;
-            const allLocs = [...histEntry.locators.entries()].sort((a,b) => b[1]-a[1]);
+            const newLocWeighted = histEntry.locators.get(newLocUp) || 0;
+            const newLocRaw      = histEntry.locatorsRaw.get(newLocUp) || 0;
             issues.push({
               type: 'LOC_MISMATCH',
               historicalMode: modeLoc.loc,
-              historicalModeCount: modeLoc.count,
-              newLocCount,
-              total: histEntry.total,
-              allLocs,
-              severity: (modeConf >= _minConfidence && newLocCount === 0) ? 'high' : 'med',
+              historicalModeCount: modeRawCount,
+              newLocCount: newLocRaw,
+              total: totalRaw,
+              allLocs: allLocsRaw,
+              severity: (modeConf >= _minConfidence && newLocWeighted === 0) ? 'high' : 'med',
             });
           }
         } else {
           // Missing locator in new log — suggest historical mode
-          const modeConf = modeLoc.count / histEntry.total;
-          const allLocs = [...histEntry.locators.entries()].sort((a,b) => b[1]-a[1]);
           issues.push({
             type: 'LOC_MISSING',
             historicalMode: modeLoc.loc,
-            historicalModeCount: modeLoc.count,
-            total: histEntry.total,
-            allLocs,
+            historicalModeCount: modeRawCount,
+            total: totalRaw,
+            allLocs: allLocsRaw,
             severity: modeConf >= _minConfidence ? 'high' : 'med',
           });
         }
@@ -640,19 +753,26 @@ function runCrosscheck(qsos){
         : { type: 'CALL_UNKNOWN' }
       );
 
-      // Locator-filtered callsign suggestion (composite heuristic)
+      // Locator-filtered callsign suggestion (composite heuristic).
+      // Algorithm iterates over weighted _locToCalls (presence is the signal,
+      // not weight), but the display count uses _locToCallsRaw.
       if(qso.wwl){
-        const locCalls = _locToCalls.get(qso.wwl.toUpperCase());
+        const locUp    = qso.wwl.toUpperCase();
+        const locCalls = _locToCalls.get(locUp);
+        const locCallsRaw = _locToCallsRaw.get(locUp);
         if(locCalls && locCalls.size > 0){
           const candidates = [];
-          for(const [hcall, count] of locCalls){
+          for(const [hcall] of locCalls){
             const cacheKey = base + '\n' + hcall;
             let d = distCache.get(cacheKey);
             if(d === undefined){
               d = levenshtein(base, hcall, 2);
               distCache.set(cacheKey, d);
             }
-            if(d > 0 && d <= 2) candidates.push({ call: hcall, dist: d, count });
+            if(d > 0 && d <= 2){
+              const rawCount = (locCallsRaw && locCallsRaw.get(hcall)) || 0;
+              candidates.push({ call: hcall, dist: d, count: rawCount });
+            }
           }
           if(candidates.length > 0){
             candidates.sort((a,b) => a.dist-b.dist || b.count-a.count);
@@ -1021,6 +1141,10 @@ function toggleTheme(){
     document.getElementById('btnTheme').textContent = '☾';
   }
 })();
+
+// Bootstrap: attempt to load prebuilt OEVSV baseline. Silent fallback if absent
+// (e.g. file:// CORS, missing file). Async — does not block page interactivity.
+loadBaseline();
 </script>
 </body>
 </html>

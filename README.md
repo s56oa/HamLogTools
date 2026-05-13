@@ -11,8 +11,9 @@ Tools for amateur radio log processing and format conversion.
 | Tool | Type | Purpose |
 |---|---|---|
 | [`edi2adif.html`](edi2adif.html) | Browser app | Convert REG1TEST EDI v1 contest logs to ADIF and CSV formats |
-| [`edi-crosscheck.html`](edi-crosscheck.html) | Browser app | Crosscheck a new EDI log against historical logs — flags locator mismatches and callsign typos |
+| [`edi-crosscheck.html`](edi-crosscheck.html) | Browser app | Crosscheck a new EDI log against historical logs + optional OEVSV IARU R1 baseline — flags locator mismatches and callsign typos |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filter an ADIF log to keep only QSOs with BURO-accepting stations |
+| [`build-baseline.js`](build-baseline.js) | Node.js CLI | Build `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports for use with `edi-crosscheck.html` |
 
 ---
 
@@ -79,8 +80,11 @@ Open the file in any modern browser — no installation required.
 
 ### How it works
 
-1. **Phase 1 — build database:** Drag any number of past EDI logs (1–50+) onto the tool. It builds a statistical map of which locator each callsign has historically used.
-2. **Phase 2 — crosscheck:** Drag the new EDI log. Every QSO is checked against the database.
+1. **Optional baseline:** If [`crosscheck-baseline.json`](crosscheck-baseline.json) is present next to the HTML and the page is served over HTTP, a prebuilt baseline of 3 000+ IARU R1 contest stations (call → locator, derived from public OEVSV CSV exports) is loaded automatically on startup. This gives a useful crosscheck even *without* any of your own EDI history.
+2. **Phase 1 — extend database:** Drag any number of past EDI logs (1–50+) onto the tool. Locator counts from your EDI logs are merged into the baseline.
+3. **Phase 2 — crosscheck:** Drag the new EDI log. Every QSO is checked against the combined database.
+
+> **Note on `file://` opening:** modern browsers block `fetch()` from `file://` URLs for security. If you double-click the HTML, the baseline silently fails to load and the tool works exactly like v1.3 (your EDI history only). To use the baseline, serve over HTTP (`python3 -m http.server`) — see [How to Use](#how-to-use-1) below.
 
 ### What is flagged
 
@@ -100,22 +104,121 @@ The locator check requires at least **3** historical appearances by default, but
 
 ### Features
 
+- **OEVSV IARU R1 baseline** (v1.4+) — optional prebuilt database of ~3 240 contest callsigns with their declared locators, loaded automatically on startup if `crosscheck-baseline.json` is present. Each baseline entry weighs 3× a single EDI QSO (authoritative own-locator declarations from robotically-validated contest logs). Display chips still show **raw counts** to remain intuitive.
 - **Configurable thresholds** — adjust minimum historical appearances (1–10) and mode-confidence cutoff (10–100%) via toolbar sliders; re-run crosscheck without reloading the file
 - **Missing-locator suggestion** — flags QSOs that have no locator but whose callsign exists in history, suggesting the most common historical locator
 - **Composite callsign check** — when a callsign is unknown globally, also checks callsigns that have historically operated from the *same locator* (catches typos like `IK3GOY` → `IW3GOA` when both are from `JN65DM`)
 - **HTML export** — download a self-contained HTML report of all flagged QSOs with correction suggestions
+- **Persistent baseline** — the "Clear history" button clears only your dropped EDI logs; the baseline remains in place.
 
 ### How to Use
 
-1. Download `edi-crosscheck.html` (single file, ~30 KB)
-2. Open it in any modern browser (Chrome, Firefox, Edge, Safari)
-3. Drag historical EDI logs onto the first drop zone — the database builds instantly
+1. Download `edi-crosscheck.html` (single file, ~50 KB). Optionally also download [`crosscheck-baseline.json`](crosscheck-baseline.json) (~220 KB) for the OEVSV baseline.
+2. **For baseline support**, serve over a local HTTP server (browsers block `fetch()` from `file://`):
+   ```bash
+   cd /path/to/HamLogTools
+   python3 -m http.server 8080
+   # then open: http://localhost:8080/edi-crosscheck.html
+   ```
+   For double-click `file://` use, the tool still works fully — just without the baseline.
+3. Drag historical EDI logs onto the first drop zone (optional if baseline is loaded)
 4. Drag the new EDI log onto the second drop zone
 5. Review the results table — filter by "flagged only" or search by callsign
 6. Optionally adjust the sliders and click **Re-run** to change sensitivity
 7. Click **Export issues** to download an HTML report
 
 No internet connection required. All processing is local in your browser.
+
+---
+
+## Baseline Builder (`build-baseline.js`)
+
+Node.js CLI script that builds `crosscheck-baseline.json` from a directory of OEVSV IARU R1 contest CSV exports. Used to occasionally refresh the prebuilt baseline that `edi-crosscheck.html` loads on startup.
+
+**Source:** OEVSV IARU R1 contest results database at <https://iaru.oevsv.at/v_upld/prg_list.php>. Each contest has a CSV export button containing (at minimum) `Call` and `WWL` columns. Download multiple contests' CSVs into one directory, then run the script.
+
+### Requirements
+
+- **Node.js v18+**
+- No external dependencies
+- Directory of OEVSV contest CSV exports
+
+### Workflow
+
+```bash
+# 1. Create a directory for your CSV downloads:
+mkdir iaru_oevsv_csv
+
+# 2. Download CSV exports from OEVSV for the contests you want to include.
+#    Save them into iaru_oevsv_csv/ (any filenames are fine).
+
+# 3. Build the baseline:
+node build-baseline.js
+
+# Output: ./crosscheck-baseline.json
+```
+
+### Options
+
+```bash
+node build-baseline.js                              # defaults
+node build-baseline.js --in ./iaru_oevsv_csv        # custom input dir
+node build-baseline.js --out ./crosscheck-baseline.json
+node build-baseline.js --min-appearances 5          # stricter quality filter
+node build-baseline.js --min-appearances 1          # keep everything (no filter)
+node build-baseline.js --pretty                     # indented JSON for inspection
+node build-baseline.js --verbose                    # per-file row stats
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--in DIR` | `./iaru_oevsv_csv` | Directory containing CSV files |
+| `--out FILE` | `./crosscheck-baseline.json` | Output JSON path |
+| `--min-appearances N` | `3` | Minimum total contest entries to include a callsign |
+| `--pretty` | off | Pretty-print JSON output |
+| `--verbose` | off | Per-file processing stats |
+
+### What it does
+
+1. **Reads all `*.csv` files** in the input directory (encoding auto-detection: UTF-8 → ISO-8859-1 fallback)
+2. **Maps columns by name** — tolerant to OEVSV's 23-column and 25-column variants (50 MHz has extra `LL Squares` columns)
+3. **Validates each row:** Maidenhead regex on WWL, callsign with `/MM` or `/AM` suffix is dropped (always unpredictable)
+4. **Normalizes:** callsign via `baseCall()` (same logic as the HTML tool), band via `BAND_MAP`, locator to first-4-upper + last-2-lower
+5. **Aggregates** into per-call, per-band locator histograms with portable flag
+6. **Filters** by `--min-appearances`
+7. **Writes compact JSON** with metadata (`v` = build date, `src`, `n.calls`, `n.entries`, `n.files`, band index, calls dict)
+
+### Refresh schedule
+
+The baseline ages because operators may move QTH or new operators emerge. Recommended cadence: **rebuild every 3–6 months**, or after major IARU R1 contests (IARU R1 VHF, UHF/SHF, Marconi Memorial). Each rebuild:
+
+```bash
+# 1. Download fresh CSVs into iaru_oevsv_csv/ (add new contests, optionally remove old ones)
+# 2. Rebuild:
+node build-baseline.js
+# 3. The HTML tool picks up the new file automatically on next page load.
+```
+
+### Output format
+
+Compact JSON, ~220 KB for a typical IARU R1 dataset (3 000+ callsigns, 16 bands):
+
+```json
+{
+  "v": "2026-05-13",
+  "src": "iaru.oevsv.at",
+  "minAppearances": 3,
+  "n": { "calls": 3240, "entries": 10564, "files": 35 },
+  "b": ["6m", "4m", "2m", "70cm", "23cm", ...],
+  "c": {
+    "DK0NA": { "2": [["JO50ti", 16]], "3": [["JO50ti", 16]], ... },
+    "S59P":  { "2": [["JN86ao", 15]], ... },
+    ...
+  }
+}
+```
+
+Each call entry is `{ bandIndex: [[locator, count, portableFlag?], ...] }`, sorted by count descending. A third element `1` marks the locator as exclusively portable (`/P` or `/M` only).
 
 ---
 
@@ -222,8 +325,9 @@ Orodja za obdelavo in pretvorbo formatov radioamaterskih dnevnikov.
 | Orodje | Vrsta | Namen |
 |---|---|---|
 | [`edi2adif.html`](edi2adif.html) | Brskalniška app | Pretvorba REG1TEST EDI v1 tekmovalnih dnevnikov v ADIF in CSV formate |
-| [`edi-crosscheck.html`](edi-crosscheck.html) | Brskalniška app | Crosscheck novega EDI dnevnika glede na zgodovinske dnevnike — zaznava napake lokatorjev in klicnih znakov |
+| [`edi-crosscheck.html`](edi-crosscheck.html) | Brskalniška app | Crosscheck novega EDI dnevnika glede na zgodovinske dnevnike + opcijski OEVSV IARU R1 baseline — zaznava napake lokatorjev in klicnih znakov |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filtriranje ADIF dnevnika — ohrani samo zveze s postajami, ki sprejemajo biro |
+| [`build-baseline.js`](build-baseline.js) | Node.js CLI | Zgradi `crosscheck-baseline.json` iz OEVSV IARU R1 contest CSV exportov za uporabo z `edi-crosscheck.html` |
 
 ---
 
@@ -290,8 +394,11 @@ Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
 
 ### Kako deluje
 
-1. **Faza 1 — zgradi bazo:** Na orodje povleci poljubno število preteklih EDI dnevnikov (1–50+). Orodje zgradi statistično mapo, kateri lokator je kateri klicni znak zgodovinsko uporabljal.
-2. **Faza 2 — crosscheck:** Povleci nov EDI dnevnik. Vsaka zveza se preveri glede na bazo.
+1. **Opcijski baseline:** Če je poleg HTML datoteke prisotna datoteka [`crosscheck-baseline.json`](crosscheck-baseline.json) in je stran odprta preko HTTP-ja, se ob zagonu samodejno naloži pred-zgrajen baseline 3 000+ IARU R1 tekmovalnih postaj (klicni znak → lokator, izpeljano iz javnih OEVSV CSV exportov). To omogoča smiseln crosscheck *brez* lastne EDI zgodovine.
+2. **Faza 1 — razširitev baze:** Povleci poljubno število preteklih EDI dnevnikov (1–50+). Štetja lokatorjev iz lastnih EDI dnevnikov se združijo z baseline-om.
+3. **Faza 2 — crosscheck:** Povleci nov EDI dnevnik. Vsaka zveza se preveri glede na združeno bazo.
+
+> **Opomba o `file://` odpiranju:** sodobni brskalniki blokirajo `fetch()` iz `file://` URL-jev zaradi varnosti. Če dvoklikneš HTML, se baseline tiho ne naloži in orodje deluje natanko kot v1.3 (samo lastna EDI zgodovina). Za uporabo baseline-a postrežaj preko HTTP-ja (`python3 -m http.server`) — glej [Navodila za uporabo](#navodila-za-uporabo-1) spodaj.
 
 ### Kaj se zaznava
 
@@ -311,22 +418,121 @@ Preverjanje lokatorja zahteva privzeto vsaj **3** zgodovinske pojavitve, a je to
 
 ### Funkcionalnosti
 
+- **OEVSV IARU R1 baseline** (v1.4+) — opcijska pred-zgrajena baza ~3 240 tekmovalnih klicnih znakov z deklariranimi lokatorji, samodejno naložena ob zagonu, če je `crosscheck-baseline.json` prisoten. Vsak baseline vnos šteje 3× toliko kot en EDI QSO (avtoritativna deklaracija lastnega lokatorja iz robotsko-validiranih tekmovalnih dnevnikov). Chip-i v prikazu kažejo **raw številke** zaradi intuitivnosti.
 - **Nastavljivi pragovi** — nastavi najmanjše zgodovinske pojavitve (1–10) in prag zaupanja v modus (10–100%) prek drsnikov v orodni vrstici; ponovi crosscheck brez ponovnega nalaganja datoteke
 - **Predlog za manjkajoč lokator** — označi zveze brez lokatorja, če klicni znak obstaja v zgodovini, in predlaga najpogostejši zgodovinski lokator
 - **Kompozitno preverjanje klicnega znaka** — ko je klicni znak neznan globalno, orodje preveri tudi klicne znake, ki so zgodovinsko delovali z *istega lokatorja* (uje napake kot `IK3GOY` → `IW3GOA`, ko sta oba iz `JN65DM`)
 - **HTML izvoz** — prenesi samostojno HTML poročilo vseh označenih zvez s predlogi popravkov
+- **Trajni baseline** — gumb "Počisti zgodovino" počisti samo tvoje spuščene EDI dnevnike; baseline ostane.
 
 ### Navodila za uporabo
 
-1. Prenesi `edi-crosscheck.html` (ena datoteka, ~30 KB)
-2. Odpri jo v katerem koli sodobnem brskalniku (Chrome, Firefox, Edge, Safari)
-3. Povleci zgodovinske EDI dnevnike na prvo območje za spuščanje — baza se zgradi takoj
+1. Prenesi `edi-crosscheck.html` (ena datoteka, ~50 KB). Opcijsko prenesi tudi [`crosscheck-baseline.json`](crosscheck-baseline.json) (~220 KB) za OEVSV baseline.
+2. **Za baseline podporo** postrežaj preko lokalnega HTTP strežnika (brskalniki blokirajo `fetch()` iz `file://`):
+   ```bash
+   cd /pot/do/HamLogTools
+   python3 -m http.server 8080
+   # nato odpri: http://localhost:8080/edi-crosscheck.html
+   ```
+   Za dvoklik `file://` orodje deluje normalno — samo brez baseline-a.
+3. Povleci zgodovinske EDI dnevnike na prvo območje za spuščanje (opcijsko, če je baseline naložen)
 4. Povleci nov EDI dnevnik na drugo območje za spuščanje
 5. Preglej tabelo rezultatov — filtriraj po "samo označeni" ali išči po klicnem znaku
 6. Po želji prilagodi drsnika in klikni **Ponovi**, da spremeniš občutljivost
 7. Klikni **Izvoz problemov**, da preneseš HTML poročilo
 
 Internetna povezava ni potrebna. Vsa obdelava poteka lokalno v brskalniku.
+
+---
+
+## Graditelj baseline-a (`build-baseline.js`)
+
+Node.js CLI skripta, ki gradi `crosscheck-baseline.json` iz mape OEVSV IARU R1 tekmovalnih CSV exportov. Uporablja se za občasno osveževanje pred-zgrajenega baseline-a, ki ga `edi-crosscheck.html` naloži ob zagonu.
+
+**Vir:** OEVSV baza rezultatov IARU R1 tekmovanj na <https://iaru.oevsv.at/v_upld/prg_list.php>. Vsako tekmovanje ima gumb za CSV export z (najmanj) stolpcema `Call` in `WWL`. Prenesi CSV-je več tekmovanj v eno mapo, nato zaženi skripto.
+
+### Zahteve
+
+- **Node.js v18+**
+- Brez zunanjih odvisnosti
+- Mapa z OEVSV tekmovalnimi CSV exporti
+
+### Potek
+
+```bash
+# 1. Ustvari mapo za CSV prenose:
+mkdir iaru_oevsv_csv
+
+# 2. Prenesi CSV exporte iz OEVSV za tekmovanja, ki jih želiš vključiti.
+#    Shrani jih v iaru_oevsv_csv/ (poljubna imena datotek).
+
+# 3. Zgradi baseline:
+node build-baseline.js
+
+# Izhod: ./crosscheck-baseline.json
+```
+
+### Možnosti
+
+```bash
+node build-baseline.js                              # privzeto
+node build-baseline.js --in ./iaru_oevsv_csv        # nastavljiva vhodna mapa
+node build-baseline.js --out ./crosscheck-baseline.json
+node build-baseline.js --min-appearances 5          # strožji kvalitetni filter
+node build-baseline.js --min-appearances 1          # obdrži vse (brez filtra)
+node build-baseline.js --pretty                     # zamiknjen JSON za pregled
+node build-baseline.js --verbose                    # statistika po datotekah
+```
+
+| Možnost | Privzeto | Opis |
+|---|---|---|
+| `--in DIR` | `./iaru_oevsv_csv` | Mapa s CSV datotekami |
+| `--out FILE` | `./crosscheck-baseline.json` | Pot izhodnega JSON |
+| `--min-appearances N` | `3` | Najmanjše skupno število tekmovalnih nastopov za vključitev klicnega znaka |
+| `--pretty` | izkl. | Zamiknjen JSON izhod |
+| `--verbose` | izkl. | Statistika obdelave po datotekah |
+
+### Kaj počne
+
+1. **Prebere vse `*.csv` datoteke** v vhodni mapi (samodejna detekcija encodinga: UTF-8 → ISO-8859-1 fallback)
+2. **Mapira stolpce po imenu** — tolerantna do OEVSV variant z 23 in 25 stolpci (50 MHz ima dodatna `LL Squares` stolpca)
+3. **Validira vsako vrstico:** Maidenhead regex na WWL, klicni znak s pripono `/MM` ali `/AM` se zavrže (po definiciji nepredvidljiv)
+4. **Normalizira:** klicni znak preko `baseCall()` (enaka logika kot HTML orodje), pas preko `BAND_MAP`, lokator v prve 4 velike + zadnji 2 mali
+5. **Agregira** v histograme lokatorjev per klicni znak in pas z oznako portable
+6. **Filtrira** glede na `--min-appearances`
+7. **Zapiše kompakten JSON** z metapodatki (`v` = datum gradnje, `src`, `n.calls`, `n.entries`, `n.files`, indeks pasov, slovar klicnih znakov)
+
+### Urnik obnavljanja
+
+Baseline se s časom stara, ker se operatorji selijo ali pojavijo novi. Priporočeni interval: **rebuild vsake 3–6 mesecev**, ali po večjih IARU R1 tekmovanjih (IARU R1 VHF, UHF/SHF, Marconi Memorial). Vsaka osvežitev:
+
+```bash
+# 1. Prenesi sveže CSV-je v iaru_oevsv_csv/ (dodaj nova tekmovanja, opcijsko odstrani stara)
+# 2. Rebuild:
+node build-baseline.js
+# 3. HTML orodje samodejno pobere novo datoteko ob naslednjem nalaganju strani.
+```
+
+### Format izhoda
+
+Kompakten JSON, ~220 KB za tipičen IARU R1 dataset (3 000+ klicnih znakov, 16 pasov):
+
+```json
+{
+  "v": "2026-05-13",
+  "src": "iaru.oevsv.at",
+  "minAppearances": 3,
+  "n": { "calls": 3240, "entries": 10564, "files": 35 },
+  "b": ["6m", "4m", "2m", "70cm", "23cm", ...],
+  "c": {
+    "DK0NA": { "2": [["JO50ti", 16]], "3": [["JO50ti", 16]], ... },
+    "S59P":  { "2": [["JN86ao", 15]], ... },
+    ...
+  }
+}
+```
+
+Vsak vnos klicnega znaka je `{ indeksPasu: [[lokator, count, portableFlag?], ...] }`, urejen po count padajoče. Tretji element `1` označuje, da je lokator izključno portable (samo `/P` ali `/M`).
 
 ---
 

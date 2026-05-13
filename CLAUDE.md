@@ -10,8 +10,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Current tools:**
 - `edi2adif.html` — Converts REG1TEST EDI v1 contest logs to ADIF and other formats
-- `edi-crosscheck.html` — Cross-checks a new EDI log against historical logs to flag callsign typos and locator mismatches
+- `edi-crosscheck.html` — Cross-checks a new EDI log against historical logs (+ optional prebuilt OEVSV IARU R1 baseline) to flag callsign typos and locator mismatches
 - `adif-qrz-filter.js` — Node.js CLI tool that filters an ADIF log to keep only BURO-accepting stations by querying the QRZ.com XML API
+- `build-baseline.js` — Node.js CLI tool that builds `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports, consumed by `edi-crosscheck.html`
 
 ## Development
 
@@ -79,32 +80,98 @@ Single HTML file with three co-located layers (CSS → HTML → JavaScript). No 
 | Band mapping (`BAND_MAP`, `normBand()`) | Reused from `edi2adif.html`. |
 | EDI parser (`parseEDI()`) | Slimmer variant: extracts callsign, mode, locator, date, band. |
 | Utilities (`baseCall()`, `levenshtein()`, `htmlEsc()`) | Suffix stripping, edit distance with early exit, XSS escaping. |
-| Historical DB (`_histDB`, `addToHistDB()`, `clearHist()`) | `Map<baseCall → {locators: Map<loc,count>, total}>` built from dropped historical EDI files. |
-| Crosscheck algorithm (`runCrosscheck()`) | Two-pass check: (1) locator mismatch/missing against historical mode, (2) unknown callsign similarity via Levenshtein. |
+| Historical DB (`_histDB`, `_locToCalls`, `_locToCallsRaw`) | Dual weighted+raw maps; see "Weighting model" below. |
+| DB population (`addToHistDB()`, `applyBaseline()`, `loadBaseline()`, `clearHist()`) | Two sources: dropped EDI files (weight 1) and prebuilt baseline JSON (weight `BASELINE_WEIGHT` = 3). |
+| Crosscheck algorithm (`runCrosscheck()`) | Two-pass check: (1) locator mismatch/missing against historical mode, (2) unknown callsign similarity via Levenshtein. Decisions use weighted counts, display fields use raw counts. |
 | Threshold controls (`updatePrag()`, `rerunCrosscheck()`) | `_minAppearances` (1–10) and `_minConfidence` (0.1–1.0) slider UI; `_lastQsos` stores last new log for re-run. |
-| Render (`renderSummaryBar()`, `renderResults()`) | Summary counts, filterable table with severity colour coding. |
+| Render (`renderSummaryBar()`, `renderResults()`, `updateDbCard()`) | Summary counts, filterable table with severity colour coding, dbCard with baseline tag + EDI stats. |
 | HTML export (`exportIssues()`) | Generates a self-contained HTML file of all flagged QSOs with correction suggestions. |
 | File loading (`loadHistFiles()`, `loadNewFile()`) | Async `FileReader` loops; historical files deduplicated by name+size. |
 | Drag & drop + theme (`setupDrop()`, `toggleTheme()`) | Drag-over styling, click-to-input wiring, light/dark theme toggle with `localStorage`. |
 
+**Weighting model (v1.4):**
+
+The `_histDB` entry tracks two parallel histograms per callsign:
+
+```
+Map<baseCall, {
+  locators:    Map<locUPPER, weightedCount>,  // used by algorithm
+  locatorsRaw: Map<locUPPER, rawCount>,       // used by display
+  total:       int,                            // weighted sum
+  totalRaw:    int,                            // raw sum
+}>
+```
+
+- **EDI QSO** contributes `+1` to both weighted and raw.
+- **Baseline entry** contributes `+BASELINE_WEIGHT` (=3) to weighted and `+rawCount` to raw.
+- `_locToCalls` / `_locToCallsRaw` use the same dual structure.
+
+**Why:** robotically-validated own-locator declarations in the OEVSV baseline are higher confidence than partner-reported locators in user EDI files. Decisions (threshold `_minAppearances`, mode locator, severity) use weighted to give baseline more pull. Display surfaces (chips, exports) show raw counts so numbers stay intuitive. The `modeConf` ratio (`modeLoc.count / histEntry.total`) is invariant under uniform weighting, so threshold semantics remain stable.
+
+**Baseline lifecycle:**
+
+1. On page load, `loadBaseline()` fetches `./crosscheck-baseline.json`.
+2. On success, JSON is cached in `_baselineRaw` and `applyBaseline()` aggregates the per-band locator stats into the flat weighted+raw maps.
+3. On `fetch()` failure (most commonly `file://` CORS, or missing file), silent fallback — tool runs with EDI-only history.
+4. `clearHist()` clears EDI contributions and re-injects baseline from cached `_baselineRaw` (baseline is persistent).
+
 **Key data flow:**
-1. Historical EDI files → `loadHistFiles()` → `parseEDI()` → `addToHistDB()` → `_histDB`
-2. New EDI log → `loadNewFile()` → `parseEDI()` → `_lastQsos`
-3. `runCrosscheck(_lastQsos)` → `_results[]` (each entry has `qso`, `issues[]`, `base`, `idx`)
-4. `renderSummaryBar()` + `renderResults()` → filtered table
-5. Slider change → `updatePrag()` → enables `rerunCrosscheck()` → re-populates `_results`
-6. `exportIssues()` → Blob HTML → download
+1. Page load → `loadBaseline()` → `fetch()` → `applyBaseline()` → `_histDB` (baseline contribution, weight ×3)
+2. Historical EDI files → `loadHistFiles()` → `parseEDI()` → `addToHistDB()` → `_histDB` (EDI contribution, weight ×1)
+3. New EDI log → `loadNewFile()` → `parseEDI()` → `_lastQsos`
+4. `runCrosscheck(_lastQsos)` → `_results[]` (each entry has `qso`, `issues[]`, `base`, `idx`)
+5. `renderSummaryBar()` + `renderResults()` → filtered table
+6. Slider change → `updatePrag()` → enables `rerunCrosscheck()` → re-populates `_results`
+7. `exportIssues()` → Blob HTML → download
 
 **Issue types:**
 - `LOC_MISMATCH` — new locator differs from historical mode; severity `high` (mode confidence ≥ threshold and locator never seen) or `med` (locator seen before).
 - `LOC_MISSING` — new log QSO has no locator but history exists; severity `high`/`med` based on mode confidence.
 - `CALL_SIMILAR` — callsign not in history; Levenshtein distance ≤ 2 matches found, sorted by distance ASC then count DESC.
+- `CALL_BY_LOC` — callsign not in history but a similar callsign worked from the same locator (composite heuristic).
 - `CALL_UNKNOWN` — callsign not in history and no similar match within distance 2.
 
 **QSO object shape** (after `parseEDI`):
 ```
 call, mode, wwl, dateDisp, band, src
 ```
+
+---
+
+## Architecture of build-baseline.js
+
+Node.js CLI script that builds `crosscheck-baseline.json` from a directory of OEVSV IARU R1 contest CSV exports. No external dependencies.
+
+| Section | Responsibility |
+|---|---|
+| CLI parser (`parseArgs`) | `--in`, `--out`, `--min-appearances`, `--pretty`, `--verbose`, `--help` |
+| Band mapping (`BAND_MAP`, `normBand()`) | 16 bands from 50 MHz to 300 GHz. Decimal-anchored regexes disambiguate "1.3 GHz" → 23cm from "122 GHz" → 2.5mm. |
+| Callsign normalization (`baseCall()`, `callSuffix()`) | Mirrors `edi-crosscheck.html` exactly — same suffix-strip vs. prefix-keep heuristic. |
+| Locator validation (`normLocator()`) | Maidenhead regex `[A-R]{2}[0-9]{2}[A-X]{2}`; first-4-upper + last-2-lower to match tool convention. |
+| CSV parser (`parseCSVLine`, `readCSV`) | RFC-4180-ish quoted-field parser. Encoding fallback: UTF-8 → ISO-8859-1 on U+FFFD detection. Header-driven column mapping (tolerant to 23/25-col OEVSV variants). |
+| Main (`main`) | Aggregate → filter (≥ `MIN_APP`) → sort → emit compact JSON with versioning. |
+
+**Key data flow:**
+1. Read CSV directory → header detection per file → row iteration
+2. Validate row (call non-empty, locator regex, band recognized, suffix not `/MM` or `/AM`)
+3. Aggregate into `Map<baseCall, Map<band, Map<loc, {count, portable}>>>`
+4. Filter calls by total appearances ≥ `MIN_APP` (default 3)
+5. Build stable band index (BAND_MAP order, unknowns alphabetically last)
+6. Emit compact JSON: `c[call][bandIdx] = [[loc, count, portable?], ...]` sorted by count desc
+
+**Output format** (consumed by `edi-crosscheck.html`):
+```json
+{
+  "v": "YYYY-MM-DD",
+  "src": "iaru.oevsv.at",
+  "minAppearances": 3,
+  "n": { "calls": N, "entries": M, "files": F },
+  "b": ["6m", "4m", "2m", ...],
+  "c": { "CALL": { "bandIdx": [[loc, count, portable?], ...] } }
+}
+```
+
+**Rebuild cadence:** quarterly or after major IARU R1 contests. The script is idempotent given the same inputs.
 
 ---
 
@@ -137,8 +204,9 @@ Node.js CLI script, no external dependencies. Pure Node.js `https` client for QR
 
 **Trenutna orodja:**
 - `edi2adif.html` — Pretvori REG1TEST EDI v1 tekmovalne dnevnike v format ADIF in druge formate
-- `edi-crosscheck.html` — Preveri nov EDI dnevnik proti zgodovinskim dnevnikom in označi morebitne napake v klicnih znakih in lokatorjih
+- `edi-crosscheck.html` — Preveri nov EDI dnevnik proti zgodovinskim dnevnikom (+ opcijski pred-zgrajen OEVSV IARU R1 baseline) in označi morebitne napake v klicnih znakih in lokatorjih
 - `adif-qrz-filter.js` — Node.js CLI orodje, ki filtrira ADIF dnevnik in ohrani samo postaje, ki sprejemajo QSL preko biroja, s poizvedovanjem prek QRZ.com XML API
+- `build-baseline.js` — Node.js CLI orodje, ki gradi `crosscheck-baseline.json` iz OEVSV IARU R1 contest CSV exportov, namenjeno za `edi-crosscheck.html`
 
 ## Razvoj
 
@@ -200,29 +268,95 @@ Enojna HTML datoteka s tremi solociranimi plastmi (CSS → HTML → JavaScript).
 | Mapiranje pasov (`BAND_MAP`, `normBand()`) | Ponovno uporabljeno iz `edi2adif.html`. |
 | EDI razčlenjevalnik (`parseEDI()`) | Ožja različica: izvleče klicni znak, način, lokator, datum, pas. |
 | Pomožniki (`baseCall()`, `levenshtein()`, `htmlEsc()`) | Odstranjevanje pripon, razdalja urejanja z zgodnjim izhodom, ubežanje XSS. |
-| Zgodovinska baza (`_histDB`, `addToHistDB()`, `clearHist()`) | `Map<bazniKlicniZnak → {locators: Map<lokator,števec>, total}>` zgrajena iz spuščenih zgodovinskih EDI datotek. |
-| Algoritem crosschecka (`runCrosscheck()`) | Dvojni prehod: (1) neskladje/manjkajoč lokator proti zgodovinskemu modusu, (2) podobnost neznanega klicnega znaka prek Levenshteina. |
+| Zgodovinska baza (`_histDB`, `_locToCalls`, `_locToCallsRaw`) | Dvojni weighted+raw maps; glej "Model uteževanja" spodaj. |
+| Polnjenje baze (`addToHistDB()`, `applyBaseline()`, `loadBaseline()`, `clearHist()`) | Dva vira: spuščene EDI datoteke (teža 1) in pred-zgrajen baseline JSON (teža `BASELINE_WEIGHT` = 3). |
+| Algoritem crosschecka (`runCrosscheck()`) | Dvojni prehod: (1) neskladje/manjkajoč lokator proti zgodovinskemu modusu, (2) podobnost neznanega klicnega znaka prek Levenshteina. Odločitve uporabljajo weighted štetja, prikazna polja raw. |
 | Nadzor pragov (`updatePrag()`, `rerunCrosscheck()`) | Drsnika `_minAppearances` (1–10) in `_minConfidence` (0,1–1,0); `_lastQsos` shrani zadnji nov dnevnik za ponovni prehod. |
-| Prikaz (`renderSummaryBar()`, `renderResults()`) | Povzetek s štetjem, filtrirajmo tabela z barvnim kodiranjem resnosti. |
+| Prikaz (`renderSummaryBar()`, `renderResults()`, `updateDbCard()`) | Povzetek s štetjem, filtrirana tabela z barvnim kodiranjem resnosti, dbCard z baseline tag-om + EDI statistiko. |
 | HTML izvoz (`exportIssues()`) | Ustvari samostojno HTML datoteko z vsemi označenimi QSO in predlogi popravkov. |
 | Nalaganje datotek (`loadHistFiles()`, `loadNewFile()`) | Asinhroni zanki `FileReader`; zgodovinske datoteke deduplicirane po ime+velikost. |
 | Povleci-in-spusti + tema (`setupDrop()`, `toggleTheme()`) | Oblikovanje povleci-nad, priklop klik-vnos, preklop svetla/temna tema s `localStorage`. |
 
+**Model uteževanja (v1.4):**
+
+Vsak `_histDB` zapis sledi dvema vzporednima histogramoma per klicni znak:
+
+```
+Map<bazniKlicniZnak, {
+  locators:    Map<locUPPER, utežene števec>,  // uporablja algoritem
+  locatorsRaw: Map<locUPPER, raw števec>,      // uporablja prikaz
+  total:       int,                             // utežena vsota
+  totalRaw:    int,                             // raw vsota
+}>
+```
+
+- **EDI QSO** prispeva `+1` k uteženemu in raw.
+- **Baseline vnos** prispeva `+BASELINE_WEIGHT` (=3) k uteženemu in `+rawCount` k raw.
+- `_locToCalls` / `_locToCallsRaw` uporabljata isto dvojno strukturo.
+
+**Zakaj:** robotsko-validirane deklaracije lastnega lokatorja v OEVSV baseline-u imajo višje zaupanje kot lokatorji, ki jih je v EDI dnevniku zapisal partner. Odločitve (prag `_minAppearances`, modus lokator, severity) uporabljajo weighted, da baseline ima več teže. Prikazne površine (chip-i, izvozi) kažejo raw številke, da ostanejo intuitivne. Razmerje `modeConf` (`modeLoc.count / histEntry.total`) je invariantno pod uniformnim weighting-om, tako da threshold semantika ostane stabilna.
+
+**Življenjski cikel baseline-a:**
+
+1. Ob nalaganju strani `loadBaseline()` fetch-a `./crosscheck-baseline.json`.
+2. Ob uspehu se JSON shrani v `_baselineRaw` in `applyBaseline()` agregira per-band statistiko v flat weighted+raw maps.
+3. Ob `fetch()` napaki (najpogosteje `file://` CORS ali manjkajoča datoteka) — tih fallback, orodje deluje samo z EDI zgodovino.
+4. `clearHist()` počisti EDI prispevke in re-inject-a baseline iz cached `_baselineRaw` (baseline je trajen).
+
 **Potek podatkov:**
-1. Zgodovinske EDI datoteke → `loadHistFiles()` → `parseEDI()` → `addToHistDB()` → `_histDB`
-2. Nov EDI dnevnik → `loadNewFile()` → `parseEDI()` → `_lastQsos`
-3. `runCrosscheck(_lastQsos)` → `_results[]` (vsak vnos ima `qso`, `issues[]`, `base`, `idx`)
-4. `renderSummaryBar()` + `renderResults()` → filtrirana tabela
-5. Sprememba drsnika → `updatePrag()` → omogoči `rerunCrosscheck()` → ponovno napolni `_results`
-6. `exportIssues()` → Blob HTML → prenos
+1. Nalaganje strani → `loadBaseline()` → `fetch()` → `applyBaseline()` → `_histDB` (baseline prispevek, teža ×3)
+2. Zgodovinske EDI datoteke → `loadHistFiles()` → `parseEDI()` → `addToHistDB()` → `_histDB` (EDI prispevek, teža ×1)
+3. Nov EDI dnevnik → `loadNewFile()` → `parseEDI()` → `_lastQsos`
+4. `runCrosscheck(_lastQsos)` → `_results[]` (vsak vnos ima `qso`, `issues[]`, `base`, `idx`)
+5. `renderSummaryBar()` + `renderResults()` → filtrirana tabela
+6. Sprememba drsnika → `updatePrag()` → omogoči `rerunCrosscheck()` → ponovno napolni `_results`
+7. `exportIssues()` → Blob HTML → prenos
 
 **Vrste težav:**
 - `LOC_MISMATCH` — nov lokator se razlikuje od zgodovinskega modusa; resnost `high` (zaupanje v modus ≥ prag in lokator še nikoli viden) ali `med` (lokator že viden prej).
 - `LOC_MISSING` — zveza v novem dnevniku nima lokatorja, a zgodovina obstaja; resnost `high`/`med` glede na zaupanje v modus.
 - `CALL_SIMILAR` — klicni znak ni v zgodovini; najdena ujemanja z Levenshteinovo razdaljo ≤ 2, razvrščena po razdalji NAR, nato po številu PAD.
+- `CALL_BY_LOC` — klicni znak ni v zgodovini, ampak podoben klicni znak je delal iz istega lokatorja (kompozitna hevristika).
 - `CALL_UNKNOWN` — klicni znak ni v zgodovini in ni podobnega ujemanja v razdalji 2.
 
 **Oblika objekta QSO** (po `parseEDI`):
 ```
 call, mode, wwl, dateDisp, band, src
 ```
+
+---
+
+## Arhitektura build-baseline.js
+
+Node.js CLI skripta, ki gradi `crosscheck-baseline.json` iz mape OEVSV IARU R1 contest CSV exportov. Brez zunanjih odvisnosti.
+
+| Razdelek | Odgovornost |
+|---|---|
+| CLI parser (`parseArgs`) | `--in`, `--out`, `--min-appearances`, `--pretty`, `--verbose`, `--help` |
+| Mapiranje pasov (`BAND_MAP`, `normBand()`) | 16 pasov od 50 MHz do 300 GHz. Decimalka-zavarovani regex-i razlikujejo "1.3 GHz" → 23cm od "122 GHz" → 2.5mm. |
+| Normalizacija klicnega znaka (`baseCall()`, `callSuffix()`) | Eksaktno enako kot `edi-crosscheck.html` — ista suffix-strip vs. prefix-keep hevristika. |
+| Validacija lokatorja (`normLocator()`) | Maidenhead regex `[A-R]{2}[0-9]{2}[A-X]{2}`; prve 4 velike + zadnji 2 mali za ujemanje s konvencijo orodja. |
+| CSV parser (`parseCSVLine`, `readCSV`) | RFC-4180-ish parser kvotiranih polj. Encoding fallback: UTF-8 → ISO-8859-1 ob detekciji U+FFFD. Mapiranje stolpcev po glavi (tolerantno do 23/25-stolpčnih OEVSV variant). |
+| Main (`main`) | Agregira → filtrira (≥ `MIN_APP`) → razvrsti → izda kompakten JSON z versioniranjem. |
+
+**Potek podatkov:**
+1. Branje CSV mape → detekcija glave per datoteka → iteracija vrstic
+2. Validacija vrstice (klicni znak neprazen, lokator regex, pas prepoznan, pripona ne `/MM` ali `/AM`)
+3. Agregacija v `Map<bazniKlicniZnak, Map<pas, Map<lok, {count, portable}>>>`
+4. Filtriranje klicnih znakov po skupnem številu nastopov ≥ `MIN_APP` (privzeto 3)
+5. Gradnja stabilnega indeksa pasov (BAND_MAP vrstni red, neznane abecedno na konec)
+6. Izdaja kompaktnega JSON: `c[call][bandIdx] = [[loc, count, portable?], ...]` razvrščen po count padajoče
+
+**Format izhoda** (konzumira ga `edi-crosscheck.html`):
+```json
+{
+  "v": "YYYY-MM-DD",
+  "src": "iaru.oevsv.at",
+  "minAppearances": 3,
+  "n": { "calls": N, "entries": M, "files": F },
+  "b": ["6m", "4m", "2m", ...],
+  "c": { "CALL": { "bandIdx": [[loc, count, portable?], ...] } }
+}
+```
+
+**Interval obnavljanja:** kvartalno ali po večjih IARU R1 tekmovanjih. Skripta je idempotentna pri enakih vhodnih podatkih.
