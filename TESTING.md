@@ -13,7 +13,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger.test.js` | `vhf-logger.html` | 95 | 11 |
+| `vhf-logger.test.js` | `vhf-logger.html` | 123 | 15 |
 
 The sections below document each test file in detail.
 
@@ -472,17 +472,20 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 ---
 
-## `vhf-logger.test.js` — 95 tests · 11 groups
+## `vhf-logger.test.js` — 123 tests · 15 groups
 
-Covers the pure logic of `vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, and crosscheck lookup.
+Covers the pure logic of `vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, crosscheck lookup, EDI import parsing, ZIP generation, band colors, and manual time state.
 
 ### How the tests work
 
-`vhf-logger.html` is evaluated inside a `node:vm` context using the same Proxy-based DOM mock as `edi-crosscheck.html`. Because module-level `let _current` is not a ctx property, two helper functions are injected via a second `vm.runInContext` call:
+`vhf-logger.html` is evaluated inside a `node:vm` context using the same Proxy-based DOM mock as `edi-crosscheck.html`. Because module-level `let` bindings are not ctx properties, helpers are injected via a second `vm.runInContext` call. The ctx also explicitly receives `TextEncoder`, `TextDecoder`, `Uint8Array`, `DataView`, and `ArrayBuffer` so that `makeZip` can run correctly:
 - `_setCurrentForTest(session)` — sets the active session for dupe-related tests
 - `_getCurrentForTest()` — reads the active session back
 - `_getEditingExistingForTest()` — reads the `_editingExisting` flag for session-edit tests
 - `_getI18nValueForTest(lang, key)` — reads a value from the `S` i18n object for i18n coverage tests
+- `_getManualTimeForTest()` — reads the `_manualTime` state variable
+- `_setManualTimeForTest(v)` — sets `_manualTime` for state tests
+- `_getBandColorsForTest()` — returns the `BAND_COLORS` map
 
 ### Test groups
 
@@ -556,7 +559,7 @@ Verifies REG1TEST EDI v1 output format.
 - File starts with `[REG1TEST;1]` header.
 - `TDate` uses full `YYYYMMDD` (header); QSO records use `YYMMDD`.
 - `TName`, `PCall`, `PWWLo`, `PBand`, `PClub`, `PSect`, `MOpe1` headers present and correct.
-- Equipment headers: `SPowe`, `SAnte`, `STXEq`, `OPEqu`, `SAntH` populated from band config.
+- Equipment headers: `SPowe`, `SAnte`, `STXEq`, `SRXEq`, `SAntH` populated from band config.
 - C* summary block: `CQSOs`, `CQSOP`, `CWWLs`, `CWWLB`, `CExcs`, `CExcB`, `CDXCs`, `CDXCB`, `CToSc`, `CODXC` — computed from non-dupe QSOs.
 - `[QSORecords N]` section present with correct count.
 - QSO line has exactly 14 semicolon-separated fields (col 0–13).
@@ -582,6 +585,43 @@ Verifies state and i18n coverage for the session-editing feature.
 - Four new SL i18n keys (`btnEditSetup`, `setupEdit`, `btnSaveSetup`, `errBandHasQsos`) are non-empty strings.
 - Four new EN i18n keys (same set) are non-empty strings.
 - `sl.setupEdit` and `en.setupEdit` are distinct strings (translation exists).
+
+#### 12 · `parseEdiForImport` (10 tests)
+Verifies EDI file parsing for the import feature.
+
+- Correct QSO count from a 3-record EDI fragment.
+- `YYMMDD` date in QSO records converted to full `YYYYMMDD` (YY ≥ 80 → 19xx, YY < 80 → 20xx).
+- Mode number `1` → `SSB`, `2` → `CW`.
+- Dupe flag `D` at col 13 detected; clean QSOs have `dupe=false`.
+- Callsign uppercased; locator normalised to 4-upper + 2-lower mixed case.
+- Header fields (`PBand`, `PCall`) extracted.
+- UTC time parsed correctly from `HHMM`.
+
+#### 13 · `makeZip` (5 tests)
+Verifies the minimal ZIP generator (STORE/no-compression).
+
+- Returns a `Uint8Array`.
+- First 4 bytes are the ZIP local file header magic `PK\x03\x04`.
+- Last 22 bytes start with the end-of-central-directory magic `PK\x05\x06`.
+- EOCD entry count field matches the number of files passed in.
+- Empty file list produces a valid minimal ZIP (≥ 22 bytes).
+
+#### 14 · `bandColors` (4 tests)
+Verifies the `BAND_COLORS` map used to colour band tabs.
+
+- Map has entries for `2m` and `70cm`.
+- `2m` and `70cm` have distinct colour values.
+- All values are 7-character `#rrggbb` hex strings.
+
+#### 15 · `manualTime` (7 tests)
+Verifies manual UTC time override state and i18n keys for new features.
+
+- `_manualTime` initialises to `null`.
+- State can be set and read back via helpers.
+- `sl.toastImported` contains `${n}` placeholder.
+- `sl.errImportBand` contains `${band}` placeholder.
+- `sl.btnExportAll` and `en.btnExportAll` are non-empty strings.
+- `sl.btnImport` and `en.btnImport` are non-empty strings.
 
 ---
 
@@ -710,17 +750,20 @@ CLI orodje se izvede znotraj konteksta `node:vm`, ki nadomesti `fs`, `https`, `p
 
 ---
 
-## `vhf-logger.test.js` — 95 testov · 11 skupin
+## `vhf-logger.test.js` — 123 testov · 15 skupin
 
-Pokriva čisto logiko `vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI in crosscheck poizvedbe.
+Pokriva čisto logiko `vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI, crosscheck poizvedbe, razčlenjevanje uvoza EDI, generiranje ZIP, barve pasov in stanje ročnega časa.
 
 ### Kako testi delujejo
 
-`vhf-logger.html` se izvede znotraj konteksta `node:vm` z enakim nadomestkom DOM na osnovi Proxy kot `edi-crosscheck.html`. Ker modularni `let _current` ni lastnost ctx, se prek drugega klica `vm.runInContext` vbrizgata dve pomožni funkciji:
-- `_setCurrentForTest(seja)` — nastavi aktivno sejo za teste, ki preverjajo duplikate
+`vhf-logger.html` se izvede znotraj konteksta `node:vm` z enakim nadomestkom DOM na osnovi Proxy kot `edi-crosscheck.html`. Ker modularni `let` vezani niso lastnosti ctx, se pomožne funkcije vbrizgajo prek drugega klica `vm.runInContext`. Ctx izrecno prejme `TextEncoder`, `TextDecoder`, `Uint8Array`, `DataView` in `ArrayBuffer` za pravilno delovanje `makeZip`:
+- `_setCurrentForTest(seja)` — nastavi aktivno sejo za teste duplikatov
 - `_getCurrentForTest()` — prebere aktivno sejo
-- `_getEditingExistingForTest()` — prebere zastavico `_editingExisting` za teste urejanja seje
-- `_getI18nValueForTest(jezik, ključ)` — prebere vrednost iz objekta `S` za teste i18n pokritosti
+- `_getEditingExistingForTest()` — prebere zastavico `_editingExisting`
+- `_getI18nValueForTest(jezik, ključ)` — prebere vrednost iz `S` objekta za i18n teste
+- `_getManualTimeForTest()` — prebere stanje `_manualTime`
+- `_setManualTimeForTest(v)` — nastavi `_manualTime` za teste stanja
+- `_getBandColorsForTest()` — vrne mapo `BAND_COLORS`
 
 ### Skupine testov
 
@@ -794,7 +837,7 @@ Preverja izhodni format REG1TEST EDI v1.
 - Datoteka se začne z glavo `[REG1TEST;1]`.
 - `TDate` uporablja polni `YYYYMMDD` (glava); QSO zapisi uporabljajo `YYMMDD`.
 - Prisotne in pravilne glave `TName`, `PCall`, `PWWLo`, `PBand`, `PClub`, `PSect`, `MOpe1`.
-- Glave opreme: `SPowe`, `SAnte`, `STXEq`, `OPEqu`, `SAntH` izpolnjene iz konfiguracije pasu.
+- Glave opreme: `SPowe`, `SAnte`, `STXEq`, `SRXEq`, `SAntH` izpolnjene iz konfiguracije pasu.
 - Blok C*: `CQSOs`, `CQSOP`, `CWWLs`, `CWWLB`, `CExcs`, `CExcB`, `CDXCs`, `CDXCB`, `CToSc`, `CODXC` — izračunani iz QSO-jev brez duplikatov.
 - Razdelek `[QSORecords N]` prisoten s pravilnim številom.
 - Vrstica QSO ima natanko 14 polj, ločenih s podpičji (stolpci 0–13).

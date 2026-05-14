@@ -184,11 +184,11 @@ Single HTML file with three co-located layers (CSS → HTML → JavaScript). No 
 
 | Section | Responsibility |
 |---|---|
-| I18N (`S`, `t()`, `setLang()`) | Bilingual UI strings (SL/EN). Keys include `lblClub`, `ariaTheme`, `ariaDelLog`, `ariaDelQso`, `errStorageFull`. |
-| Band config (`BAND_MAP`, `normBand`, `BAND_OPTS`) | 11 bands (6m–6mm) with canonical names and EDI header strings. |
+| I18N (`S`, `t()`, `setLang()`) | Bilingual UI strings (SL/EN). Keys include `lblClub`, `ariaTheme`, `ariaDelLog`, `ariaDelQso`, `errStorageFull`, `statLocs`, `btnImport`, `toastImported`, `toastImportErr`, `errImportBand`, `confirmImport`, `btnExportAll`, `ovrLabel`. |
+| Band config (`BAND_MAP`, `normBand`, `BAND_OPTS`, `BAND_COLORS`) | 11 bands (6m–6mm) with canonical names and EDI header strings. `BAND_COLORS` maps band name → hex color used for tab highlighting. |
 | Geo utils (`locToLatLon`, `haversine`, `calcBearing`) | Maidenhead → lat/lon, QRB distance, great-circle bearing. |
 | Crosscheck module | `baseCall()`, `levenshtein()`, `_histDB` (weighted+raw dual maps, same structure as `edi-crosscheck.html`), `applyBaseline()`, `loadBaseline()`, `lookupCall()`, `searchCalls()`. |
-| State + persistence | `STORE='vhf-logger-v1'`, module-level `let _sessions`, `_current`, `_editingQso`. `saveSessions()` wrapped in try/catch. |
+| State + persistence | `STORE='vhf-logger-v1'`, module-level `let _sessions`, `_current`, `_editingQso`, `_manualTime`, `_soundEnabled`, `_statsOpen`, `_exportingSession`. `saveSessions()` wrapped in try/catch. |
 | Clock (`tickClock`) | Fires every 5 s; skips display update when `_editingQso` is set. |
 | Navigation | `showHome()`, `showSetup()`, `showLogger()`, `pauseSession()`. |
 | Home screen | `renderHome()`, `resumeSession()`, `deleteSession()`. |
@@ -197,6 +197,12 @@ Single HTML file with three co-located layers (CSS → HTML → JavaScript). No 
 | QSO editing | `editQso()`, `cancelEdit()`, `saveEditedQso()`, `setupTableClickHandler()`, `deleteQso()`. |
 | QSO form | `onCallInput()`, `onCallKey()`, `renderAc()`, `selectAc()`, `onWwlInput()`, `updateWwlColor()`, `onModeChange()`, `checkDupeField()`, `logQso()`, `resetForm()`. |
 | Hints | `updateLocHint()`, `calcAzimuth()`, `updateXhint()`, `debouncedXhint()` (150 ms debounce). |
+| Per-band stats | `toggleStatsPanel()`, `renderStatsDetail()`. Collapsible panel below band tabs: QSOs/band, unique 4-char locator squares, total QRB, best DX. Toggle state persisted in `localStorage`. |
+| Sound | `toggleSound()`, `playQsoBeep()`. Web Audio API 880 Hz beep (12 ms), wrapped in try/catch. Toggle state persisted in `localStorage`. |
+| Manual time | `toggleTimeOvr()`, `onManualTimeInput()`. Inline ✎ button reveals a `HH:MM` override input; stores `{date, time}` in `_manualTime`. `logQso()` reads `_manualTime` if set, otherwise uses live UTC clock. |
+| Keyboard | `onRstKey(e, nextId)`, `onNrRKey(e)`. Tab/Enter advance RST_S → RST_R → NrR → logQso; global `keydown` handles Esc (cancel edit or close autocomplete/time override). |
+| ZIP export | `_crc32` (IIFE CRC-32 table), `makeZip(files)`, `exportAllZip()`. Builds a STORE-method ZIP from all bands with QSOs using `_exportingSession`; no external dependencies. |
+| EDI import | `parseEdiForImport(text)`, `triggerImport()`, `handleImportFile(input)`, `importEdi(text)`. Reads REG1TEST EDI; converts YYMMDD → YYYYMMDD, mode number → string, normalizes locator; appends QSOs to the matching band row if band exists in session. |
 | EDI export | `buildEdi()`, `showExportModal()`, `showExportFor()`, `_showExportFor()`, `_exportBand()`, `closeModal()`. |
 | Theme + init | `toggleTheme()`, `init()`. |
 
@@ -231,18 +237,23 @@ Col 8 = exchange (empty), col 11–12 = reserved (empty), col 13 = `D` if dupe, 
 - `saveSessions()` is wrapped in try/catch; shows `t('errStorageFull')` toast on quota exceeded.
 - `_editingExisting` — boolean flag; `true` while `editSessionSetup()` is open. `startSession()` branches on this flag: updates `_current` in place (and calls `showLogger`) instead of creating a new session. `cancelSetup()` checks the flag to decide whether to return to logger or home.
 - `removeBandRow()` — guards against removing a band that has QSOs when `_editingExisting` is true; shows `t('errBandHasQsos')` toast and aborts.
+- `_manualTime` — `{date: 'YYYYMMDD', time: 'HHMM'} | null`; set by `onManualTimeInput()`, read by `logQso()` to timestamp a QSO at a specific UTC time instead of the live clock.
+- `_exportingSession` — set at the top of `_showExportFor()` so that `exportAllZip()` knows which session to export (necessary when called from home screen where `_current` may differ).
+- `renderBandTabs()` — uses `BAND_COLORS[b.band]` to set `border-color`, `color`, and `background` (hex + `22` = ~13% alpha) on the active tab via inline `style=`.
+- `playQsoBeep()` — called at end of successful `logQso()`; no-op if `_soundEnabled` is false or `AudioContext` unavailable.
 
 **Key data flow:**
 1. Page load → `loadBaseline()` → `fetch('./crosscheck-baseline.json')` → `applyBaseline()` → `_histDB`
 2. Home → Setup → `startSession()` creates session with `club` field → `showLogger()`
-3. `logQso()` → `isDupe()` + `lookupCall()` for xFlags → push QSO → `syncCurrent()` → `renderTable()`
+3. `logQso()` → checks `_manualTime` for timestamp → `isDupe()` + `lookupCall()` for xFlags → push QSO → `playQsoBeep()` → `syncCurrent()` → `renderTable()` → `renderStatsDetail()`
 4. Row click → `editQso()` loads form, shows `#editTimeRow`, hides `#clockRow`
 5. `logQso()` (while `_editingQso` set) → delegates to `saveEditedQso()` → `recalcDupes()` → `syncCurrent()`
 6. Band tab click → `switchBand()` → `renderBandTabs()` + `renderTable()` + `updateNrS()` + `resetForm()`
-7. Export button → `showExportModal()` → per-band `buildEdi()` → `dl()`
+7. Export button → `showExportModal()` → per-band `buildEdi()` → `dl()`; ZIP button → `exportAllZip()` → `makeZip()` → `dl()`
 8. ⚙ Edit button → `editSessionSetup()` pre-fills form → `startSession()` updates `_current` → `showLogger(_current)`
+9. ⬆ EDI button → `triggerImport()` → file picker → `handleImportFile()` → `parseEdiForImport()` → `importEdi()` → `recalcDupes()` → `renderTable()`
 
-**Tests:** `vhf-logger.test.js` — 95 tests across 11 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`).
+**Tests:** `vhf-logger.test.js` — 121 tests across 15 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`).
 
 ---
 
@@ -406,11 +417,11 @@ Enojna HTML datoteka s tremi solociranimi plastmi (CSS → HTML → JavaScript).
 
 | Razdelek | Odgovornost |
 |---|---|
-| I18N (`S`, `t()`, `setLang()`) | Dvojezični nizi vmesnika (SL/EN). Ključi vključujejo `lblClub`, `ariaTheme`, `ariaDelLog`, `ariaDelQso`, `errStorageFull`. |
-| Konfiguracija pasov (`BAND_MAP`, `normBand`, `BAND_OPTS`) | 11 pasov (6m–6mm) s kanonskimi imeni in nizi za EDI glavo. |
+| I18N (`S`, `t()`, `setLang()`) | Dvojezični nizi vmesnika (SL/EN). Ključi vključujejo `lblClub`, `ariaTheme`, `ariaDelLog`, `ariaDelQso`, `errStorageFull`, `statLocs`, `btnImport`, `toastImported`, `toastImportErr`, `errImportBand`, `confirmImport`, `btnExportAll`, `ovrLabel`. |
+| Konfiguracija pasov (`BAND_MAP`, `normBand`, `BAND_OPTS`, `BAND_COLORS`) | 11 pasov (6m–6mm) s kanonskimi imeni in nizi za EDI glavo. `BAND_COLORS` preslika ime pasu → hex barvo za barvanje zavihkov. |
 | Geo pomožniki (`locToLatLon`, `haversine`, `calcBearing`) | Maidenhead → lat/lon, razdalja QRB, smer po velikem krogu. |
 | Crosscheck modul | `baseCall()`, `levenshtein()`, `_histDB` (uteženi+raw dual maps, enaka struktura kot `edi-crosscheck.html`), `applyBaseline()`, `loadBaseline()`, `lookupCall()`, `searchCalls()`. |
-| Stanje + trajnost | `STORE='vhf-logger-v1'`, modularni `let _sessions`, `_current`, `_editingQso`. `saveSessions()` zavita v try/catch. |
+| Stanje + trajnost | `STORE='vhf-logger-v1'`, modularni `let _sessions`, `_current`, `_editingQso`, `_manualTime`, `_soundEnabled`, `_statsOpen`, `_exportingSession`. `saveSessions()` zavita v try/catch. |
 | Ura (`tickClock`) | Sproži se vsakih 5 s; preskoči posodobitev prikaza, ko je nastavljen `_editingQso`. |
 | Navigacija | `showHome()`, `showSetup()`, `showLogger()`, `pauseSession()`. |
 | Domači zaslon | `renderHome()`, `resumeSession()`, `deleteSession()`. |
@@ -419,6 +430,12 @@ Enojna HTML datoteka s tremi solociranimi plastmi (CSS → HTML → JavaScript).
 | Urejanje QSO | `editQso()`, `cancelEdit()`, `saveEditedQso()`, `setupTableClickHandler()`, `deleteQso()`. |
 | Obrazec QSO | `onCallInput()`, `onCallKey()`, `renderAc()`, `selectAc()`, `onWwlInput()`, `updateWwlColor()`, `onModeChange()`, `checkDupeField()`, `logQso()`, `resetForm()`. |
 | Namigi | `updateLocHint()`, `calcAzimuth()`, `updateXhint()`, `debouncedXhint()` (150 ms debounce). |
+| Statistika po pasovih | `toggleStatsPanel()`, `renderStatsDetail()`. Zložljiva plošča pod zavihki pasov: QSO/pas, unikatni 4-znakovni kvadrati lokatorjev, skupna QRB, best DX. Stanje togla shranjeno v `localStorage`. |
+| Zvok | `toggleSound()`, `playQsoBeep()`. Web Audio API 880 Hz pip (12 ms), zavita v try/catch. Stanje togla shranjeno v `localStorage`. |
+| Ročni čas | `toggleTimeOvr()`, `onManualTimeInput()`. Gumb ✎ prikaže polje za vnos `HH:MM`; vrednost shrani v `_manualTime`. `logQso()` prebere `_manualTime`, če je nastavljena, sicer uporabi živo UTC uro. |
+| Tipkovnica | `onRstKey(e, nextId)`, `onNrRKey(e)`. Tab/Enter napreduje RST_S → RST_R → NrR → logQso; globalni `keydown` obravnava Esc (prekini urejanje ali zapri avtodokončanje/override časa). |
+| ZIP izvoz | `_crc32` (IIFE tabela CRC-32), `makeZip(files)`, `exportAllZip()`. Zgradi STORE-method ZIP iz vseh pasov s QSO-ji prek `_exportingSession`; brez zunanjih odvisnosti. |
+| EDI uvoz | `parseEdiForImport(text)`, `triggerImport()`, `handleImportFile(input)`, `importEdi(text)`. Prebere REG1TEST EDI; pretvori YYMMDD → YYYYMMDD, številko načina → niz, normalizira lokator; doda QSO-je v ustrezno vrstico pasu, če pas obstaja v seji. |
 | EDI izvoz | `buildEdi()`, `showExportModal()`, `showExportFor()`, `_showExportFor()`, `_exportBand()`, `closeModal()`. |
 | Tema + inicializacija | `toggleTheme()`, `init()`. |
 
@@ -453,18 +470,23 @@ Stolpec 8 = izmenjava (prazno), stolpci 11–12 = rezervirano (prazno), stolpec 
 - `saveSessions()` je zavita v try/catch; ob prekoračitvi kvote prikaže toast `t('errStorageFull')`.
 - `_editingExisting` — logična zastavica; `true`, ko je odprt `editSessionSetup()`. `startSession()` se razveja glede na to zastavico: posodobi `_current` na mestu (in pokliče `showLogger`) namesto ustvarjanja nove seje. `cancelSetup()` preveri zastavico, da odloči, ali se vrne v logger ali domov.
 - `removeBandRow()` — ščiti pred odstranjevanjem pasu, ki ima QSO-je, ko je `_editingExisting` true; prikaže toast `t('errBandHasQsos')` in prekine.
+- `_manualTime` — `{date: 'YYYYMMDD', time: 'HHMM'} | null`; nastavi `onManualTimeInput()`, prebere `logQso()` za žigosanje QSO na določen UTC čas namesto žive ure.
+- `_exportingSession` — nastavi se na vrhu `_showExportFor()`, da `exportAllZip()` ve, katero sejo izvoziti (potrebno pri klicu z domačega zaslona, kjer `_current` morda ne ustreza).
+- `renderBandTabs()` — za aktivni zavihek nastavi `border-color`, `color` in `background` (hex + `22` ≈ 13% alpha) prek `BAND_COLORS[b.band]`.
+- `playQsoBeep()` — pokliče se ob koncu uspešnega `logQso()`; ne naredi ničesar, če je `_soundEnabled` false ali `AudioContext` ni na voljo.
 
 **Potek podatkov:**
 1. Nalaganje strani → `loadBaseline()` → `fetch('./crosscheck-baseline.json')` → `applyBaseline()` → `_histDB`
 2. Domov → Nastavitve → `startSession()` ustvari sejo s poljem `club` → `showLogger()`
-3. `logQso()` → `isDupe()` + `lookupCall()` za xFlags → doda QSO → `syncCurrent()` → `renderTable()`
+3. `logQso()` → preveri `_manualTime` za žig → `isDupe()` + `lookupCall()` za xFlags → doda QSO → `playQsoBeep()` → `syncCurrent()` → `renderTable()` → `renderStatsDetail()`
 4. Klik na vrstico → `editQso()` naloži obrazec, prikaže `#editTimeRow`, skrije `#clockRow`
 5. `logQso()` (ko je nastavljen `_editingQso`) → delegira na `saveEditedQso()` → `recalcDupes()` → `syncCurrent()`
 6. Klik na zavihek pasu → `switchBand()` → `renderBandTabs()` + `renderTable()` + `updateNrS()` + `resetForm()`
-7. Gumb za izvoz → `showExportModal()` → `buildEdi()` po pasovih → `dl()`
+7. Gumb za izvoz → `showExportModal()` → `buildEdi()` po pasovih → `dl()`; gumb ZIP → `exportAllZip()` → `makeZip()` → `dl()`
 8. Gumb ⚙ Uredi → `editSessionSetup()` predizpolni obrazec → `startSession()` posodobi `_current` → `showLogger(_current)`
+9. Gumb ⬆ EDI → `triggerImport()` → izbirnik datotek → `handleImportFile()` → `parseEdiForImport()` → `importEdi()` → `recalcDupes()` → `renderTable()`
 
-**Testi:** `vhf-logger.test.js` — 95 testov v 11 skupinah (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`).
+**Testi:** `vhf-logger.test.js` — 121 testov v 15 skupinah (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`).
 
 ---
 

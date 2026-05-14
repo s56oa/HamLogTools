@@ -147,7 +147,14 @@ Open the file in any modern browser (for baseline support, serve over HTTP).
 - **Dupe detection** — real-time warning with `baseCall()` normalization so `S59DGO/P` is correctly matched against `S59DGO`; per-band, excludes the QSO currently being edited
 - **Inline editing** — click any logged QSO to correct call, locator, RST, serial, mode, or time; dupe flags and xFlags recalculated on save
 - **Session metadata editing** — ⚙ Edit button in the logger toolbar opens the setup form pre-filled with the current session's data; saves changes to the existing session in place without losing any QSOs
-- **EDI export** — produces valid REG1TEST EDI v1.1 files (one per band): correct `[REG1TEST;1]` header, `SPowe`/`SAnte`/`STXEq`/`OPEqu`/`SAntH` equipment fields, `PSect` category, full C* score summary block (`CQSOs`, `CQSOP`, `CWWLs`, `CWWLs`, `CDXCs`, `CToSc`, `CODXC`), and correct 14-field QSO records
+- **Per-band stats panel** — 📊 toggle shows a collapsible table with QSOs/band, unique Maidenhead squares, total QRB, and best DX call+distance; state persisted in `localStorage`
+- **ZIP export** — one click downloads a ZIP file containing separate EDI files for all bands that have QSOs
+- **EDI import** — ⬆ EDI button imports an existing REG1TEST EDI file into the current session; merges QSOs into the matching band row (band must already be configured)
+- **Manual time override** — ✎ button reveals a UTC time input next to the clock; QSOs logged while override is active use the specified time instead of the live clock (for late entries)
+- **Keyboard shortcuts** — Enter on the last serial field submits the QSO; Tab advances RST_S → RST_R → NrR → Log; Esc cancels editing or closes the autocomplete/time override
+- **Band tab colours** — each band tab is highlighted in a distinct colour when active (6m = amber, 2m = blue, 70cm = teal, etc.)
+- **QSO sound** — 🔊 toggle enables a short 880 Hz beep on each successfully logged QSO (Web Audio API); persisted in `localStorage`
+- **EDI export** — produces valid REG1TEST EDI v1.1 files (one per band): correct `[REG1TEST;1]` header, `SPowe`/`SAnte`/`STXEq`/`SRXEq`/`SAntH` equipment fields, `PSect` category, full C* score summary block (`CQSOs`, `CQSOP`, `CWWLs`, `CWWLs`, `CDXCs`, `CToSc`, `CODXC`), and correct 14-field QSO records
 - **Session management** — multiple concurrent sessions; pause/resume between contest legs; delete individual QSOs or entire sessions
 - **Offline-capable PWA** — installable on iOS and Android home screen; service worker caches the app shell and baseline for fully offline use after first load
 - **Bilingual UI** — Slovenian and English
@@ -166,9 +173,10 @@ Open the file in any modern browser (for baseline support, serve over HTTP).
    Without the baseline the logger still works fully for dupe detection, EDI export, and QRB calculation.
 3. Click **New session**, fill in the setup form (call, locator, contest, operator, club, section, reporter contact, bands with equipment), then click **Start**. To change any field later, click **⚙ Edit** in the logger toolbar.
 4. Type a callsign in the QSO form — autocomplete and crosscheck hints appear automatically
-5. Enter locator, RST, serial, mode; press **Enter** or click **Log** to save the QSO
-6. Click any row to edit; click the trash icon to delete
-7. Click **Export EDI** to download REG1TEST EDI files
+5. Enter locator, RST, serial, mode; Tab moves between RST fields; press **Enter** on the last serial field or click **Log** to save the QSO
+6. Click any row to edit; press **Esc** or click the ✕ to cancel; click the trash icon to delete
+7. Click **Export EDI** for per-band files, or the **⬇ Vsi pasovi (ZIP)** button in the export modal for all bands at once
+8. Click **📊** to toggle the per-band stats panel; **🔊** to toggle QSO beep; **⬆ EDI** to import an existing EDI file
 
 No internet connection required after the page loads. All data stays in your browser's `localStorage`.
 
@@ -342,7 +350,7 @@ node --test --test-reporter=spec vhf-logger.test.js
 | `edi2adif.test.js` | 120 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit) |
 | `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` locator mismatch ×6, `runCrosscheck` callsign ×8, missing locator ×4, thresholds ×3, callsign by locator ×4) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
-| `vhf-logger.test.js` | 95 | 11 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`) |
+| `vhf-logger.test.js` | 121 | 15 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`) |
 
 See [TESTING.md](TESTING.md) for full test documentation.
 
@@ -508,7 +516,14 @@ Datoteko odpri v katerem koli sodobnem brskalniku (za baseline podporo postreža
 - **Zaznavanje duplikatov** — opozorilo v realnem času z normalizacijo `baseCall()`, tako da se `S59DGO/P` pravilno ujame z `S59DGO`; per-pas, izključuje QSO, ki se trenutno ureja
 - **Urejanje v živo** — klikni kateri koli vnos v dnevniku za popravek klicnega znaka, lokatorja, RST, serije, načina ali časa; zastavice duplikatov in xFlags se preračunajo ob shranitvi
 - **Urejanje podatkov seje** — gumb ⚙ Uredi v orodni vrstici beležnika odpre nastavitveni obrazec, predizpolnjen s trenutnimi podatki seje; spremembe se shranijo v obstoječo sejo brez izgube QSO-jev
-- **EDI izvoz** — ustvari veljavne REG1TEST EDI v1.1 datoteke (eno per pas): pravilna glava `[REG1TEST;1]`, polja opreme `SPowe`/`SAnte`/`STXEq`/`OPEqu`/`SAntH`, kategorija `PSect`, blok C* povzetka točkanja (`CQSOs`, `CQSOP`, `CWWLs`, `CDXCs`, `CToSc`, `CODXC`) in pravilni 14-polni zapisi QSO
+- **Statistika po pasovih** — gumb 📊 prikaže/skrije plošče s statistiko: QSO/pas, unikatni Maidenhead kvadrati, skupna QRB, best DX; stanje ohranjeno v `localStorage`
+- **ZIP izvoz** — en klik prenese ZIP datoteko z ločenimi EDI datotekami za vse pasove, ki imajo QSO-je
+- **EDI uvoz** — gumb ⬆ EDI uvozi obstoječo REG1TEST EDI datoteko v trenutno sejo; QSO-ji se dodajo v ustrezno vrstico pasu (pas mora biti že nastavljen v seji)
+- **Ročni vnos časa** — gumb ✎ prikaže polje za vnos UTC časa poleg ure; QSO-ji, vneseni medtem, dobijo določen čas namesto žive ure (za zamujene vnose)
+- **Tipkovnične bližnjice** — Enter na zadnjem polju serije odda QSO; Tab napreduje RST_S → RST_R → NrR → Zabeleži; Esc prekine urejanje ali zapre avtodokončanje
+- **Barve zavihkov** — vsak aktivni zavihek pasu je označen v svoji barvi (6m = jantarna, 2m = modra, 70cm = tirkizna itd.)
+- **Zvok QSO** — gumb 🔊 vklopi/izklopi kratek 880 Hz pip ob vsakem uspešno zabeleženenem QSO (Web Audio API); stanje ohranjeno v `localStorage`
+- **EDI izvoz** — ustvari veljavne REG1TEST EDI v1.1 datoteke (eno per pas): pravilna glava `[REG1TEST;1]`, polja opreme `SPowe`/`SAnte`/`STXEq`/`SRXEq`/`SAntH`, kategorija `PSect`, blok C* povzetka točkanja (`CQSOs`, `CQSOP`, `CWWLs`, `CDXCs`, `CToSc`, `CODXC`) in pravilni 14-polni zapisi QSO
 - **Upravljanje sej** — več sočasnih sej; premor/nadaljevanje med deli tekmovanja; brisanje posameznih QSO ali celotnih sej
 - **PWA brez povezave** — namestitven na začetni zaslon iOS in Android; service worker predpomni lupino aplikacije in baseline za popolno delovanje brez interneta po prvem nalaganju
 - **Dvojezični vmesnik** — slovenščina in angleščina
@@ -527,9 +542,10 @@ Datoteko odpri v katerem koli sodobnem brskalniku (za baseline podporo postreža
    Brez baseline-a beležnik deluje normalno za zaznavanje duplikatov, EDI izvoz in izračun QRB.
 3. Klikni **Nova seja**, izpolni nastavitveni obrazec (klicni znak, lokator, tekmovanje, operater, klub, sekcija, kontakt odgovornega, pasovi z opremo), nato klikni **Začni**. Za poznejše spremembe klikni **⚙ Uredi** v orodni vrstici beležnika.
 4. Vtipkaj klicni znak v obrazec QSO — avtodokončanje in crosscheck namigi se prikažejo samodejno
-5. Vnesi lokator, RST, serijo, način; pritisni **Enter** ali klikni **Zabeleži** za shranitev
-6. Klikni kateri koli vnos za urejanje; klikni ikono koša za brisanje
-7. Klikni **Izvozi EDI** za prenos REG1TEST EDI datotek
+5. Vnesi lokator, RST, serijo, način; Tab premakne med polji RST; pritisni **Enter** na zadnjem polju serije ali klikni **Zabeleži** za shranitev
+6. Klikni kateri koli vnos za urejanje; pritisni **Esc** ali klikni ✕ za preklic; klikni ikono koša za brisanje
+7. Klikni **Izvozi EDI** za eno datoteko per pas, ali gumb **⬇ Vsi pasovi (ZIP)** v izvozu za vse pasove naenkrat
+8. Klikni **📊** za statistiko po pasovih; **🔊** za vklop/izklop pipa; **⬆ EDI** za uvoz obstoječe EDI datoteke
 
 Po nalaganju strani internetna povezava ni potrebna. Vsi podatki ostanejo v `localStorage` brskalnika.
 
@@ -703,7 +719,7 @@ node --test --test-reporter=spec vhf-logger.test.js
 | `edi2adif.test.js` | 120 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplikati, CSV izvoz, urejanje v živo) |
 | `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` lokator ×6, `runCrosscheck` klicni znak ×8, manjkajoč lokator ×4, pragovi ×3, klicni znak po lokatorju ×4) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
-| `vhf-logger.test.js` | 95 | 11 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`) |
+| `vhf-logger.test.js` | 121 | 15 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`) |
 
 Celotna dokumentacija je v [TESTING.md](TESTING.md).
 

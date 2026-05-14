@@ -295,13 +295,42 @@ tr:hover td{background:rgba(77,157,224,.04)}
   .qf-mode{width:64px}
   .qf-rst,.qf-nrr{width:46px}
 }
+
+/* ── Per-band stats panel ── */
+.stats-detail{background:var(--bg3);border-bottom:1px solid var(--border);
+  padding:.4rem .9rem;flex-shrink:0;overflow-x:auto;display:none}
+.stats-detail.open{display:block}
+.sdtbl{width:100%;border-collapse:collapse;font-size:11px;font-family:'Space Mono',monospace;min-width:360px}
+.sdtbl th{color:var(--muted);text-transform:uppercase;font-size:9px;letter-spacing:.05em;
+  padding:.25rem .55rem;white-space:nowrap;text-align:right}
+.sdtbl th:first-child{text-align:left}
+.sdtbl td{padding:.28rem .55rem;white-space:nowrap;text-align:right;border-top:.5px solid var(--border)}
+.sdtbl td:first-child{text-align:left;font-weight:700}
+.sdtbl td.sd-odx{color:var(--accent2);font-size:10px}
+.sdtbl tr:last-child td{border-bottom:none}
+
+/* ── Manual time override ── */
+.time-ovr{display:none;align-items:center;gap:.3rem;margin-left:.3rem}
+.time-ovr.show{display:flex}
+.ovr-inp{background:var(--bg3);border:1.5px solid var(--accent3);border-radius:4px;
+  color:var(--accent3);padding:.2rem .4rem;font-size:.85rem;
+  font-family:'Space Mono',monospace;width:58px;text-align:center;min-height:28px}
+.ovr-inp:focus{outline:none}
+.ovr-lbl{font-size:10px;color:var(--accent3);font-weight:600;white-space:nowrap}
+
+/* ── Icon buttons ── */
+.btn-icon{background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:4px;padding:2px 7px;font-size:13px;cursor:pointer;line-height:1;
+  transition:all .15s;min-height:28px;font-family:inherit}
+.btn-icon:hover{border-color:var(--accent);color:var(--accent)}
+.btn-icon.on{border-color:var(--accent3)!important;color:var(--accent3)!important}
 </style>
 </head>
 <body>
 
 <header>
   <div class="logo">VHF<span class="icon">◉</span>Logger</div>
-  <span class="version">v1.1</span>
+  <span class="version">v1.2</span>
   <div class="hdr-info" id="hdrInfo"></div>
   <div class="lang-wrap">
     <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" aria-label="Preklopi temo / Toggle theme">☀</button>
@@ -413,11 +442,17 @@ tr:hover td{background:rgba(77,157,224,.04)}
     <div class="st-sep"></div>
     <div class="st"><span class="st-val" id="stODX">—</span><span class="st-lbl">ODX km</span></div>
     <div class="st-sep push"></div>
+    <button class="btn-icon" id="btnStats" onclick="toggleStatsPanel()" title="Statistika po pasovih / Per-band stats">📊</button>
+    <button class="btn-icon" id="btnSound" onclick="toggleSound()" title="Zvok QSO / QSO beep">🔊</button>
+    <button class="btn btn-secondary btn-sm" onclick="triggerImport()" data-i18n="btnImport">⬆ EDI</button>
     <button class="btn btn-secondary btn-sm" onclick="editSessionSetup()" data-i18n="btnEditSetup">⚙ Uredi</button>
     <button class="btn btn-secondary btn-sm" onclick="pauseSession()" data-i18n="btnPause">⏸ Pavza</button>
     <button class="btn btn-secondary btn-sm" onclick="showExportModal()" data-i18n="btnExport">⬇ EDI</button>
   </div>
   <div class="band-tabs" id="bandTabs"></div>
+  <div class="stats-detail" id="statsDetail">
+    <table class="sdtbl" id="sdTbl"></table>
+  </div>
 
   <!-- Table — fills available space, newest QSO at bottom -->
   <div class="tbl-panel">
@@ -480,15 +515,15 @@ tr:hover td{background:rgba(77,157,224,.04)}
       </div>
       <div class="qf-rst">
         <div class="qf-lbl" data-i18n="lblRstS">RST↑</div>
-        <input class="qinp-sm" id="inRstS" value="59" maxlength="3">
+        <input class="qinp-sm" id="inRstS" value="59" maxlength="3" onkeydown="onRstKey(event,'inRstR')">
       </div>
       <div class="qf-rst">
         <div class="qf-lbl" data-i18n="lblRstR">RST↓</div>
-        <input class="qinp-sm" id="inRstR" value="59" maxlength="3">
+        <input class="qinp-sm" id="inRstR" value="59" maxlength="3" onkeydown="onRstKey(event,'inNrR')">
       </div>
       <div class="qf-nrr">
         <div class="qf-lbl" data-i18n="lblNrR">Nr↓</div>
-        <input class="qinp-sm" id="inNrR" maxlength="4">
+        <input class="qinp-sm" id="inNrR" maxlength="4" onkeydown="onNrRKey(event)">
       </div>
       <button class="btn btn-success" onclick="logQso()" style="align-self:flex-end;min-height:44px;padding:.4rem 1.1rem;white-space:nowrap;flex-shrink:0" data-i18n="btnLog">✓ Zapiši QSO</button>
     </div>
@@ -502,6 +537,13 @@ tr:hover td{background:rgba(77,157,224,.04)}
       <span id="clockRow" style="display:flex;align-items:center;gap:.4rem">
         <span class="qf-lbl">UTC</span>
         <span class="utc-v" id="utcDisp">--:--</span>
+        <button class="btn-icon" id="btnTimeOvr" onclick="toggleTimeOvr()" title="Ročni čas / Manual time" style="margin-left:.2rem;padding:1px 5px;font-size:11px;min-height:24px">✎</button>
+        <span class="time-ovr" id="timeOvr">
+          <span class="ovr-lbl" data-i18n="ovrLabel">→</span>
+          <input class="ovr-inp" id="inManualTime" placeholder="HH:MM" maxlength="5"
+            oninput="onManualTimeInput()"
+            onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();document.getElementById('inCall').focus();}">
+        </span>
         <span class="qf-lbl" style="margin-left:.4rem" data-i18n="lblLocal">lok.</span>
         <span class="local-v" id="localDisp">--:--</span>
       </span>
@@ -521,11 +563,15 @@ tr:hover td{background:rgba(77,157,224,.04)}
   <div class="modal-box">
     <div class="modal-title" data-i18n="exportTitle">Izvoz EDI</div>
     <div id="exportRows"></div>
-    <div style="margin-top:1rem">
+    <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border);display:flex;gap:.5rem;flex-wrap:wrap">
+      <button class="btn btn-secondary btn-sm" id="btnZipExport" onclick="exportAllZip()" data-i18n="btnExportAll">⬇ Vsi pasovi (ZIP)</button>
+    </div>
+    <div style="margin-top:.65rem">
       <button class="btn btn-secondary btn-sm" onclick="closeModal()" data-i18n="btnClose">✕ Zapri</button>
     </div>
   </div>
 </div>
+<input type="file" id="importInput" accept=".edi,.txt" style="display:none" onchange="handleImportFile(this)">
 
 <div id="toast" aria-live="polite"></div>
 
@@ -608,6 +654,15 @@ sl:{
   ariaTheme:'Preklopi temo',
   ariaDelLog:'Izbriši dnevnik',
   ariaDelQso:'Izbriši QSO',
+  statLocs:'Lok.',
+  btnImport:'⬆ EDI',
+  toastImported:'Uvoženo ${n} QSO (${band})',
+  toastImportErr:'Napaka pri uvozu EDI',
+  errImportBand:'Pas "${band}" ni v tej seji — dodaj ga v nastavitvah',
+  warnImportBand:'PBand manjka v EDI glavi — uvažam v aktivni pas "${band}"',
+  confirmImport:'Uvozi ${n} QSO iz pasu ${band}?',
+  btnExportAll:'⬇ Vsi pasovi (ZIP)',
+  ovrLabel:'→',
 },
 en:{
   homeTitle:'VHF Logger',
@@ -683,6 +738,15 @@ en:{
   ariaTheme:'Toggle theme',
   ariaDelLog:'Delete log',
   ariaDelQso:'Delete QSO',
+  statLocs:'Loc.',
+  btnImport:'⬆ EDI',
+  toastImported:'Imported ${n} QSOs (${band})',
+  toastImportErr:'EDI import error',
+  errImportBand:'Band "${band}" not in this session — add it in setup',
+  warnImportBand:'PBand missing in EDI header — importing to active band "${band}"',
+  confirmImport:'Import ${n} QSOs from band ${band}?',
+  btnExportAll:'⬇ All bands (ZIP)',
+  ovrLabel:'→',
 }};
 let _lang = localStorage.getItem('vhf-lang')||'sl';
 function t(k, vars){
@@ -715,6 +779,12 @@ const BAND_MAP = [
   [/47\s*GHz/i,                                            '6mm'  ],
 ];
 function normBand(s){ if(!s) return ''; for(const[re,b] of BAND_MAP) if(re.test(s.trim())) return b; return s.trim(); }
+
+const BAND_COLORS={
+  '6m':'#f0a500','4m':'#d4c000','2m':'#4d9de0','70cm':'#2ecc8a',
+  '23cm':'#50d8e0','13cm':'#c880f8','9cm':'#ff8080',
+  '6cm':'#ff70c0','3cm':'#80ff80','1.25cm':'#ffb040','6mm':'#a0a0ff',
+};
 
 const BAND_OPTS = [
   {band:'6m',  freq:'50.150',   edi:'50 MHz'    },
@@ -872,6 +942,10 @@ function searchCalls(prefix){
 const STORE='vhf-logger-v1';
 let _sessions=[], _current=null, _clockId=null, _editingQso=null;
 let _acItems=[], _acIdx=-1, _bandRowN=0, _editingExisting=false;
+let _manualTime=null;         // {date:'YYYYMMDD', time:'HHMM'} or null
+let _soundEnabled=true;       // init from localStorage in init()
+let _statsOpen=false;         // init from localStorage in init()
+let _exportingSession=null;   // tracks which session the export modal is for
 
 function loadSessions(){ try{ _sessions=JSON.parse(localStorage.getItem(STORE)||'[]'); } catch{ _sessions=[]; } }
 function saveSessions(){
@@ -941,6 +1015,13 @@ function showSetup(){
 
 function showLogger(session){
   _current=session;
+  if(_manualTime){
+    _manualTime=null;
+    document.getElementById('timeOvr')?.classList.remove('show');
+    document.getElementById('btnTimeOvr')?.classList.remove('on');
+    const mti=document.getElementById('inManualTime');
+    if(mti) mti.value='';
+  }
   document.getElementById('hdrInfo').innerHTML=
     `<span class="hdr-call">${htmlEsc(session.myCall)}</span>`+
     `<span>${htmlEsc(session.myLoc)}</span>`+
@@ -1197,6 +1278,7 @@ function updateNrS(){
 
 function switchBand(band){
   if(!_current) return;
+  if(_editingQso) cancelEdit();
   _current.activeBand=band;
   renderBandTabs();
   updateNrS();
@@ -1210,7 +1292,9 @@ function renderBandTabs(){
   el.innerHTML=_current.bands.map(b=>{
     const n=_current.qsos.filter(q=>q.band===b.band).length;
     const active=b.band===_current.activeBand;
-    return `<button class="btab${active?' active':''}" onclick="switchBand('${b.band}')">${htmlEsc(b.band)}<span class="tn">${n}</span></button>`;
+    const col=BAND_COLORS[b.band]||'var(--accent)';
+    const style=active?`border-color:${col};color:${col};background:${col}22`:'';
+    return `<button class="btab${active?' active':''}" style="${style}" onclick="switchBand('${b.band}')">${htmlEsc(b.band)}<span class="tn">${n}</span></button>`;
   }).join('');
 }
 
@@ -1225,6 +1309,7 @@ function renderStats(){
   document.getElementById('stKm').textContent=Math.round(totalKm).toLocaleString();
   document.getElementById('stSq').textContent=squares;
   document.getElementById('stODX').textContent=maxKm>0?Math.round(maxKm).toLocaleString():'—';
+  renderStatsDetail();
 }
 
 function renderTable(){
@@ -1563,9 +1648,14 @@ function logQso(){
   const call=document.getElementById('inCall').value.trim().toUpperCase();
   if(!call){ showToast(t('errNoCall'),true); return; }
   const band=_current.activeBand;
-  const now=new Date();
-  const utcDate=`${now.getUTCFullYear()}${String(now.getUTCMonth()+1).padStart(2,'0')}${String(now.getUTCDate()).padStart(2,'0')}`;
-  const utcTime=`${String(now.getUTCHours()).padStart(2,'0')}${String(now.getUTCMinutes()).padStart(2,'0')}`;
+  let utcDate, utcTime;
+  if(_manualTime){
+    utcDate=_manualTime.date; utcTime=_manualTime.time;
+  } else {
+    const now=new Date();
+    utcDate=`${now.getUTCFullYear()}${String(now.getUTCMonth()+1).padStart(2,'0')}${String(now.getUTCDate()).padStart(2,'0')}`;
+    utcTime=`${String(now.getUTCHours()).padStart(2,'0')}${String(now.getUTCMinutes()).padStart(2,'0')}`;
+  }
   const wwlRaw=document.getElementById('inWwl').value.trim().toUpperCase();
   const wwl=wwlRaw.length===6 ? wwlRaw.slice(0,4)+wwlRaw.slice(4).toLowerCase() : wwlRaw;
   const myPos=locToLatLon(_current.myLoc);
@@ -1599,6 +1689,7 @@ function logQso(){
   renderTable(); renderStats(); renderBandTabs(); updateNrS();
   scrollTableBottom();
   showToast(t('toastAdded',{nr:nrS,km:qrb?Math.round(qrb).toLocaleString():'?'}));
+  playQsoBeep();
   resetForm();
   document.getElementById('inCall').focus();
 }
@@ -1653,7 +1744,7 @@ function buildEdi(session,band){
   out+=`PSect=${session.sect||''}\r\nPClub=${session.club||''}\r\nRClub=\r\n`;
   out+=`MOpe1=${session.operator||session.myCall}\r\nMOpe2=\r\n`;
   out+=`SPowe=${bc.power||100}\r\nSAnte=${bc.antenna||''}\r\n`;
-  out+=`STXEq=${bc.txEq||''}\r\nOPEqu=${bc.rxEq||''}\r\nSAntH=${bc.antH||''}\r\n`;
+  out+=`STXEq=${bc.txEq||''}\r\nSRXEq=${bc.rxEq||''}\r\nSAntH=${bc.antH||''}\r\n`;
   out+=`CQSOs=${cQSOs}\r\nCQSOP=${cQSOP}\r\n`;
   out+=`CWWLs=${cWWLs}\r\nCWWLB=${cWWLs}\r\n`;
   out+=`CExcs=${cExcs}\r\nCExcB=${cExcs}\r\n`;
@@ -1686,6 +1777,7 @@ function showExportFor(id){
 }
 
 function _showExportFor(session){
+  _exportingSession=session;
   const bands=[...new Set(session.qsos.map(q=>q.band))];
   if(!bands.length){ showToast(t('errNoBand'),true); return; }
   const rows=bands.map(b=>{
@@ -1715,6 +1807,272 @@ function _exportBand(sessionId,band){
 function closeModal(){ document.getElementById('exportModal').className='modal-bg'; }
 
 // ════════════════════════════════════════
+//  PER-BAND STATS PANEL
+// ════════════════════════════════════════
+function toggleStatsPanel(){
+  _statsOpen=!_statsOpen;
+  localStorage.setItem('vhf-stats-open',_statsOpen?'1':'0');
+  const el=document.getElementById('statsDetail');
+  if(el) el.classList.toggle('open',_statsOpen);
+  if(_statsOpen) renderStatsDetail();
+}
+
+function renderStatsDetail(){
+  if(!_current||!_statsOpen) return;
+  const el=document.getElementById('sdTbl');
+  if(!el) return;
+  const bands=_current.bands.map(b=>b.band);
+  const rows=bands.map(band=>{
+    const bq=_current.qsos.filter(q=>q.band===band);
+    const valid=bq.filter(q=>!q.dupe);
+    const locs=new Set(valid.filter(q=>q.wwl&&q.wwl.length>=4).map(q=>q.wwl.slice(0,4).toUpperCase())).size;
+    const km=Math.round(valid.reduce((s,q)=>s+(q.qrb||0),0));
+    const odx=valid.reduce((m,q)=>(q.qrb||0)>(m?.qrb||0)?q:m,null);
+    const col=BAND_COLORS[band]||'var(--accent)';
+    return `<tr>
+      <td style="color:${col};font-weight:700">${htmlEsc(band)}</td>
+      <td>${valid.length}/${bq.length}</td>
+      <td>${locs}</td>
+      <td>${km.toLocaleString()}</td>
+      <td class="sd-odx">${odx?htmlEsc(odx.call)+' '+Math.round(odx.qrb)+'km':'—'}</td>
+    </tr>`;
+  });
+  el.innerHTML=`<thead><tr>`+
+    `<th style="text-align:left">${t('thBand')}</th>`+
+    `<th>QSO*</th>`+
+    `<th>${t('statLocs')}</th>`+
+    `<th>km</th>`+
+    `<th style="text-align:left">ODX</th>`+
+    `</tr></thead><tbody>${rows.join('')}</tbody>`;
+}
+
+// ════════════════════════════════════════
+//  SOUND
+// ════════════════════════════════════════
+function toggleSound(){
+  _soundEnabled=!_soundEnabled;
+  localStorage.setItem('vhf-sound',_soundEnabled?'1':'0');
+  const btn=document.getElementById('btnSound');
+  if(btn){ btn.textContent=_soundEnabled?'🔊':'🔇'; btn.classList.toggle('on',_soundEnabled); }
+  if(_soundEnabled) playQsoBeep();
+}
+
+function playQsoBeep(){
+  if(!_soundEnabled) return;
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(880,ctx.currentTime);
+    gain.gain.setValueAtTime(0.25,ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.12);
+    osc.start(); osc.stop(ctx.currentTime+0.12);
+    osc.onended=()=>{try{ctx.close();}catch(_){}};
+  }catch(e){}
+}
+
+// ════════════════════════════════════════
+//  MANUAL TIME OVERRIDE
+// ════════════════════════════════════════
+function toggleTimeOvr(){
+  const ovr=document.getElementById('timeOvr');
+  const btn=document.getElementById('btnTimeOvr');
+  if(_manualTime){
+    _manualTime=null;
+    if(ovr) ovr.classList.remove('show');
+    if(btn){ btn.classList.remove('on'); }
+  } else {
+    if(ovr) ovr.classList.add('show');
+    if(btn) btn.classList.add('on');
+    const now=new Date();
+    const hhmm=`${String(now.getUTCHours()).padStart(2,'0')}:${String(now.getUTCMinutes()).padStart(2,'0')}`;
+    const el=document.getElementById('inManualTime');
+    if(el){ el.value=hhmm; el.focus(); }
+    onManualTimeInput();
+  }
+}
+
+function onManualTimeInput(){
+  const raw=(document.getElementById('inManualTime')?.value||'').replace(/\D/g,'').slice(0,4);
+  if(raw.length===4){
+    const now=new Date();
+    const date=`${now.getUTCFullYear()}${String(now.getUTCMonth()+1).padStart(2,'0')}${String(now.getUTCDate()).padStart(2,'0')}`;
+    _manualTime={date, time:raw};
+  } else {
+    _manualTime=null;
+  }
+}
+
+// ════════════════════════════════════════
+//  KEYBOARD SHORTCUTS
+// ════════════════════════════════════════
+function onRstKey(e, nextId){
+  if(e.key==='Enter'||e.key==='Tab'){ e.preventDefault(); document.getElementById(nextId)?.focus(); }
+}
+function onNrRKey(e){
+  if(e.key==='Enter'){ e.preventDefault(); logQso(); }
+}
+
+// ════════════════════════════════════════
+//  ZIP EXPORT
+// ════════════════════════════════════════
+const _crc32=(()=>{
+  const T=new Uint32Array(256);
+  for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=c&1?0xEDB88320^c>>>1:c>>>1;T[i]=c;}
+  return buf=>{let c=0xFFFFFFFF;for(const b of buf)c=T[(c^b)&0xFF]^c>>>8;return(c^0xFFFFFFFF)>>>0;};
+})();
+
+function makeZip(files){
+  const enc=new TextEncoder();
+  const u16=(v,a)=>{a.push(v&0xFF,(v>>8)&0xFF);};
+  const u32=(v,a)=>{a.push(v&0xFF,(v>>8)&0xFF,(v>>16)&0xFF,(v>>24)&0xFF);};
+  const now=new Date();
+  const dt=((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate();
+  const tm=(now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1);
+  const local=[],central=[];
+  let off=0;
+  for(const {name,data} of files){
+    const nb=enc.encode(name);
+    const db=typeof data==='string'?enc.encode(data):data;
+    const crc=_crc32(db);
+    const sz=db.length;
+    const lh=[];
+    lh.push(0x50,0x4B,0x03,0x04);
+    u16(20,lh);u16(0,lh);u16(0,lh);u16(tm,lh);u16(dt,lh);
+    u32(crc,lh);u32(sz,lh);u32(sz,lh);u16(nb.length,lh);u16(0,lh);
+    lh.push(...nb,...db);
+    const ch=[];
+    ch.push(0x50,0x4B,0x01,0x02);
+    u16(20,ch);u16(20,ch);u16(0,ch);u16(0,ch);u16(tm,ch);u16(dt,ch);
+    u32(crc,ch);u32(sz,ch);u32(sz,ch);u16(nb.length,ch);u16(0,ch);
+    u16(0,ch);u16(0,ch);u16(0,ch);u32(0,ch);u32(off,ch);
+    ch.push(...nb);
+    local.push(lh); central.push(ch); off+=lh.length;
+  }
+  const cd=central.flat();
+  const eocd=[];
+  eocd.push(0x50,0x4B,0x05,0x06);
+  u16(0,eocd);u16(0,eocd);u16(files.length,eocd);u16(files.length,eocd);
+  u32(cd.length,eocd);u32(off,eocd);u16(0,eocd);
+  return new Uint8Array([...local.flat(),...cd,...eocd]);
+}
+
+function exportAllZip(){
+  const session=_exportingSession||_current;
+  if(!session) return;
+  const bands=[...new Set(session.qsos.map(q=>q.band))];
+  if(!bands.length){ showToast(t('errNoBand'),true); return; }
+  const files=[];
+  for(const b of bands){
+    const content=buildEdi(session,b);
+    if(content){
+      const slug=`${session.myCall}_${b}_${session.contest}`.replace(/[^\w]/g,'_');
+      files.push({name:`${slug}.edi`,data:content});
+    }
+  }
+  if(!files.length){ showToast(t('errNoBand'),true); return; }
+  const zip=makeZip(files);
+  const blob=new Blob([zip],{type:'application/zip'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  const slug=`${session.myCall}_${session.contest}`.replace(/[^\w]/g,'_');
+  a.download=`${slug}_EDI.zip`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  closeModal();
+}
+
+// ════════════════════════════════════════
+//  EDI IMPORT
+// ════════════════════════════════════════
+function parseEdiForImport(text){
+  const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  const header={};
+  const qsos=[];
+  let inQso=false;
+  const modeMap={'1':'SSB','2':'CW','3':'CW','4':'SSB','5':'AM','6':'FM','7':'RTTY','8':'SSTV','9':'ATV'};
+  for(const line of lines){
+    const tr=line.trim();
+    if(!tr||tr.startsWith(';')) continue;
+    if(tr.startsWith('[QSORecords')){ inQso=true; continue; }
+    if(tr.startsWith('[')){ inQso=false; continue; }
+    if(!inQso){
+      const eq=tr.indexOf('=');
+      if(eq>0) header[tr.slice(0,eq).trim()]=tr.slice(eq+1).trim();
+    } else {
+      const f=tr.split(';');
+      if(f.length<10) continue;
+      const [yymmdd,hhmm,call,mn,rstS,nrS,rstR,nrR,,wwlRaw,qrbRaw,,,dupeFlag]=f;
+      if(!call||call.length<2) continue;
+      const yy=parseInt(yymmdd.slice(0,2));
+      const utcDate=`${yy>=80?1900+yy:2000+yy}${yymmdd.slice(2)}`;
+      const utcTime=(hhmm||'0000').slice(0,4);
+      const mode=modeMap[mn]||'SSB';
+      const wwl=wwlRaw&&wwlRaw.length===6
+        ? wwlRaw.slice(0,4).toUpperCase()+wwlRaw.slice(4).toLowerCase()
+        : (wwlRaw||'').toUpperCase();
+      qsos.push({
+        call:call.toUpperCase(),mode,
+        rstS:rstS||(mode==='CW'?'599':'59'),
+        rstR:rstR||(mode==='CW'?'599':'59'),
+        nrS:parseInt(nrS)||0, nrR:parseInt(nrR)||0,
+        wwl, utcDate, utcTime,
+        qrb:parseFloat(qrbRaw)||0,
+        dupe:dupeFlag==='D',
+      });
+    }
+  }
+  return {header,qsos};
+}
+
+function triggerImport(){
+  const el=document.getElementById('importInput');
+  if(el){ el.value=''; el.click(); }
+}
+
+function handleImportFile(input){
+  const file=input.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ importEdi(e.target.result); } catch(err){ showToast(t('toastImportErr'),true); } };
+  reader.readAsText(file,'utf-8');
+}
+
+function importEdi(text){
+  if(!_current){ showToast(t('toastImportErr'),true); return; }
+  const {header,qsos}=parseEdiForImport(text);
+  if(!qsos.length){ showToast(t('toastImportErr'),true); return; }
+  const rawBand=header['PBand']||header['RBand']||'';
+  const resolved=normBand(rawBand);
+  const band=resolved||_current.activeBand;
+  if(!rawBand) showToast(t('warnImportBand',{band}));
+  if(!_current.bands.some(b=>b.band===band)){
+    showToast(t('errImportBand',{band}),true); return;
+  }
+  if(!confirm(t('confirmImport',{n:qsos.length,band}))) return;
+  const myPos=locToLatLon(_current.myLoc);
+  let added=0;
+  for(const q of qsos){
+    const thPos=locToLatLon(q.wwl);
+    const qrb=(myPos&&thPos)?haversine(myPos.lat,myPos.lon,thPos.lat,thPos.lon):(q.qrb||0);
+    const brg=(myPos&&thPos)?calcBearing(myPos.lat,myPos.lon,thPos.lat,thPos.lon):null;
+    _current.qsos.push({
+      _id:genId(),band,mode:q.mode,call:q.call,wwl:q.wwl,
+      rstS:q.rstS,rstR:q.rstR,nrS:q.nrS,nrR:q.nrR,
+      utcDate:q.utcDate,utcTime:q.utcTime,
+      qrb,brg,dupe:false,xFlags:[],
+    });
+    added++;
+  }
+  recalcDupes();
+  syncCurrent();
+  renderTable(); renderStats(); renderBandTabs(); updateNrS();
+  scrollTableBottom();
+  showToast(t('toastImported',{n:added,band}));
+}
+
+// ════════════════════════════════════════
 //  THEME + INIT
 // ════════════════════════════════════════
 function toggleTheme(){
@@ -1732,11 +2090,27 @@ function init(){
     document.getElementById('btnSL').classList.remove('active');
     document.getElementById('btnEN').classList.add('active');
   }
+  // Sound init
+  _soundEnabled=localStorage.getItem('vhf-sound')!=='0';
+  const btnS=document.getElementById('btnSound');
+  if(btnS){ btnS.textContent=_soundEnabled?'🔊':'🔇'; btnS.classList.toggle('on',_soundEnabled); }
+  // Stats panel init
+  _statsOpen=localStorage.getItem('vhf-stats-open')==='1';
+  if(_statsOpen){ const sd=document.getElementById('statsDetail'); if(sd) sd.classList.add('open'); }
   document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));
   loadSessions();
   renderHome();
   loadBaseline();
   setupTableClickHandler();
+  // Global Esc handler
+  document.addEventListener('keydown',function(e){
+    if(!document.getElementById('screen-logger')?.classList.contains('active')) return;
+    if(e.key==='Escape'){
+      if(_editingQso){ cancelEdit(); e.preventDefault(); return; }
+      document.getElementById('acDrop').className='acdrop';
+      if(_manualTime){ toggleTimeOvr(); }
+    }
+  });
 }
 
 init();

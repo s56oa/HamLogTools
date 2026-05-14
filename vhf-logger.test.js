@@ -39,6 +39,7 @@ const ctx = vm.createContext({
   process: { argv:[], exit:()=>{}, env:{} },
   Buffer, Date, JSON, Math, String, Number, RegExp, Set, Map, Array, Object,
   parseInt, parseFloat, isNaN, isFinite,
+  TextEncoder, TextDecoder, Uint8Array, DataView, ArrayBuffer,
   clearTimeout, setTimeout: ()=>0,
   fetch: async ()=>({ ok:false }),
   URL: { createObjectURL:()=>'', revokeObjectURL:()=>{} },
@@ -57,12 +58,15 @@ const ctx = vm.createContext({
 
 vm.runInContext(jsSrc, ctx);
 
-// ─── Inject test helper to set _current (let var, accessible via new vm run) ─
+// ─── Inject test helpers ──────────────────────────────────────────────────────
 vm.runInContext(`
   function _setCurrentForTest(s){ _current = s; }
   function _getCurrentForTest(){ return _current; }
   function _getEditingExistingForTest(){ return _editingExisting; }
   function _getI18nValueForTest(lang, key){ return (S[lang]||{})[key]; }
+  function _getManualTimeForTest(){ return _manualTime; }
+  function _setManualTimeForTest(v){ _manualTime = v; }
+  function _getBandColorsForTest(){ return BAND_COLORS; }
 `, ctx);
 
 const {
@@ -70,8 +74,11 @@ const {
   locToLatLon, haversine, calcBearing,
   buildEdi, applyBaseline, lookupCall,
   isDupe, recalcDupes,
+  parseEdiForImport, makeZip,
   _setCurrentForTest, _getCurrentForTest,
   _getEditingExistingForTest, _getI18nValueForTest,
+  _getManualTimeForTest, _setManualTimeForTest,
+  _getBandColorsForTest,
 } = ctx;
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -417,10 +424,11 @@ describe('buildEdi', () => {
     assert.ok(out.includes('PSect=MO'), `PSect not found; got: ${out.match(/PSect=.*/)?.[0]}`);
   });
 
-  it('STXEq and OPEqu (rxEq) populated from band config', () => {
+  it('STXEq and SRXEq (rxEq) populated from band config', () => {
     const out = buildEdi(session, '2m');
     assert.ok(out.includes('STXEq=SSPA 300W'), `STXEq not found`);
-    assert.ok(out.includes('OPEqu=LNA'), `OPEqu not found`);
+    assert.ok(out.includes('SRXEq=LNA'), `SRXEq not found`);
+    assert.ok(!out.includes('OPEqu'), `OPEqu must not appear (use SRXEq)`);
   });
 
   it('CQSOs counts non-dupe QSOs', () => {
@@ -573,4 +581,201 @@ describe('sessionEdit', () => {
 
   it('sl.setupEdit ≠ en.setupEdit (distinct translations)', () =>
     assert.notEqual(_getI18nValueForTest('sl','setupEdit'), _getI18nValueForTest('en','setupEdit')));
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  parseEdiForImport
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('parseEdiForImport', () => {
+  const ediText = [
+    '[REG1TEST;1]',
+    'TDate=20260510',
+    'PBand=144 MHz',
+    'PCall=S56OA',
+    '[QSORecords 3]',
+    '260510;1030;S59DGO;1;59;001;59;001;;JN65vp;50;;;',
+    '260510;1045;OE5VRL/P;2;599;002;599;007;;JN78dg;180;;;',
+    '260510;1100;S59DGO;1;59;003;59;002;;JN65vp;50;;;D',
+    '',
+  ].join('\r\n');
+
+  it('parses correct number of QSOs', () => {
+    const {qsos} = parseEdiForImport(ediText);
+    assert.equal(qsos.length, 3);
+  });
+
+  it('converts YYMMDD to YYYYMMDD', () => {
+    const {qsos} = parseEdiForImport(ediText);
+    assert.equal(qsos[0].utcDate, '20260510');
+  });
+
+  it('converts mode number 1 → SSB', () => {
+    const {qsos} = parseEdiForImport(ediText);
+    assert.equal(qsos[0].mode, 'SSB');
+  });
+
+  it('converts mode number 2 → CW', () => {
+    const {qsos} = parseEdiForImport(ediText);
+    assert.equal(qsos[1].mode, 'CW');
+  });
+
+  it('detects dupe flag D in col 13', () => {
+    const {qsos} = parseEdiForImport(ediText);
+    assert.equal(qsos[0].dupe, false);
+    assert.equal(qsos[2].dupe, true);
+  });
+
+  it('uppercases callsign', () => {
+    const {qsos} = parseEdiForImport(ediText);
+    assert.equal(qsos[0].call, 'S59DGO');
+  });
+
+  it('normalises locator case (4 upper + 2 lower)', () => {
+    const {qsos} = parseEdiForImport(ediText);
+    assert.equal(qsos[0].wwl, 'JN65vp');
+    assert.equal(qsos[1].wwl, 'JN78dg');
+  });
+
+  it('reads header fields', () => {
+    const {header} = parseEdiForImport(ediText);
+    assert.equal(header['PBand'], '144 MHz');
+    assert.equal(header['PCall'], 'S56OA');
+  });
+
+  it('parses UTC time correctly', () => {
+    const {qsos} = parseEdiForImport(ediText);
+    assert.equal(qsos[0].utcTime, '1030');
+    assert.equal(qsos[1].utcTime, '1045');
+  });
+
+  it('handles YY >= 80 as 19xx', () => {
+    const old = '[REG1TEST;1]\r\n[QSORecords 1]\r\n850615;1200;DL1XYZ;1;59;001;59;001;;JO31ab;100;;;\r\n';
+    const {qsos} = parseEdiForImport(old);
+    assert.equal(qsos[0].utcDate, '19850615');
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  makeZip
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('makeZip', () => {
+  it('returns a Uint8Array', () => {
+    const z = makeZip([{name:'test.edi', data:'hello'}]);
+    assert.ok(z instanceof Uint8Array);
+  });
+
+  it('starts with ZIP local file header magic PK\\x03\\x04', () => {
+    const z = makeZip([{name:'a.edi', data:'data'}]);
+    assert.equal(z[0], 0x50); // P
+    assert.equal(z[1], 0x4B); // K
+    assert.equal(z[2], 0x03);
+    assert.equal(z[3], 0x04);
+  });
+
+  it('ends with end-of-central-directory magic PK\\x05\\x06', () => {
+    const z = makeZip([{name:'a.edi', data:'data'}]);
+    // EOCD is 22 bytes from end
+    const eocdOff = z.length - 22;
+    assert.equal(z[eocdOff],   0x50);
+    assert.equal(z[eocdOff+1], 0x4B);
+    assert.equal(z[eocdOff+2], 0x05);
+    assert.equal(z[eocdOff+3], 0x06);
+  });
+
+  it('encodes file count in EOCD (2 files)', () => {
+    const z = makeZip([{name:'a.edi', data:'aaa'}, {name:'b.edi', data:'bbb'}]);
+    const eocdOff = z.length - 22;
+    const count = z[eocdOff+8] | (z[eocdOff+9] << 8); // total entries (little-endian)
+    assert.equal(count, 2);
+  });
+
+  it('empty file list produces minimal valid ZIP', () => {
+    const z = makeZip([]);
+    assert.ok(z.length >= 22);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  bandColors — BAND_COLORS map
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('bandColors', () => {
+  it('BAND_COLORS has entry for 2m', () => {
+    const bc = _getBandColorsForTest();
+    assert.ok(typeof bc['2m'] === 'string' && bc['2m'].startsWith('#'));
+  });
+
+  it('BAND_COLORS has entry for 70cm', () => {
+    const bc = _getBandColorsForTest();
+    assert.ok(typeof bc['70cm'] === 'string' && bc['70cm'].startsWith('#'));
+  });
+
+  it('2m and 70cm have distinct colors', () => {
+    const bc = _getBandColorsForTest();
+    assert.notEqual(bc['2m'], bc['70cm']);
+  });
+
+  it('all entries are 7-char hex strings (#rrggbb)', () => {
+    const bc = _getBandColorsForTest();
+    for (const [band, col] of Object.entries(bc)) {
+      assert.ok(/^#[0-9a-fA-F]{6}$/.test(col), `${band}: invalid color ${col}`);
+    }
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  manualTime — state + i18n
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('manualTime', () => {
+  it('_manualTime initialises to null', () => {
+    assert.equal(_getManualTimeForTest(), null);
+  });
+
+  it('can be set via helper and read back', () => {
+    _setManualTimeForTest({date:'20260510', time:'1234'});
+    const v = _getManualTimeForTest();
+    assert.equal(v.date, '20260510');
+    assert.equal(v.time, '1234');
+    _setManualTimeForTest(null);
+  });
+
+  it('sl.toastImported contains ${n} placeholder', () => {
+    const s = _getI18nValueForTest('sl','toastImported');
+    assert.ok(s.includes('${n}'), `missing \${n} in: ${s}`);
+  });
+
+  it('sl.errImportBand contains ${band} placeholder', () => {
+    const s = _getI18nValueForTest('sl','errImportBand');
+    assert.ok(s.includes('${band}'), `missing \${band} in: ${s}`);
+  });
+
+  it('sl.btnExportAll is a non-empty string', () => {
+    const s = _getI18nValueForTest('sl','btnExportAll');
+    assert.ok(typeof s === 'string' && s.length > 0);
+  });
+
+  it('en.btnExportAll is a non-empty string', () => {
+    const s = _getI18nValueForTest('en','btnExportAll');
+    assert.ok(typeof s === 'string' && s.length > 0);
+  });
+
+  it('sl.btnImport ≠ en.btnImport (same string, but let us verify both exist)', () => {
+    const sl = _getI18nValueForTest('sl','btnImport');
+    const en = _getI18nValueForTest('en','btnImport');
+    assert.ok(typeof sl === 'string' && sl.length > 0);
+    assert.ok(typeof en === 'string' && en.length > 0);
+  });
+
+  it('sl.warnImportBand contains ${band} placeholder', () => {
+    const s = _getI18nValueForTest('sl','warnImportBand');
+    assert.ok(s.includes('${band}'), `missing \${band} in: ${s}`);
+  });
+
+  it('en.warnImportBand contains ${band} placeholder', () => {
+    const s = _getI18nValueForTest('en','warnImportBand');
+    assert.ok(s.includes('${band}'), `missing \${band} in: ${s}`);
+  });
 });
