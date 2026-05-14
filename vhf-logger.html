@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>VHF Logger</title>
+<link rel="manifest" href="vhf-logger.webmanifest">
+<meta name="theme-color" content="#4d9de0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VHF Logger">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -114,9 +120,9 @@ header{
 .inp:focus{outline:none;border-color:var(--accent)}
 .inp.mono{font-family:'Space Mono',monospace}
 .band-rows{display:flex;flex-direction:column;gap:.45rem}
-.brow{display:grid;gap:.45rem;align-items:center;
-  grid-template-columns:18px 110px 100px 70px 1fr 28px;
-  background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:.45rem .65rem}
+.brow{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:.45rem .65rem;display:flex;flex-direction:column;gap:.35rem}
+.brow-main{display:grid;gap:.45rem;align-items:center;grid-template-columns:18px 110px 100px 70px 1fr 28px}
+.brow-eq{display:grid;gap:.45rem;grid-template-columns:1fr 1fr 120px;padding-left:22px}
 .brow-idx{font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);text-align:center}
 .bsel{background:var(--bg4);border:1px solid var(--border2);border-radius:4px;
   color:var(--text);padding:.3rem .4rem;font-size:.8rem;cursor:pointer;font-family:'Space Mono',monospace;width:100%}
@@ -282,7 +288,8 @@ tr:hover td{background:rgba(77,157,224,.04)}
   .qf-call{flex-basis:55%;min-width:120px}
   .qf-wwl{flex-basis:40%;min-width:100px}
   .stats-bar{gap:.75rem}
-  .brow{grid-template-columns:14px 90px 90px 60px 1fr 24px;gap:.3rem}
+  .brow-main{grid-template-columns:14px 90px 90px 60px 1fr 24px;gap:.3rem}
+  .brow-eq{grid-template-columns:1fr 1fr 80px}
 }
 @media(max-width:360px){
   .qf-mode{width:64px}
@@ -294,7 +301,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
 
 <header>
   <div class="logo">VHF<span class="icon">◉</span>Logger</div>
-  <span class="version">v1.0</span>
+  <span class="version">v1.1</span>
   <div class="hdr-info" id="hdrInfo"></div>
   <div class="lang-wrap">
     <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" aria-label="Preklopi temo / Toggle theme">☀</button>
@@ -345,6 +352,43 @@ tr:hover td{background:rgba(77,157,224,.04)}
       </div>
     </div>
     <div class="fsec">
+      <div class="fsec-hdr"><span data-i18n="setupReporter">Oddajatelj</span></div>
+      <div class="frow">
+        <div class="field">
+          <label data-i18n="lblSect">Sekcija (EDI PSect)</label>
+          <input class="inp mono" id="fSect" placeholder="MO" oninput="this.value=this.value.toUpperCase()">
+        </div>
+        <div class="field" style="flex:3">
+          <label data-i18n="lblQthName">Ime lokacije (QTH)</label>
+          <input class="inp" id="fQthName" placeholder="Krvavec">
+        </div>
+      </div>
+      <div class="frow">
+        <div class="field">
+          <label data-i18n="lblRCall">Odgovorni (kl. znak)</label>
+          <input class="inp mono" id="fRCall" placeholder="S56OA" oninput="this.value=this.value.toUpperCase()">
+        </div>
+        <div class="field" style="flex:2">
+          <label data-i18n="lblRName">Odgovorni (ime)</label>
+          <input class="inp" id="fRName" placeholder="Ime Priimek">
+        </div>
+      </div>
+      <div class="frow">
+        <div class="field">
+          <label data-i18n="lblRCity">Odgovorni (kraj)</label>
+          <input class="inp" id="fRCity" placeholder="Ljubljana">
+        </div>
+        <div class="field">
+          <label data-i18n="lblRCoun">Odgovorni (država)</label>
+          <input class="inp mono" id="fRCoun" placeholder="SI" oninput="this.value=this.value.toUpperCase()">
+        </div>
+        <div class="field" style="flex:2">
+          <label data-i18n="lblREmail">Odgovorni (e-pošta)</label>
+          <input class="inp" id="fREmail" placeholder="ime@example.com">
+        </div>
+      </div>
+    </div>
+    <div class="fsec">
       <div class="fsec-hdr">
         <span data-i18n="setupBands">Pasovi</span>
         <button class="btn btn-secondary btn-sm" onclick="addBandRow()" data-i18n="btnAddBand">+ Dodaj pas</button>
@@ -353,7 +397,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
     </div>
     <div class="setup-act">
       <button class="btn btn-success btn-lg" onclick="startSession()" data-i18n="btnStart">▶ Začni logiranje</button>
-      <button class="btn btn-secondary" onclick="showHome()" data-i18n="btnCancel">Prekliči</button>
+      <button class="btn btn-secondary" onclick="cancelSetup()" data-i18n="btnCancel">Prekliči</button>
     </div>
   </div>
 </div>
@@ -369,6 +413,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
     <div class="st-sep"></div>
     <div class="st"><span class="st-val" id="stODX">—</span><span class="st-lbl">ODX km</span></div>
     <div class="st-sep push"></div>
+    <button class="btn btn-secondary btn-sm" onclick="editSessionSetup()" data-i18n="btnEditSetup">⚙ Uredi</button>
     <button class="btn btn-secondary btn-sm" onclick="pauseSession()" data-i18n="btnPause">⏸ Pavza</button>
     <button class="btn btn-secondary btn-sm" onclick="showExportModal()" data-i18n="btnExport">⬇ EDI</button>
   </div>
@@ -517,6 +562,7 @@ sl:{
   dupeWarn:'⚠ DUPLIKAT na tem pasu!',
   fAllBands:'— vsi pasovi —',
   bandFreqPh:'Freq. (MHz)',bandPwrPh:'Moč (W)',bandAntPh:'Antena',
+  bandTxPh:'TX ojačevalec',bandRxPh:'RX predojačevalec',bandAntHPh:'Višina ant. (m)',
   errNoCall:'Vnesi klicni znak',
   errNoMyCall:'Vnesi moj klicni znak',
   errNoMyLoc:'Neveljavni lokator (6 znakov, npr. JN65WP)',
@@ -546,7 +592,19 @@ sl:{
   lblUtcDate:'Datum UTC:',
   lblUtcTime:'Čas UTC:',
   lblClub:'Klub (EDI PClub)',
+  setupReporter:'Oddajatelj',
+  lblSect:'Sekcija (EDI PSect)',
+  lblQthName:'Ime lokacije (QTH)',
+  lblRCall:'Odgovorni (kl. znak)',
+  lblRName:'Odgovorni (ime)',
+  lblRCity:'Odgovorni (kraj)',
+  lblRCoun:'Odgovorni (država)',
+  lblREmail:'Odgovorni (e-pošta)',
   errStorageFull:'Shranjevanje neuspešno — lokalni prostor poln',
+  errBandHasQsos:'Pas ima QSO-je — najprej jih izbriši',
+  btnEditSetup:'⚙ Uredi',
+  setupEdit:'Uredi dnevnik',
+  btnSaveSetup:'✓ Shrani podatke',
   ariaTheme:'Preklopi temo',
   ariaDelLog:'Izbriši dnevnik',
   ariaDelQso:'Izbriši QSO',
@@ -579,6 +637,7 @@ en:{
   dupeWarn:'⚠ DUPLICATE on this band!',
   fAllBands:'— all bands —',
   bandFreqPh:'Freq. (MHz)',bandPwrPh:'Power (W)',bandAntPh:'Antenna',
+  bandTxPh:'TX amplifier',bandRxPh:'RX preamp',bandAntHPh:'Ant. height (m)',
   errNoCall:'Enter callsign',
   errNoMyCall:'Enter my callsign',
   errNoMyLoc:'Invalid locator (6 chars, e.g. JN65WP)',
@@ -608,7 +667,19 @@ en:{
   lblUtcDate:'UTC date:',
   lblUtcTime:'UTC time:',
   lblClub:'Club (EDI PClub)',
+  setupReporter:'Reporter',
+  lblSect:'Section (EDI PSect)',
+  lblQthName:'QTH name',
+  lblRCall:'Responsible (callsign)',
+  lblRName:'Responsible (name)',
+  lblRCity:'Responsible (city)',
+  lblRCoun:'Responsible (country)',
+  lblREmail:'Responsible (email)',
   errStorageFull:'Save failed — local storage full',
+  errBandHasQsos:'Band has QSOs — delete them first',
+  btnEditSetup:'⚙ Edit',
+  setupEdit:'Edit log',
+  btnSaveSetup:'✓ Save settings',
   ariaTheme:'Toggle theme',
   ariaDelLog:'Delete log',
   ariaDelQso:'Delete QSO',
@@ -800,7 +871,7 @@ function searchCalls(prefix){
 // ════════════════════════════════════════
 const STORE='vhf-logger-v1';
 let _sessions=[], _current=null, _clockId=null, _editingQso=null;
-let _acItems=[], _acIdx=-1, _bandRowN=0;
+let _acItems=[], _acIdx=-1, _bandRowN=0, _editingExisting=false;
 
 function loadSessions(){ try{ _sessions=JSON.parse(localStorage.getItem(STORE)||'[]'); } catch{ _sessions=[]; } }
 function saveSessions(){
@@ -846,6 +917,7 @@ function showHome(){
 }
 
 function showSetup(){
+  _editingExisting=false;
   _bandRowN=0;
   document.getElementById('bandRows').innerHTML='';
   document.getElementById('fMyCall').value='';
@@ -853,6 +925,15 @@ function showSetup(){
   document.getElementById('fContest').value='';
   document.getElementById('fOperator').value='';
   document.getElementById('fClub').value='';
+  document.getElementById('fSect').value='';
+  document.getElementById('fQthName').value='';
+  document.getElementById('fRCall').value='';
+  document.getElementById('fRName').value='';
+  document.getElementById('fRCity').value='';
+  document.getElementById('fRCoun').value='';
+  document.getElementById('fREmail').value='';
+  const saveBtn=document.querySelector('[data-i18n="btnSaveSetup"]');
+  if(saveBtn){saveBtn.textContent=t('btnStart');saveBtn.dataset.i18n='btnStart';}
   document.getElementById('setupTitle').textContent=t('setupNew');
   addBandRow({band:'70cm'});
   showScreen('screen-setup');
@@ -935,6 +1016,41 @@ function deleteSession(id){
 // ════════════════════════════════════════
 //  SETUP SCREEN
 // ════════════════════════════════════════
+function editSessionSetup(){
+  if(!_current) return;
+  _editingExisting=true;
+  _bandRowN=0;
+  document.getElementById('bandRows').innerHTML='';
+  document.getElementById('fMyCall').value=_current.myCall||'';
+  document.getElementById('fMyLoc').value=_current.myLoc||'';
+  document.getElementById('fContest').value=_current.contest||'';
+  document.getElementById('fOperator').value=_current.operator||'';
+  document.getElementById('fClub').value=_current.club||'';
+  document.getElementById('fSect').value=_current.sect||'';
+  document.getElementById('fQthName').value=_current.qthName||'';
+  document.getElementById('fRCall').value=_current.rCall||'';
+  document.getElementById('fRName').value=_current.rName||'';
+  document.getElementById('fRCity').value=_current.rCity||'';
+  document.getElementById('fRCoun').value=_current.rCoun||'';
+  document.getElementById('fREmail').value=_current.rEmail||'';
+  for(const b of _current.bands) addBandRow(b);
+  document.getElementById('setupTitle').textContent=t('setupEdit');
+  const btn=document.querySelector('[data-i18n="btnStart"]');
+  if(btn){btn.textContent=t('btnSaveSetup');btn.dataset.i18n='btnSaveSetup';}
+  showScreen('screen-setup');
+}
+
+function cancelSetup(){
+  if(_editingExisting){
+    _editingExisting=false;
+    const btn=document.querySelector('[data-i18n="btnSaveSetup"]');
+    if(btn){btn.textContent=t('btnStart');btn.dataset.i18n='btnStart';}
+    showLogger(_current);
+  } else {
+    showHome();
+  }
+}
+
 function addBandRow(def={}){
   _bandRowN++;
   const rowId=_bandRowN;
@@ -943,12 +1059,19 @@ function addBandRow(def={}){
   const row=document.createElement('div');
   row.className='brow'; row.dataset.rid=rowId;
   row.innerHTML=
-    `<span class="brow-idx">${rowId}</span>`+
-    `<select class="bsel" onchange="onBandSel(this,${rowId})">${opts}</select>`+
-    `<input class="inp-sm" placeholder="${t('bandFreqPh')}" value="${def.freq||defOpt.freq}">`+
-    `<input class="inp-sm" type="number" placeholder="${t('bandPwrPh')}" value="${def.power||100}" min="1" max="9999">`+
-    `<input class="inp-sm" placeholder="${t('bandAntPh')}" value="${htmlEsc(def.antenna||'')}">`+
-    `<button class="btn btn-danger btn-sm" onclick="removeBandRow(${rowId})" style="padding:0;width:22px;min-height:22px;font-size:10px">✕</button>`;
+    `<div class="brow-main">`+
+      `<span class="brow-idx">${rowId}</span>`+
+      `<select class="bsel" onchange="onBandSel(this,${rowId})">${opts}</select>`+
+      `<input class="inp-sm" placeholder="${t('bandFreqPh')}" value="${def.freq||defOpt.freq}">`+
+      `<input class="inp-sm" type="number" placeholder="${t('bandPwrPh')}" value="${def.power||100}" min="1" max="9999">`+
+      `<input class="inp-sm" placeholder="${t('bandAntPh')}" value="${htmlEsc(def.antenna||'')}">`+
+      `<button class="btn btn-danger btn-sm" onclick="removeBandRow(${rowId})" style="padding:0;width:22px;min-height:22px;font-size:10px">✕</button>`+
+    `</div>`+
+    `<div class="brow-eq">`+
+      `<input class="inp-sm" placeholder="${t('bandTxPh')}" value="${htmlEsc(def.txEq||'')}">`+
+      `<input class="inp-sm" placeholder="${t('bandRxPh')}" value="${htmlEsc(def.rxEq||'')}">`+
+      `<input class="inp-sm" type="number" placeholder="${t('bandAntHPh')}" value="${def.antH||''}" min="0" max="9999">`+
+    `</div>`;
   document.getElementById('bandRows').appendChild(row);
 }
 
@@ -956,12 +1079,17 @@ function onBandSel(sel,rowId){
   const row=document.querySelector(`.brow[data-rid="${rowId}"]`);
   if(!row) return;
   const opt=BAND_OPTS.find(o=>o.band===sel.value);
-  if(opt) row.querySelectorAll('input')[0].value=opt.freq;
+  if(opt) row.querySelector('.brow-main').querySelectorAll('input')[0].value=opt.freq;
 }
 
 function removeBandRow(rowId){
   const row=document.querySelector(`.brow[data-rid="${rowId}"]`);
-  if(row) row.remove();
+  if(!row) return;
+  if(_editingExisting&&_current){
+    const band=row.querySelector('select')?.value;
+    if(band&&_current.qsos.some(q=>q.band===band)){showToast(t('errBandHasQsos'),true);return;}
+  }
+  row.remove();
 }
 
 function collectSetup(){
@@ -970,22 +1098,50 @@ function collectSetup(){
   const contest=document.getElementById('fContest').value.trim();
   const operator=document.getElementById('fOperator').value.trim().toUpperCase()||myCall;
   const club=document.getElementById('fClub').value.trim().toUpperCase();
+  const sect=document.getElementById('fSect').value.trim().toUpperCase();
+  const qthName=document.getElementById('fQthName').value.trim();
+  const rCall=document.getElementById('fRCall').value.trim().toUpperCase();
+  const rName=document.getElementById('fRName').value.trim();
+  const rCity=document.getElementById('fRCity').value.trim();
+  const rCoun=document.getElementById('fRCoun').value.trim().toUpperCase();
+  const rEmail=document.getElementById('fREmail').value.trim();
   if(!myCall){ showToast(t('errNoMyCall'),true); return null; }
   if(!/^[A-R]{2}[0-9]{2}[A-X]{2}$/i.test(myLoc)){ showToast(t('errNoMyLoc'),true); return null; }
   if(!contest){ showToast(t('errNoContest'),true); return null; }
   const bands=[];
   for(const row of document.querySelectorAll('.brow')){
     const sel=row.querySelector('select');
-    const [fInp,pInp,aInp]=row.querySelectorAll('input');
-    if(sel&&sel.value) bands.push({band:sel.value,freq:fInp.value.trim(),power:parseInt(pInp.value)||100,antenna:aInp.value.trim()});
+    const [fInp,pInp,aInp]=row.querySelector('.brow-main').querySelectorAll('input');
+    const [txInp,rxInp,hInp]=row.querySelector('.brow-eq').querySelectorAll('input');
+    if(sel&&sel.value) bands.push({
+      band:sel.value,freq:fInp.value.trim(),power:parseInt(pInp.value)||100,antenna:aInp.value.trim(),
+      txEq:txInp.value.trim(),rxEq:rxInp.value.trim(),antH:hInp.value.trim(),
+    });
   }
   if(bands.length===0){ showToast(t('errNoBand'),true); return null; }
-  return {myCall,myLoc,contest,operator,club,bands};
+  return {myCall,myLoc,contest,operator,club,sect,qthName,rCall,rName,rCity,rCoun,rEmail,bands};
 }
 
 function startSession(){
   const cfg=collectSetup();
   if(!cfg) return;
+  if(_editingExisting){
+    const newActiveBand=cfg.bands.find(b=>b.band===_current.activeBand)
+      ? _current.activeBand : cfg.bands[0].band;
+    Object.assign(_current,{
+      contest:cfg.contest,myCall:cfg.myCall,myLoc:cfg.myLoc,
+      operator:cfg.operator,club:cfg.club,sect:cfg.sect,
+      qthName:cfg.qthName,rCall:cfg.rCall,rName:cfg.rName,
+      rCity:cfg.rCity,rCoun:cfg.rCoun,rEmail:cfg.rEmail,
+      bands:cfg.bands,activeBand:newActiveBand,
+    });
+    _editingExisting=false;
+    syncCurrent();
+    const btn=document.querySelector('[data-i18n="btnSaveSetup"]');
+    if(btn){btn.textContent=t('btnStart');btn.dataset.i18n='btnStart';}
+    showLogger(_current);
+    return;
+  }
   const session={
     id:genId(),
     contest:cfg.contest,
@@ -993,6 +1149,13 @@ function startSession(){
     myLoc:cfg.myLoc,
     operator:cfg.operator,
     club:cfg.club,
+    sect:cfg.sect,
+    qthName:cfg.qthName,
+    rCall:cfg.rCall,
+    rName:cfg.rName,
+    rCity:cfg.rCity,
+    rCoun:cfg.rCoun,
+    rEmail:cfg.rEmail,
     created:Date.now(),
     modified:Date.now(),
     activeBand:cfg.bands[0].band,
@@ -1466,15 +1629,36 @@ function buildEdi(session,band){
   const opt=BAND_OPTS.find(o=>o.band===band);
   const ediBand=opt?opt.edi:(bc.freq?bc.freq+' MHz':band);
   const first=qsos[0];
-  const yymmdd=first.utcDate.slice(2);
-  let out='[REG1TEST]\r\n';
-  out+=`TDate=${yymmdd}\r\nTTime=${first.utcTime}\r\n`;
+
+  // C* summary — computed from non-dupe QSOs
+  const valid=qsos.filter(q=>!q.dupe);
+  const cQSOs=valid.length;
+  const cQSOP=valid.reduce((s,q)=>s+Math.round(q.qrb||0),0);
+  const wwlSet=new Set(valid.filter(q=>q.wwl&&q.wwl.length>=4).map(q=>q.wwl.slice(0,4).toUpperCase()));
+  const cWWLs=wwlSet.size;
+  const cExcs=valid.filter(q=>(q.nrR||0)>0).length;
+  const dxSet=new Set();
+  for(const q of valid){const m=baseCall(q.call).match(/^([A-Z]+[0-9])/);if(m)dxSet.add(m[1]);}
+  const cDXCs=dxSet.size;
+  const cToSc=cQSOP+cWWLs;
+  const odx=valid.reduce((best,q)=>(!best||(q.qrb||0)>(best.qrb||0))?q:best,null);
+  const cODXC=odx?`${odx.call};${(odx.wwl||'').toUpperCase()};${Math.round(odx.qrb||0)}`:';;0';
+
+  let out='[REG1TEST;1]\r\n';
+  out+=`TDate=${first.utcDate}\r\nTTime=${first.utcTime}\r\n`;
   out+=`TCall=${session.myCall}\r\nTLocator=${session.myLoc}\r\n`;
   out+=`TName=${session.operator||session.myCall}\r\n`;
   out+=`RName=${session.contest}\r\nRBand=${ediBand}\r\nRAZ=28\r\nRHBBS=\r\n`;
   out+=`PWWLo=${session.myLoc}\r\nPWWLr=\r\nPCall=${session.myCall}\r\nPBand=${ediBand}\r\n`;
-  out+=`PSect=\r\nPClub=${session.club||''}\r\nRClub=\r\nMOpe1=${session.operator||session.myCall}\r\n`;
-  out+=`PWatt=${bc.power||100}\r\nPAntn=${bc.antenna||''}\r\nSTXEq=\r\nOPEqu=\r\n`;
+  out+=`PSect=${session.sect||''}\r\nPClub=${session.club||''}\r\nRClub=\r\n`;
+  out+=`MOpe1=${session.operator||session.myCall}\r\nMOpe2=\r\n`;
+  out+=`SPowe=${bc.power||100}\r\nSAnte=${bc.antenna||''}\r\n`;
+  out+=`STXEq=${bc.txEq||''}\r\nOPEqu=${bc.rxEq||''}\r\nSAntH=${bc.antH||''}\r\n`;
+  out+=`CQSOs=${cQSOs}\r\nCQSOP=${cQSOP}\r\n`;
+  out+=`CWWLs=${cWWLs}\r\nCWWLB=${cWWLs}\r\n`;
+  out+=`CExcs=${cExcs}\r\nCExcB=${cExcs}\r\n`;
+  out+=`CDXCs=${cDXCs}\r\nCDXCB=${cDXCs}\r\n`;
+  out+=`CToSc=${cToSc}\r\nCODXC=${cODXC}\r\n`;
   out+='\r\n[Remarks]\r\n\r\n';
   out+=`[QSORecords ${qsos.length}]\r\n`;
   for(const q of qsos){
@@ -1556,6 +1740,9 @@ function init(){
 }
 
 init();
+if(typeof navigator!=='undefined'&&'serviceWorker'in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
 </script>
 </body>
 </html>

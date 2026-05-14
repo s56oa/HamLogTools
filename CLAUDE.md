@@ -192,7 +192,7 @@ Single HTML file with three co-located layers (CSS → HTML → JavaScript). No 
 | Clock (`tickClock`) | Fires every 5 s; skips display update when `_editingQso` is set. |
 | Navigation | `showHome()`, `showSetup()`, `showLogger()`, `pauseSession()`. |
 | Home screen | `renderHome()`, `resumeSession()`, `deleteSession()`. |
-| Setup screen | `addBandRow()`, `removeBandRow()`, `onBandSel()`, `collectSetup()`, `startSession()`. Reads `fClub` input → `session.club` for EDI `PClub`. |
+| Setup screen | `editSessionSetup()`, `cancelSetup()`, `addBandRow()`, `removeBandRow()`, `onBandSel()`, `collectSetup()`, `startSession()`. Pre-fills form from `_current` when editing; updates existing session or creates new one. Reads `fClub`, `fSect`, `fQthName`, `fRCall`, `fRName`, `fRCity`, `fRCoun`, `fREmail` inputs. |
 | Logger core | `nextSerial()`, `isDupe(call, band, excludeId)`, `recalcDupes()`, `updateNrS()`, `switchBand()`, `renderBandTabs()`, `renderStats()`, `renderTable()`, `scrollTableBottom()`. |
 | QSO editing | `editQso()`, `cancelEdit()`, `saveEditedQso()`, `setupTableClickHandler()`, `deleteQso()`. |
 | QSO form | `onCallInput()`, `onCallKey()`, `renderAc()`, `selectAc()`, `onWwlInput()`, `updateWwlColor()`, `onModeChange()`, `checkDupeField()`, `logQso()`, `resetForm()`. |
@@ -204,8 +204,10 @@ Single HTML file with three co-located layers (CSS → HTML → JavaScript). No 
 
 Session object:
 ```js
-{ id, contest, myCall, myLoc, operator, club, created, modified, activeBand,
-  bands: [{band, freq, power, antenna}], qsos: [...] }
+{ id, contest, myCall, myLoc, operator, club, sect, qthName,
+  rCall, rName, rCity, rCoun, rEmail,
+  created, modified, activeBand,
+  bands: [{band, freq, power, antenna, txEq, rxEq, antH}], qsos: [...] }
 ```
 
 QSO object:
@@ -227,6 +229,8 @@ Col 8 = exchange (empty), col 11–12 = reserved (empty), col 13 = `D` if dupe, 
 - `deleteQso()` — calls `cancelEdit()` first if the deleted QSO is the one being edited.
 - `debouncedXhint(call)` — 150 ms debounce around `updateXhint()` to throttle Levenshtein search on each keystroke.
 - `saveSessions()` is wrapped in try/catch; shows `t('errStorageFull')` toast on quota exceeded.
+- `_editingExisting` — boolean flag; `true` while `editSessionSetup()` is open. `startSession()` branches on this flag: updates `_current` in place (and calls `showLogger`) instead of creating a new session. `cancelSetup()` checks the flag to decide whether to return to logger or home.
+- `removeBandRow()` — guards against removing a band that has QSOs when `_editingExisting` is true; shows `t('errBandHasQsos')` toast and aborts.
 
 **Key data flow:**
 1. Page load → `loadBaseline()` → `fetch('./crosscheck-baseline.json')` → `applyBaseline()` → `_histDB`
@@ -236,8 +240,9 @@ Col 8 = exchange (empty), col 11–12 = reserved (empty), col 13 = `D` if dupe, 
 5. `logQso()` (while `_editingQso` set) → delegates to `saveEditedQso()` → `recalcDupes()` → `syncCurrent()`
 6. Band tab click → `switchBand()` → `renderBandTabs()` + `renderTable()` + `updateNrS()` + `resetForm()`
 7. Export button → `showExportModal()` → per-band `buildEdi()` → `dl()`
+8. ⚙ Edit button → `editSessionSetup()` pre-fills form → `startSession()` updates `_current` → `showLogger(_current)`
 
-**Tests:** `vhf-logger.test.js` — 77 tests across 10 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`).
+**Tests:** `vhf-logger.test.js` — 95 tests across 11 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`).
 
 ---
 
@@ -409,7 +414,7 @@ Enojna HTML datoteka s tremi solociranimi plastmi (CSS → HTML → JavaScript).
 | Ura (`tickClock`) | Sproži se vsakih 5 s; preskoči posodobitev prikaza, ko je nastavljen `_editingQso`. |
 | Navigacija | `showHome()`, `showSetup()`, `showLogger()`, `pauseSession()`. |
 | Domači zaslon | `renderHome()`, `resumeSession()`, `deleteSession()`. |
-| Zaslon za nastavitve | `addBandRow()`, `removeBandRow()`, `onBandSel()`, `collectSetup()`, `startSession()`. Prebere vnos `fClub` → `session.club` za EDI `PClub`. |
+| Zaslon za nastavitve | `editSessionSetup()`, `cancelSetup()`, `addBandRow()`, `removeBandRow()`, `onBandSel()`, `collectSetup()`, `startSession()`. Predizpolni obrazec iz `_current` pri urejanju; posodobi obstoječo sejo ali ustvari novo. Prebere vnose `fClub`, `fSect`, `fQthName`, `fRCall`, `fRName`, `fRCity`, `fRCoun`, `fREmail`. |
 | Jedro beležnika | `nextSerial()`, `isDupe(call, band, excludeId)`, `recalcDupes()`, `updateNrS()`, `switchBand()`, `renderBandTabs()`, `renderStats()`, `renderTable()`, `scrollTableBottom()`. |
 | Urejanje QSO | `editQso()`, `cancelEdit()`, `saveEditedQso()`, `setupTableClickHandler()`, `deleteQso()`. |
 | Obrazec QSO | `onCallInput()`, `onCallKey()`, `renderAc()`, `selectAc()`, `onWwlInput()`, `updateWwlColor()`, `onModeChange()`, `checkDupeField()`, `logQso()`, `resetForm()`. |
@@ -421,8 +426,10 @@ Enojna HTML datoteka s tremi solociranimi plastmi (CSS → HTML → JavaScript).
 
 Objekt seje:
 ```js
-{ id, contest, myCall, myLoc, operator, club, created, modified, activeBand,
-  bands: [{band, freq, power, antenna}], qsos: [...] }
+{ id, contest, myCall, myLoc, operator, club, sect, qthName,
+  rCall, rName, rCity, rCoun, rEmail,
+  created, modified, activeBand,
+  bands: [{band, freq, power, antenna, txEq, rxEq, antH}], qsos: [...] }
 ```
 
 Objekt QSO:
@@ -444,6 +451,8 @@ Stolpec 8 = izmenjava (prazno), stolpci 11–12 = rezervirano (prazno), stolpec 
 - `deleteQso()` — najprej pokliče `cancelEdit()`, če je brisujoči QSO tisti, ki se ureja.
 - `debouncedXhint(call)` — 150 ms debounce okoli `updateXhint()` za dušenje Levenshteinove iskanja ob vsakem pritisku tipke.
 - `saveSessions()` je zavita v try/catch; ob prekoračitvi kvote prikaže toast `t('errStorageFull')`.
+- `_editingExisting` — logična zastavica; `true`, ko je odprt `editSessionSetup()`. `startSession()` se razveja glede na to zastavico: posodobi `_current` na mestu (in pokliče `showLogger`) namesto ustvarjanja nove seje. `cancelSetup()` preveri zastavico, da odloči, ali se vrne v logger ali domov.
+- `removeBandRow()` — ščiti pred odstranjevanjem pasu, ki ima QSO-je, ko je `_editingExisting` true; prikaže toast `t('errBandHasQsos')` in prekine.
 
 **Potek podatkov:**
 1. Nalaganje strani → `loadBaseline()` → `fetch('./crosscheck-baseline.json')` → `applyBaseline()` → `_histDB`
@@ -453,8 +462,9 @@ Stolpec 8 = izmenjava (prazno), stolpci 11–12 = rezervirano (prazno), stolpec 
 5. `logQso()` (ko je nastavljen `_editingQso`) → delegira na `saveEditedQso()` → `recalcDupes()` → `syncCurrent()`
 6. Klik na zavihek pasu → `switchBand()` → `renderBandTabs()` + `renderTable()` + `updateNrS()` + `resetForm()`
 7. Gumb za izvoz → `showExportModal()` → `buildEdi()` po pasovih → `dl()`
+8. Gumb ⚙ Uredi → `editSessionSetup()` predizpolni obrazec → `startSession()` posodobi `_current` → `showLogger(_current)`
 
-**Testi:** `vhf-logger.test.js` — 77 testov v 10 skupinah (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`).
+**Testi:** `vhf-logger.test.js` — 95 testov v 11 skupinah (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`).
 
 ---
 

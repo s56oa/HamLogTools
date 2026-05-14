@@ -61,6 +61,8 @@ vm.runInContext(jsSrc, ctx);
 vm.runInContext(`
   function _setCurrentForTest(s){ _current = s; }
   function _getCurrentForTest(){ return _current; }
+  function _getEditingExistingForTest(){ return _editingExisting; }
+  function _getI18nValueForTest(lang, key){ return (S[lang]||{})[key]; }
 `, ctx);
 
 const {
@@ -69,6 +71,7 @@ const {
   buildEdi, applyBaseline, lookupCall,
   isDupe, recalcDupes,
   _setCurrentForTest, _getCurrentForTest,
+  _getEditingExistingForTest, _getI18nValueForTest,
 } = ctx;
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -325,7 +328,8 @@ describe('buildEdi', () => {
     contest: 'IARU R1 VHF Contest',
     operator: 'S56OA',
     club: 'S59DGO',
-    bands: [{ band:'2m', freq:'144.300', power:100, antenna:'9el Yagi' }],
+    sect: 'MO', qthName: 'Krvavec', rCall: 'S56OA', rName: 'Test User', rCity: 'Ljubljana', rCoun: 'SI', rEmail: '',
+    bands: [{ band:'2m', freq:'144.300', power:100, antenna:'9el Yagi', txEq:'SSPA 300W', rxEq:'LNA', antH:'1200' }],
     qsos: [
       { _id:'q1', band:'2m', mode:'SSB', call:'S59DGO', wwl:'JN65vp',
         rstS:'59', rstR:'59', nrS:1, nrR:1, utcDate:'20260510', utcTime:'1030', qrb:50, brg:45, dupe:false, xFlags:[] },
@@ -339,9 +343,9 @@ describe('buildEdi', () => {
   it('returns null for band with no QSOs', () =>
     assert.equal(buildEdi(session, '70cm'), null));
 
-  it('contains REG1TEST header', () => {
+  it('contains REG1TEST;1 header', () => {
     const out = buildEdi(session, '2m');
-    assert.ok(out.includes('[REG1TEST]'), 'missing [REG1TEST]');
+    assert.ok(out.includes('[REG1TEST;1]'), 'missing [REG1TEST;1]');
   });
 
   it('contains QSORecords section with correct count', () => {
@@ -397,10 +401,48 @@ describe('buildEdi', () => {
     assert.ok(out.includes('\r\n'), 'missing CRLF');
   });
 
-  it('power and antenna in header', () => {
+  it('power and antenna in header (SPowe/SAnte)', () => {
     const out = buildEdi(session, '2m');
-    assert.ok(out.includes('PWatt=100'));
-    assert.ok(out.includes('PAntn=9el Yagi'));
+    assert.ok(out.includes('SPowe=100'), `SPowe not found; got: ${out.match(/SPowe=.*/)?.[0]}`);
+    assert.ok(out.includes('SAnte=9el Yagi'), `SAnte not found; got: ${out.match(/SAnte=.*/)?.[0]}`);
+  });
+
+  it('uses full YYYYMMDD for TDate in header', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('TDate=20260510'), `TDate full year not found; got: ${out.match(/TDate=.*/)?.[0]}`);
+  });
+
+  it('PSect populated from session.sect', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('PSect=MO'), `PSect not found; got: ${out.match(/PSect=.*/)?.[0]}`);
+  });
+
+  it('STXEq and OPEqu (rxEq) populated from band config', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('STXEq=SSPA 300W'), `STXEq not found`);
+    assert.ok(out.includes('OPEqu=LNA'), `OPEqu not found`);
+  });
+
+  it('CQSOs counts non-dupe QSOs', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('CQSOs=2'), `CQSOs should be 2 (q3 is dupe); got: ${out.match(/CQSOs=.*/)?.[0]}`);
+  });
+
+  it('CWWLs counts unique 4-char grid squares from non-dupe QSOs', () => {
+    const out = buildEdi(session, '2m');
+    // q1: JN65vp → JN65, q2: JN78dg → JN78, q3 is dupe → excluded → 2 squares
+    assert.ok(out.includes('CWWLs=2'), `CWWLs should be 2; got: ${out.match(/CWWLs=.*/)?.[0]}`);
+  });
+
+  it('CQSOP is sum of QRB for non-dupe QSOs', () => {
+    const out = buildEdi(session, '2m');
+    // q1: 50km, q2: 180km, q3 dupe excluded → 230
+    assert.ok(out.includes('CQSOP=230'), `CQSOP should be 230; got: ${out.match(/CQSOP=.*/)?.[0]}`);
+  });
+
+  it('CODXC identifies the furthest non-dupe QSO', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('CODXC=OE5VRL/P;JN78DG;180'), `CODXC not correct; got: ${out.match(/CODXC=.*/)?.[0]}`);
   });
 
   it('PClub populated from session.club (LOW-EDI)', () => {
@@ -435,6 +477,11 @@ describe('buildEdi', () => {
     const qsoLine = out.split('\r\n').find(l => l.startsWith('260510'));
     const fields = qsoLine.split(';');
     assert.equal(fields.length, 14, `expected 14 fields, got ${fields.length}: ${qsoLine}`);
+  });
+
+  it('SAntH populated from band.antH', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('SAntH=1200'), `SAntH not found; got: ${out.match(/SAntH=.*/)?.[0]}`);
   });
 });
 
@@ -494,4 +541,36 @@ describe('lookupCall', () => {
     const lk = lookupCall('s59dgo');
     assert.equal(lk.found, true);
   });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  sessionEdit — state and i18n for session-editing feature
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('sessionEdit', () => {
+  it('_editingExisting initialises to false', () =>
+    assert.equal(_getEditingExistingForTest(), false));
+
+  // ── SL i18n ──
+  it('sl.btnEditSetup is a non-empty string', () =>
+    assert.ok(typeof _getI18nValueForTest('sl','btnEditSetup')==='string'&&_getI18nValueForTest('sl','btnEditSetup').length>0));
+  it('sl.setupEdit is a non-empty string', () =>
+    assert.ok(typeof _getI18nValueForTest('sl','setupEdit')==='string'&&_getI18nValueForTest('sl','setupEdit').length>0));
+  it('sl.btnSaveSetup is a non-empty string', () =>
+    assert.ok(typeof _getI18nValueForTest('sl','btnSaveSetup')==='string'&&_getI18nValueForTest('sl','btnSaveSetup').length>0));
+  it('sl.errBandHasQsos is a non-empty string', () =>
+    assert.ok(typeof _getI18nValueForTest('sl','errBandHasQsos')==='string'&&_getI18nValueForTest('sl','errBandHasQsos').length>0));
+
+  // ── EN i18n ──
+  it('en.btnEditSetup is a non-empty string', () =>
+    assert.ok(typeof _getI18nValueForTest('en','btnEditSetup')==='string'&&_getI18nValueForTest('en','btnEditSetup').length>0));
+  it('en.setupEdit is a non-empty string', () =>
+    assert.ok(typeof _getI18nValueForTest('en','setupEdit')==='string'&&_getI18nValueForTest('en','setupEdit').length>0));
+  it('en.btnSaveSetup is a non-empty string', () =>
+    assert.ok(typeof _getI18nValueForTest('en','btnSaveSetup')==='string'&&_getI18nValueForTest('en','btnSaveSetup').length>0));
+  it('en.errBandHasQsos is a non-empty string', () =>
+    assert.ok(typeof _getI18nValueForTest('en','errBandHasQsos')==='string'&&_getI18nValueForTest('en','errBandHasQsos').length>0));
+
+  it('sl.setupEdit ≠ en.setupEdit (distinct translations)', () =>
+    assert.notEqual(_getI18nValueForTest('sl','setupEdit'), _getI18nValueForTest('en','setupEdit')));
 });

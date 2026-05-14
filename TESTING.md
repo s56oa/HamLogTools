@@ -13,7 +13,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger.test.js` | `vhf-logger.html` | 77 | 10 |
+| `vhf-logger.test.js` | `vhf-logger.html` | 95 | 11 |
 
 The sections below document each test file in detail.
 
@@ -192,7 +192,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger.test.js` | `vhf-logger.html` | 77 | 10 |
+| `vhf-logger.test.js` | `vhf-logger.html` | 95 | 11 |
 
 Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 
@@ -472,7 +472,7 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 ---
 
-## `vhf-logger.test.js` — 77 tests · 10 groups
+## `vhf-logger.test.js` — 95 tests · 11 groups
 
 Covers the pure logic of `vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, and crosscheck lookup.
 
@@ -481,6 +481,8 @@ Covers the pure logic of `vhf-logger.html`: callsign normalization, band mapping
 `vhf-logger.html` is evaluated inside a `node:vm` context using the same Proxy-based DOM mock as `edi-crosscheck.html`. Because module-level `let _current` is not a ctx property, two helper functions are injected via a second `vm.runInContext` call:
 - `_setCurrentForTest(session)` — sets the active session for dupe-related tests
 - `_getCurrentForTest()` — reads the active session back
+- `_getEditingExistingForTest()` — reads the `_editingExisting` flag for session-edit tests
+- `_getI18nValueForTest(lang, key)` — reads a value from the `S` i18n object for i18n coverage tests
 
 ### Test groups
 
@@ -548,11 +550,14 @@ Verifies full dupe-flag recalculation across a session.
 - Per-band isolation: same call on different bands both get `dupe=false`.
 - After `recalcDupes`, the `_current.qsos` array is mutated in place.
 
-#### 9 · `buildEdi` (17 tests)
+#### 9 · `buildEdi` (25 tests)
 Verifies REG1TEST EDI v1 output format.
 
 - File starts with `[REG1TEST;1]` header.
-- `TName`, `TDate`, `PCall`, `PWWLo`, `PBand`, `PClub`, `MOpe1` headers present and correct.
+- `TDate` uses full `YYYYMMDD` (header); QSO records use `YYMMDD`.
+- `TName`, `PCall`, `PWWLo`, `PBand`, `PClub`, `PSect`, `MOpe1` headers present and correct.
+- Equipment headers: `SPowe`, `SAnte`, `STXEq`, `OPEqu`, `SAntH` populated from band config.
+- C* summary block: `CQSOs`, `CQSOP`, `CWWLs`, `CWWLB`, `CExcs`, `CExcB`, `CDXCs`, `CDXCB`, `CToSc`, `CODXC` — computed from non-dupe QSOs.
 - `[QSORecords N]` section present with correct count.
 - QSO line has exactly 14 semicolon-separated fields (col 0–13).
 - Dupe flag at col 13: `D` for duped QSO, empty for normal QSO.
@@ -569,6 +574,14 @@ Verifies crosscheck lookup against the weighted+raw baseline DB.
 - Call not in baseline → `found=false`, `similar` array populated from Levenshtein search.
 - `similar` list sorted by distance ASC, then count DESC.
 - Call completely unknown with no close match → `found=false`, `similar=[]`.
+
+#### 11 · `sessionEdit` (10 tests)
+Verifies state and i18n coverage for the session-editing feature.
+
+- `_editingExisting` flag initialises to `false`.
+- Four new SL i18n keys (`btnEditSetup`, `setupEdit`, `btnSaveSetup`, `errBandHasQsos`) are non-empty strings.
+- Four new EN i18n keys (same set) are non-empty strings.
+- `sl.setupEdit` and `en.setupEdit` are distinct strings (translation exists).
 
 ---
 
@@ -697,7 +710,7 @@ CLI orodje se izvede znotraj konteksta `node:vm`, ki nadomesti `fs`, `https`, `p
 
 ---
 
-## `vhf-logger.test.js` — 77 testov · 10 skupin
+## `vhf-logger.test.js` — 95 testov · 11 skupin
 
 Pokriva čisto logiko `vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI in crosscheck poizvedbe.
 
@@ -706,6 +719,8 @@ Pokriva čisto logiko `vhf-logger.html`: normalizacijo klicnih znakov, mapiranje
 `vhf-logger.html` se izvede znotraj konteksta `node:vm` z enakim nadomestkom DOM na osnovi Proxy kot `edi-crosscheck.html`. Ker modularni `let _current` ni lastnost ctx, se prek drugega klica `vm.runInContext` vbrizgata dve pomožni funkciji:
 - `_setCurrentForTest(seja)` — nastavi aktivno sejo za teste, ki preverjajo duplikate
 - `_getCurrentForTest()` — prebere aktivno sejo
+- `_getEditingExistingForTest()` — prebere zastavico `_editingExisting` za teste urejanja seje
+- `_getI18nValueForTest(jezik, ključ)` — prebere vrednost iz objekta `S` za teste i18n pokritosti
 
 ### Skupine testov
 
@@ -773,11 +788,14 @@ Preverja popolni preračun zastavic duplikatov v seji.
 - Izolacija po pasovih: enak klicni znak na različnih pasovih oba dobita `dupe=false`.
 - Po `recalcDupes` je polje `_current.qsos` mutirano na mestu.
 
-#### 9 · `buildEdi` (17 testov)
+#### 9 · `buildEdi` (25 testov)
 Preverja izhodni format REG1TEST EDI v1.
 
 - Datoteka se začne z glavo `[REG1TEST;1]`.
-- Prisotne in pravilne glave `TName`, `TDate`, `PCall`, `PWWLo`, `PBand`, `PClub`, `MOpe1`.
+- `TDate` uporablja polni `YYYYMMDD` (glava); QSO zapisi uporabljajo `YYMMDD`.
+- Prisotne in pravilne glave `TName`, `PCall`, `PWWLo`, `PBand`, `PClub`, `PSect`, `MOpe1`.
+- Glave opreme: `SPowe`, `SAnte`, `STXEq`, `OPEqu`, `SAntH` izpolnjene iz konfiguracije pasu.
+- Blok C*: `CQSOs`, `CQSOP`, `CWWLs`, `CWWLB`, `CExcs`, `CExcB`, `CDXCs`, `CDXCB`, `CToSc`, `CODXC` — izračunani iz QSO-jev brez duplikatov.
 - Razdelek `[QSORecords N]` prisoten s pravilnim številom.
 - Vrstica QSO ima natanko 14 polj, ločenih s podpičji (stolpci 0–13).
 - Zastavica duplikata v stolpcu 13: `D` za podvojeni QSO, prazno za normalnega.
@@ -794,6 +812,14 @@ Preverja crosscheck poizvedbo v uteženi+raw baseline bazi.
 - Klicni znak ni v baseline → `found=false`, polje `similar` izpolnjeno iz Levenshteinove iskanja.
 - Seznam `similar` razvrščen po razdalji naraščajoče, nato po številu padajoče.
 - Povsem neznan klicni znak brez bližnjega ujemanja → `found=false`, `similar=[]`.
+
+#### 11 · `sessionEdit` (10 testov)
+Preverja stanje in i18n pokritost za funkcijo urejanja seje.
+
+- Zastavica `_editingExisting` se inicializira na `false`.
+- Štirje novi SL i18n ključi (`btnEditSetup`, `setupEdit`, `btnSaveSetup`, `errBandHasQsos`) so neprazni nizi.
+- Štirje novi EN i18n ključi (ista množica) so neprazni nizi.
+- `sl.setupEdit` in `en.setupEdit` sta različna niza (prevod obstaja).
 
 ---
 

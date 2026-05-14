@@ -146,8 +146,10 @@ Open the file in any modern browser (for baseline support, serve over HTTP).
 - **QRB + bearing** — great-circle distance and azimuth calculated from Maidenhead locators and displayed per QSO
 - **Dupe detection** — real-time warning with `baseCall()` normalization so `S59DGO/P` is correctly matched against `S59DGO`; per-band, excludes the QSO currently being edited
 - **Inline editing** — click any logged QSO to correct call, locator, RST, serial, mode, or time; dupe flags and xFlags recalculated on save
-- **EDI export** — produces valid REG1TEST EDI v1 files (one per band), correct 14-field QSO records with dupe flag at col 13, `PClub` populated from the setup form
+- **Session metadata editing** — ⚙ Edit button in the logger toolbar opens the setup form pre-filled with the current session's data; saves changes to the existing session in place without losing any QSOs
+- **EDI export** — produces valid REG1TEST EDI v1.1 files (one per band): correct `[REG1TEST;1]` header, `SPowe`/`SAnte`/`STXEq`/`OPEqu`/`SAntH` equipment fields, `PSect` category, full C* score summary block (`CQSOs`, `CQSOP`, `CWWLs`, `CWWLs`, `CDXCs`, `CToSc`, `CODXC`), and correct 14-field QSO records
 - **Session management** — multiple concurrent sessions; pause/resume between contest legs; delete individual QSOs or entire sessions
+- **Offline-capable PWA** — installable on iOS and Android home screen; service worker caches the app shell and baseline for fully offline use after first load
 - **Bilingual UI** — Slovenian and English
 - **Dark/light theme** toggle with `localStorage` persistence
 - **Mobile-friendly** — `100dvh` layout avoids iOS Safari toolbar overlap; touch targets ≥ 32 × 32 px
@@ -162,7 +164,7 @@ Open the file in any modern browser (for baseline support, serve over HTTP).
    # then open: http://localhost:8080/vhf-logger.html
    ```
    Without the baseline the logger still works fully for dupe detection, EDI export, and QRB calculation.
-3. Click **New session**, fill in the setup form (call, locator, contest, operator, club, bands), then click **Start**
+3. Click **New session**, fill in the setup form (call, locator, contest, operator, club, section, reporter contact, bands with equipment), then click **Start**. To change any field later, click **⚙ Edit** in the logger toolbar.
 4. Type a callsign in the QSO form — autocomplete and crosscheck hints appear automatically
 5. Enter locator, RST, serial, mode; press **Enter** or click **Log** to save the QSO
 6. Click any row to edit; click the trash icon to delete
@@ -340,7 +342,7 @@ node --test --test-reporter=spec vhf-logger.test.js
 | `edi2adif.test.js` | 120 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit) |
 | `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` locator mismatch ×6, `runCrosscheck` callsign ×8, missing locator ×4, thresholds ×3, callsign by locator ×4) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
-| `vhf-logger.test.js` | 77 | 10 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`) |
+| `vhf-logger.test.js` | 95 | 11 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`) |
 
 See [TESTING.md](TESTING.md) for full test documentation.
 
@@ -505,8 +507,10 @@ Datoteko odpri v katerem koli sodobnem brskalniku (za baseline podporo postreža
 - **QRB + azimut** — razdalja po velikem krogu in azimut izračunana iz Maidenhead lokatorjev in prikazana per QSO
 - **Zaznavanje duplikatov** — opozorilo v realnem času z normalizacijo `baseCall()`, tako da se `S59DGO/P` pravilno ujame z `S59DGO`; per-pas, izključuje QSO, ki se trenutno ureja
 - **Urejanje v živo** — klikni kateri koli vnos v dnevniku za popravek klicnega znaka, lokatorja, RST, serije, načina ali časa; zastavice duplikatov in xFlags se preračunajo ob shranitvi
-- **EDI izvoz** — ustvari veljavne REG1TEST EDI v1 datoteke (eno per pas), pravilni 14-polni zapisi QSO z zastavico duplikata v stolpcu 13, `PClub` izpolnjen iz nastavitvenega obrazca
+- **Urejanje podatkov seje** — gumb ⚙ Uredi v orodni vrstici beležnika odpre nastavitveni obrazec, predizpolnjen s trenutnimi podatki seje; spremembe se shranijo v obstoječo sejo brez izgube QSO-jev
+- **EDI izvoz** — ustvari veljavne REG1TEST EDI v1.1 datoteke (eno per pas): pravilna glava `[REG1TEST;1]`, polja opreme `SPowe`/`SAnte`/`STXEq`/`OPEqu`/`SAntH`, kategorija `PSect`, blok C* povzetka točkanja (`CQSOs`, `CQSOP`, `CWWLs`, `CDXCs`, `CToSc`, `CODXC`) in pravilni 14-polni zapisi QSO
 - **Upravljanje sej** — več sočasnih sej; premor/nadaljevanje med deli tekmovanja; brisanje posameznih QSO ali celotnih sej
+- **PWA brez povezave** — namestitven na začetni zaslon iOS in Android; service worker predpomni lupino aplikacije in baseline za popolno delovanje brez interneta po prvem nalaganju
 - **Dvojezični vmesnik** — slovenščina in angleščina
 - **Temna/svetla tema** s shranitvijo v `localStorage`
 - **Primerno za mobilne naprave** — postavitev `100dvh` se izogiba prekrivanju z orodno vrstico iOS Safari; površine za dotik ≥ 32 × 32 px
@@ -521,7 +525,7 @@ Datoteko odpri v katerem koli sodobnem brskalniku (za baseline podporo postreža
    # nato odpri: http://localhost:8080/vhf-logger.html
    ```
    Brez baseline-a beležnik deluje normalno za zaznavanje duplikatov, EDI izvoz in izračun QRB.
-3. Klikni **Nova seja**, izpolni nastavitveni obrazec (klicni znak, lokator, tekmovanje, operater, klub, pasovi), nato klikni **Začni**
+3. Klikni **Nova seja**, izpolni nastavitveni obrazec (klicni znak, lokator, tekmovanje, operater, klub, sekcija, kontakt odgovornega, pasovi z opremo), nato klikni **Začni**. Za poznejše spremembe klikni **⚙ Uredi** v orodni vrstici beležnika.
 4. Vtipkaj klicni znak v obrazec QSO — avtodokončanje in crosscheck namigi se prikažejo samodejno
 5. Vnesi lokator, RST, serijo, način; pritisni **Enter** ali klikni **Zabeleži** za shranitev
 6. Klikni kateri koli vnos za urejanje; klikni ikono koša za brisanje
@@ -699,7 +703,7 @@ node --test --test-reporter=spec vhf-logger.test.js
 | `edi2adif.test.js` | 120 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplikati, CSV izvoz, urejanje v živo) |
 | `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` lokator ×6, `runCrosscheck` klicni znak ×8, manjkajoč lokator ×4, pragovi ×3, klicni znak po lokatorju ×4) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
-| `vhf-logger.test.js` | 77 | 10 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`) |
+| `vhf-logger.test.js` | 95 | 11 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`) |
 
 Celotna dokumentacija je v [TESTING.md](TESTING.md).
 
