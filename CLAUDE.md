@@ -11,8 +11,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Current tools:**
 - `edi2adif.html` — Converts REG1TEST EDI v1 contest logs to ADIF and other formats
 - `edi-crosscheck.html` — Cross-checks a new EDI log against historical logs (+ optional prebuilt OEVSV IARU R1 baseline) to flag callsign typos and locator mismatches
+- `vhf-logger.html` — Browser-based contest logger for IARU R1 VHF/UHF contests; touch-first, multi-band, exports per-band EDI, live crosscheck hints from baseline
 - `adif-qrz-filter.js` — Node.js CLI tool that filters an ADIF log to keep only BURO-accepting stations by querying the QRZ.com XML API
-- `build-baseline.js` — Node.js CLI tool that builds `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports, consumed by `edi-crosscheck.html`
+- `build-baseline.js` — Node.js CLI tool that builds `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports, consumed by `edi-crosscheck.html` and `vhf-logger.html`
 
 ## Development
 
@@ -175,6 +176,71 @@ Node.js CLI script that builds `crosscheck-baseline.json` from a directory of OE
 
 ---
 
+## Architecture of vhf-logger.html
+
+Single HTML file with three co-located layers (CSS → HTML → JavaScript). No external JS dependencies. Same CSS custom-property palette (`:root` dark/light variables) and `showToast()` / `dl()` pattern as the other tools. `crosscheck-baseline.json` loaded on startup via `fetch()` for live autocomplete and crosscheck hints during log entry.
+
+**JavaScript sections (marked with `// ════` banners):**
+
+| Section | Responsibility |
+|---|---|
+| I18N (`S`, `t()`, `setLang()`) | Bilingual UI strings (SL/EN). Keys include `lblClub`, `ariaTheme`, `ariaDelLog`, `ariaDelQso`, `errStorageFull`. |
+| Band config (`BAND_MAP`, `normBand`, `BAND_OPTS`) | 11 bands (6m–6mm) with canonical names and EDI header strings. |
+| Geo utils (`locToLatLon`, `haversine`, `calcBearing`) | Maidenhead → lat/lon, QRB distance, great-circle bearing. |
+| Crosscheck module | `baseCall()`, `levenshtein()`, `_histDB` (weighted+raw dual maps, same structure as `edi-crosscheck.html`), `applyBaseline()`, `loadBaseline()`, `lookupCall()`, `searchCalls()`. |
+| State + persistence | `STORE='vhf-logger-v1'`, module-level `let _sessions`, `_current`, `_editingQso`. `saveSessions()` wrapped in try/catch. |
+| Clock (`tickClock`) | Fires every 5 s; skips display update when `_editingQso` is set. |
+| Navigation | `showHome()`, `showSetup()`, `showLogger()`, `pauseSession()`. |
+| Home screen | `renderHome()`, `resumeSession()`, `deleteSession()`. |
+| Setup screen | `addBandRow()`, `removeBandRow()`, `onBandSel()`, `collectSetup()`, `startSession()`. Reads `fClub` input → `session.club` for EDI `PClub`. |
+| Logger core | `nextSerial()`, `isDupe(call, band, excludeId)`, `recalcDupes()`, `updateNrS()`, `switchBand()`, `renderBandTabs()`, `renderStats()`, `renderTable()`, `scrollTableBottom()`. |
+| QSO editing | `editQso()`, `cancelEdit()`, `saveEditedQso()`, `setupTableClickHandler()`, `deleteQso()`. |
+| QSO form | `onCallInput()`, `onCallKey()`, `renderAc()`, `selectAc()`, `onWwlInput()`, `updateWwlColor()`, `onModeChange()`, `checkDupeField()`, `logQso()`, `resetForm()`. |
+| Hints | `updateLocHint()`, `calcAzimuth()`, `updateXhint()`, `debouncedXhint()` (150 ms debounce). |
+| EDI export | `buildEdi()`, `showExportModal()`, `showExportFor()`, `_showExportFor()`, `_exportBand()`, `closeModal()`. |
+| Theme + init | `toggleTheme()`, `init()`. |
+
+**Key data structures:**
+
+Session object:
+```js
+{ id, contest, myCall, myLoc, operator, club, created, modified, activeBand,
+  bands: [{band, freq, power, antenna}], qsos: [...] }
+```
+
+QSO object:
+```js
+{ _id, band, mode, call, wwl, rstS, rstR, nrS, nrR,
+  utcDate, utcTime, qrb, brg, dupe, xFlags }
+```
+
+**EDI QSO record format — 14 semicolon-separated fields (col 0–13):**
+```
+YYMMDD;HHMM;CALL;MODE_NUM;RST_S;NR_S;RST_R;NR_R;;WWL;QRB;;;DUPE
+```
+Col 8 = exchange (empty), col 11–12 = reserved (empty), col 13 = `D` if dupe, empty otherwise. `PClub` header field is populated from `session.club`.
+
+**Key invariants:**
+- `isDupe(call, band, excludeId)` — uses `baseCall()` on both sides so `/P` portables are matched against base call history; `excludeId` prevents false-dupe warning on the QSO currently being edited.
+- `recalcDupes()` — iterates `_current.qsos` in order, rebuilds `dupe` flags per-band using `baseCall()` normalization. Called after any edit or delete.
+- `saveEditedQso()` — recalculates `xFlags` (LOC_MISMATCH / CALL_SIMILAR) for the edited QSO, then calls `recalcDupes()` before persisting.
+- `deleteQso()` — calls `cancelEdit()` first if the deleted QSO is the one being edited.
+- `debouncedXhint(call)` — 150 ms debounce around `updateXhint()` to throttle Levenshtein search on each keystroke.
+- `saveSessions()` is wrapped in try/catch; shows `t('errStorageFull')` toast on quota exceeded.
+
+**Key data flow:**
+1. Page load → `loadBaseline()` → `fetch('./crosscheck-baseline.json')` → `applyBaseline()` → `_histDB`
+2. Home → Setup → `startSession()` creates session with `club` field → `showLogger()`
+3. `logQso()` → `isDupe()` + `lookupCall()` for xFlags → push QSO → `syncCurrent()` → `renderTable()`
+4. Row click → `editQso()` loads form, shows `#editTimeRow`, hides `#clockRow`
+5. `logQso()` (while `_editingQso` set) → delegates to `saveEditedQso()` → `recalcDupes()` → `syncCurrent()`
+6. Band tab click → `switchBand()` → `renderBandTabs()` + `renderTable()` + `updateNrS()` + `resetForm()`
+7. Export button → `showExportModal()` → per-band `buildEdi()` → `dl()`
+
+**Tests:** `vhf-logger.test.js` — 77 tests across 10 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`).
+
+---
+
 ## Architecture of adif-qrz-filter.js
 
 Node.js CLI script, no external dependencies. Pure Node.js `https` client for QRZ.com XML API.
@@ -205,8 +271,9 @@ Node.js CLI script, no external dependencies. Pure Node.js `https` client for QR
 **Trenutna orodja:**
 - `edi2adif.html` — Pretvori REG1TEST EDI v1 tekmovalne dnevnike v format ADIF in druge formate
 - `edi-crosscheck.html` — Preveri nov EDI dnevnik proti zgodovinskim dnevnikom (+ opcijski pred-zgrajen OEVSV IARU R1 baseline) in označi morebitne napake v klicnih znakih in lokatorjih
+- `vhf-logger.html` — Brskalniški beležnik za VHF/UHF/SHF tekmovalne dnevnike z live crosscheckom, EDI izvozom in izračunom QRB/azimuta
 - `adif-qrz-filter.js` — Node.js CLI orodje, ki filtrira ADIF dnevnik in ohrani samo postaje, ki sprejemajo QSL preko biroja, s poizvedovanjem prek QRZ.com XML API
-- `build-baseline.js` — Node.js CLI orodje, ki gradi `crosscheck-baseline.json` iz OEVSV IARU R1 contest CSV exportov, namenjeno za `edi-crosscheck.html`
+- `build-baseline.js` — Node.js CLI orodje, ki gradi `crosscheck-baseline.json` iz OEVSV IARU R1 contest CSV exportov, namenjeno za `edi-crosscheck.html` in `vhf-logger.html`
 
 ## Razvoj
 
@@ -323,6 +390,71 @@ Map<bazniKlicniZnak, {
 ```
 call, mode, wwl, dateDisp, band, src
 ```
+
+---
+
+## Arhitektura vhf-logger.html
+
+Enojna HTML datoteka s tremi solociranimi plastmi (CSS → HTML → JavaScript). Brez zunanjih JS odvisnosti. Enaka barvna paleta CSS spremenljivk (`:root` temne/svetle spremenljivke) in vzorec pomožnih funkcij `showToast()` / `dl()` kot pri ostalih orodjih. `crosscheck-baseline.json` se naloži ob zagonu prek `fetch()` za live avtodokončanje in crosscheck namige med vnosom dnevnika.
+
+**Razdelki JavaScript (označeni z `// ════` pasicami):**
+
+| Razdelek | Odgovornost |
+|---|---|
+| I18N (`S`, `t()`, `setLang()`) | Dvojezični nizi vmesnika (SL/EN). Ključi vključujejo `lblClub`, `ariaTheme`, `ariaDelLog`, `ariaDelQso`, `errStorageFull`. |
+| Konfiguracija pasov (`BAND_MAP`, `normBand`, `BAND_OPTS`) | 11 pasov (6m–6mm) s kanonskimi imeni in nizi za EDI glavo. |
+| Geo pomožniki (`locToLatLon`, `haversine`, `calcBearing`) | Maidenhead → lat/lon, razdalja QRB, smer po velikem krogu. |
+| Crosscheck modul | `baseCall()`, `levenshtein()`, `_histDB` (uteženi+raw dual maps, enaka struktura kot `edi-crosscheck.html`), `applyBaseline()`, `loadBaseline()`, `lookupCall()`, `searchCalls()`. |
+| Stanje + trajnost | `STORE='vhf-logger-v1'`, modularni `let _sessions`, `_current`, `_editingQso`. `saveSessions()` zavita v try/catch. |
+| Ura (`tickClock`) | Sproži se vsakih 5 s; preskoči posodobitev prikaza, ko je nastavljen `_editingQso`. |
+| Navigacija | `showHome()`, `showSetup()`, `showLogger()`, `pauseSession()`. |
+| Domači zaslon | `renderHome()`, `resumeSession()`, `deleteSession()`. |
+| Zaslon za nastavitve | `addBandRow()`, `removeBandRow()`, `onBandSel()`, `collectSetup()`, `startSession()`. Prebere vnos `fClub` → `session.club` za EDI `PClub`. |
+| Jedro beležnika | `nextSerial()`, `isDupe(call, band, excludeId)`, `recalcDupes()`, `updateNrS()`, `switchBand()`, `renderBandTabs()`, `renderStats()`, `renderTable()`, `scrollTableBottom()`. |
+| Urejanje QSO | `editQso()`, `cancelEdit()`, `saveEditedQso()`, `setupTableClickHandler()`, `deleteQso()`. |
+| Obrazec QSO | `onCallInput()`, `onCallKey()`, `renderAc()`, `selectAc()`, `onWwlInput()`, `updateWwlColor()`, `onModeChange()`, `checkDupeField()`, `logQso()`, `resetForm()`. |
+| Namigi | `updateLocHint()`, `calcAzimuth()`, `updateXhint()`, `debouncedXhint()` (150 ms debounce). |
+| EDI izvoz | `buildEdi()`, `showExportModal()`, `showExportFor()`, `_showExportFor()`, `_exportBand()`, `closeModal()`. |
+| Tema + inicializacija | `toggleTheme()`, `init()`. |
+
+**Ključne podatkovne strukture:**
+
+Objekt seje:
+```js
+{ id, contest, myCall, myLoc, operator, club, created, modified, activeBand,
+  bands: [{band, freq, power, antenna}], qsos: [...] }
+```
+
+Objekt QSO:
+```js
+{ _id, band, mode, call, wwl, rstS, rstR, nrS, nrR,
+  utcDate, utcTime, qrb, brg, dupe, xFlags }
+```
+
+**Format zapisa EDI QSO — 14 polj, ločenih s podpičji (stolpci 0–13):**
+```
+LLMMDD;HHMM;KLICNI_ZNAK;NACIN_ST;RST_O;ST_O;RST_S;ST_S;;WWL;QRB;;;DUPE
+```
+Stolpec 8 = izmenjava (prazno), stolpci 11–12 = rezervirano (prazno), stolpec 13 = `D` pri duplikatu, sicer prazno. Polje glave `PClub` je izpolnjeno iz `session.club`.
+
+**Ključne invariante:**
+- `isDupe(call, band, excludeId)` — uporablja `baseCall()` na obeh straneh, da se prenosni `/P` ujamejo z zgodovino baznega klicnega znaka; `excludeId` preprečuje lažno opozorilo o duplikatu na QSO, ki ga trenutno urejamo.
+- `recalcDupes()` — iterira `_current.qsos` po vrsti, obnavlja zastavice `dupe` po pasovih z normalizacijo `baseCall()`. Pokliče se po vsakem urejanju ali brisanju.
+- `saveEditedQso()` — preračuna `xFlags` (LOC_MISMATCH / CALL_SIMILAR) za urejeni QSO, nato pokliče `recalcDupes()` pred shranjevanjem.
+- `deleteQso()` — najprej pokliče `cancelEdit()`, če je brisujoči QSO tisti, ki se ureja.
+- `debouncedXhint(call)` — 150 ms debounce okoli `updateXhint()` za dušenje Levenshteinove iskanja ob vsakem pritisku tipke.
+- `saveSessions()` je zavita v try/catch; ob prekoračitvi kvote prikaže toast `t('errStorageFull')`.
+
+**Potek podatkov:**
+1. Nalaganje strani → `loadBaseline()` → `fetch('./crosscheck-baseline.json')` → `applyBaseline()` → `_histDB`
+2. Domov → Nastavitve → `startSession()` ustvari sejo s poljem `club` → `showLogger()`
+3. `logQso()` → `isDupe()` + `lookupCall()` za xFlags → doda QSO → `syncCurrent()` → `renderTable()`
+4. Klik na vrstico → `editQso()` naloži obrazec, prikaže `#editTimeRow`, skrije `#clockRow`
+5. `logQso()` (ko je nastavljen `_editingQso`) → delegira na `saveEditedQso()` → `recalcDupes()` → `syncCurrent()`
+6. Klik na zavihek pasu → `switchBand()` → `renderBandTabs()` + `renderTable()` + `updateNrS()` + `resetForm()`
+7. Gumb za izvoz → `showExportModal()` → `buildEdi()` po pasovih → `dl()`
+
+**Testi:** `vhf-logger.test.js` — 77 testov v 10 skupinah (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`).
 
 ---
 

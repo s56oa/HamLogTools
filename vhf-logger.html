@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>VHF Logger</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0e14;--bg2:#0f1520;--bg3:#162030;--bg4:#1c2a3a;
+  --border:#1e3048;--border2:#254060;--text:#cdd9e5;--muted:#637e96;
+  --dim:#3d5a70;--accent:#4d9de0;--accent2:#2ecc8a;--accent3:#f0a500;
+  --danger:#e05c4d;--hdr:linear-gradient(135deg,#0a0e14 0%,#0d1a28 100%);
+  --call:#79c0ff;--r:6px;
+}
+html[data-theme="light"] {
+  --bg:#f0f4f8;--bg2:#ffffff;--bg3:#e4ecf3;--bg4:#d4e0eb;
+  --border:#bfcfdd;--border2:#96b0c6;--text:#18273a;--muted:#4a6275;
+  --dim:#7a9ab0;--accent:#1a6fad;--accent2:#178a58;--accent3:#a06800;
+  --danger:#c03030;--hdr:linear-gradient(135deg,#dde8f2 0%,#eaf2f8 100%);
+  --call:var(--accent);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;min-height:100vh;transition:background-color .2s,color .2s}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+header{
+  background:var(--hdr);border-bottom:1px solid var(--border);
+  padding:.7rem 1.1rem;display:flex;align-items:center;gap:.75rem;
+  position:sticky;top:0;z-index:200;backdrop-filter:blur(8px);height:52px;
+}
+.logo{font-family:'Space Mono',monospace;font-size:.95rem;letter-spacing:-.02em;white-space:nowrap}
+.logo .icon{color:var(--accent2);margin:0 .3rem}
+.version{font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);
+  padding:1px 6px;border:1px solid var(--border);border-radius:3px;white-space:nowrap}
+.hdr-info{font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;
+  display:flex;gap:.9rem;align-items:center;flex:1;overflow:hidden}
+.hdr-call{color:var(--call);font-weight:700}
+.lang-wrap{margin-left:auto;display:flex;gap:4px;flex-shrink:0}
+.lang-btn{background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;
+  transition:all .15s;font-family:'Space Mono',monospace}
+.lang-btn.active{background:var(--bg4);border-color:var(--accent);color:var(--accent)}
+.theme-btn{background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:4px;padding:2px 7px;font-size:13px;cursor:pointer;line-height:1;transition:all .15s}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+.btn{border:none;border-radius:var(--r);padding:.45rem 1rem;font-size:.82rem;
+  font-weight:600;cursor:pointer;transition:all .15s;font-family:'IBM Plex Sans',sans-serif;
+  min-height:36px;touch-action:manipulation}
+.btn-primary{background:var(--accent);color:#0a0e14}
+.btn-primary:hover{opacity:.85}
+.btn-success{background:var(--accent2);color:#0a0e14}
+.btn-success:hover{opacity:.85}
+.btn-secondary{background:var(--bg4);color:var(--text);border:1px solid var(--border2)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-danger{background:rgba(224,92,77,.13);color:var(--danger);border:1px solid rgba(224,92,77,.28)}
+.btn-danger:hover{background:rgba(224,92,77,.22)}
+.btn-sm{padding:.28rem .7rem;font-size:.75rem;min-height:28px}
+.btn-lg{padding:.7rem 1.4rem;font-size:.95rem;min-height:46px}
+.btn:disabled{opacity:.35;cursor:default;pointer-events:none}
+
+.screen{display:none}
+.screen.active{display:block}
+
+/* ── HOME ── */
+#screen-home.active{display:block;padding:1.5rem}
+.home-hdr{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap}
+.home-title{font-family:'Space Mono',monospace;font-size:1rem;flex:1}
+.base-tag{font-size:10px;color:var(--accent2);border:1px solid rgba(46,204,138,.3);
+  border-radius:3px;padding:1px 6px;font-family:'Space Mono',monospace}
+.log-list{display:flex;flex-direction:column;gap:.7rem;max-width:880px}
+.log-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+  padding:1rem 1.1rem;display:grid;gap:.4rem;
+  grid-template-areas:"title act" "meta act" "bands act";
+  grid-template-columns:1fr auto;transition:border-color .15s;
+}
+.log-card:hover{border-color:var(--border2)}
+.lc-title{grid-area:title;font-family:'Space Mono',monospace;font-size:.88rem;
+  display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.lc-call{color:var(--call);font-weight:700}
+.lc-meta{grid-area:meta;font-size:11px;color:var(--muted);display:flex;gap:.9rem;flex-wrap:wrap}
+.lc-bands{grid-area:bands;display:flex;gap:.35rem;flex-wrap:wrap;align-items:center}
+.lc-act{grid-area:act;display:flex;flex-direction:column;gap:.35rem;align-items:flex-end}
+.bchip{font-family:'Space Mono',monospace;font-size:10px;padding:2px 8px;
+  border-radius:3px;background:var(--bg3);border:1px solid var(--border2);
+  display:flex;align-items:center;gap:4px}
+.bchip .bc{color:var(--accent);font-weight:700}
+.bchip .bk{color:var(--accent2);font-size:9px}
+.empty-state{text-align:center;padding:3.5rem 2rem;color:var(--muted);
+  border:1.5px dashed var(--border2);border-radius:12px;max-width:480px;margin:0 auto}
+.empty-ico{font-size:2.5rem;margin-bottom:1rem;opacity:.6}
+.empty-title{font-family:'Space Mono',monospace;font-size:.88rem;margin-bottom:.4rem}
+.empty-sub{font-size:.8rem;line-height:1.6}
+
+/* ── SETUP ── */
+#screen-setup.active{display:block;padding:1.5rem}
+.setup-wrap{max-width:700px;margin:0 auto}
+.setup-title{font-family:'Space Mono',monospace;font-size:.95rem;color:var(--accent);margin-bottom:1.25rem}
+.fsec{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+  padding:1rem 1.1rem;margin-bottom:.9rem}
+.fsec-hdr{font-size:.72rem;font-weight:600;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.06em;margin-bottom:.85rem;display:flex;align-items:center;justify-content:space-between}
+.frow{display:flex;gap:.65rem;margin-bottom:.65rem;flex-wrap:wrap}
+.frow:last-child{margin-bottom:0}
+.field{display:flex;flex-direction:column;gap:3px;flex:1;min-width:130px}
+.field label{font-size:11px;color:var(--muted);font-weight:500}
+.inp{background:var(--bg3);border:1px solid var(--border2);border-radius:4px;
+  color:var(--text);padding:.45rem .7rem;font-size:.88rem;
+  font-family:'IBM Plex Sans',sans-serif;width:100%;min-height:36px}
+.inp:focus{outline:none;border-color:var(--accent)}
+.inp.mono{font-family:'Space Mono',monospace}
+.band-rows{display:flex;flex-direction:column;gap:.45rem}
+.brow{display:grid;gap:.45rem;align-items:center;
+  grid-template-columns:18px 110px 100px 70px 1fr 28px;
+  background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:.45rem .65rem}
+.brow-idx{font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);text-align:center}
+.bsel{background:var(--bg4);border:1px solid var(--border2);border-radius:4px;
+  color:var(--text);padding:.3rem .4rem;font-size:.8rem;cursor:pointer;font-family:'Space Mono',monospace;width:100%}
+.inp-sm{background:var(--bg3);border:1px solid var(--border2);border-radius:4px;
+  color:var(--text);padding:.3rem .5rem;font-size:.8rem;width:100%;font-family:'Space Mono',monospace}
+.inp-sm:focus{outline:none;border-color:var(--accent)}
+.setup-act{display:flex;gap:.65rem;margin-top:1.1rem;flex-wrap:wrap}
+
+/* ── LOGGER ── */
+#screen-logger.active{display:flex;flex-direction:column;height:calc(100dvh - 52px);overflow:hidden}
+.stats-bar{background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:.45rem .9rem;display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;flex-shrink:0}
+.st{display:flex;flex-direction:column;gap:1px}
+.st-val{font-family:'Space Mono',monospace;font-size:.95rem;font-weight:700;color:var(--accent)}
+.st-lbl{font-size:10px;color:var(--muted)}
+.st-sep{width:1px;height:26px;background:var(--border)}
+.st-sep.push{margin-left:auto}
+.band-tabs{background:var(--bg3);border-bottom:1px solid var(--border);
+  padding:.35rem .7rem;display:flex;gap:.3rem;align-items:center;flex-wrap:wrap;flex-shrink:0}
+.btab{font-family:'Space Mono',monospace;font-size:.78rem;padding:.28rem .75rem;border-radius:4px;
+  border:1px solid var(--border2);background:var(--bg4);color:var(--muted);cursor:pointer;
+  transition:all .15s;touch-action:manipulation}
+.btab.active{background:rgba(77,157,224,.15);border-color:var(--accent);color:var(--accent)}
+.btab .tn{font-size:9px;color:var(--dim);margin-left:3px}
+
+/* Table panel — fills space above form */
+.tbl-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.tbl-bar{background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:.4rem .65rem;display:flex;align-items:center;gap:.5rem;flex-shrink:0}
+.tbl-sel{background:var(--bg3);border:1px solid var(--border2);border-radius:4px;
+  color:var(--text);padding:.28rem .5rem;font-size:.78rem;cursor:pointer;font-family:'Space Mono',monospace}
+.tbl-cnt{font-size:10px;color:var(--dim);margin-left:auto;font-family:'Space Mono',monospace}
+.tbl-wrap{flex:1;overflow:auto;background:var(--bg2)}
+
+/* QSO panel — fixed compact bar at bottom */
+.qso-panel{background:var(--bg2);border-top:2px solid var(--border2);
+  padding:.55rem .9rem .65rem;flex-shrink:0;display:flex;flex-direction:column;gap:.35rem}
+.qf-hints{display:flex;flex-direction:column;gap:.25rem}
+.xhint{font-size:.78rem;display:none;flex-direction:column;gap:.25rem}
+.xhint.show{display:flex}
+.xh-row{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap}
+.xh-lbl{color:var(--muted);font-size:.72rem;font-weight:600;white-space:nowrap}
+.xh-val{font-family:'Space Mono',monospace;color:var(--text)}
+.xbadge{display:inline-block;font-family:'Space Mono',monospace;font-size:.68rem;padding:1px 5px;border-radius:2px}
+.xb-ok{background:rgba(46,204,138,.2);color:#3fb950}
+.xb-warn{background:rgba(240,165,0,.2);color:var(--accent3)}
+.xb-err{background:rgba(224,92,77,.2);color:var(--danger)}
+.xb-dim{background:rgba(99,126,150,.15);color:var(--muted)}
+.dupe-warn{font-family:'Space Mono',monospace;font-size:.76rem;color:var(--accent3);display:none}
+.dupe-warn.show{display:block}
+
+/* Main input row */
+.qf-main{display:flex;gap:.4rem;align-items:flex-end}
+.qf-lbl{font-size:10px;color:var(--muted);font-weight:500;margin-bottom:2px;white-space:nowrap}
+.qf-lbl-row{display:flex;align-items:center;gap:.4rem;margin-bottom:2px}
+.qf-call{flex:2;min-width:140px;position:relative}
+.qf-wwl {flex:1.4;min-width:110px}
+.qf-mode{width:76px;flex-shrink:0}
+.qf-rst {width:54px;flex-shrink:0}
+.qf-nrr {width:58px;flex-shrink:0}
+
+/* Autocomplete — opens upward */
+.call-wrap{position:relative}
+.acdrop{position:absolute;left:0;right:0;bottom:calc(100% + 2px);z-index:150;
+  background:var(--bg3);border:1px solid var(--accent);border-radius:6px;
+  max-height:220px;overflow-y:auto;display:none}
+.acdrop.open{display:block}
+.aci{padding:.5rem .75rem;cursor:pointer;display:flex;align-items:center;gap:.6rem;
+  border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:.82rem;
+  transition:background .1s;touch-action:manipulation}
+.aci:last-child{border-bottom:none}
+.aci:hover,.aci.hi{background:rgba(77,157,224,.12)}
+.aci-call{color:var(--call);font-weight:700}
+.aci-loc{color:var(--accent2);font-size:.76rem}
+.aci-cnt{color:var(--dim);font-size:.72rem;margin-left:auto}
+
+/* loc hint — inline next to WWL label */
+.loc-hint{display:none;align-items:center;gap:.3rem;font-family:'Space Mono',monospace;font-size:.72rem}
+.loc-hint.show{display:flex}
+.lh-lbl{color:var(--muted)}
+.lh-val{color:var(--accent2);font-weight:700}
+.lh-cnt{color:var(--dim)}
+
+.qinp{background:var(--bg3);border:1.5px solid var(--border2);border-radius:6px;
+  color:var(--text);padding:.5rem .65rem;font-size:1rem;font-family:'Space Mono',monospace;
+  width:100%;min-height:44px;transition:border-color .15s;touch-action:manipulation;
+  text-transform:uppercase;-webkit-text-transform:uppercase}
+.qinp:focus{outline:none;border-color:var(--accent);background:var(--bg4)}
+.qinp.wwl{text-transform:none;-webkit-text-transform:none}
+.qinp.warn{border-color:var(--accent3)}
+.qinp.ok{border-color:var(--accent2)}
+.qsel{background:var(--bg3);border:1.5px solid var(--border2);border-radius:6px;
+  color:var(--text);padding:.4rem .4rem;font-size:.85rem;font-family:'Space Mono',monospace;
+  width:100%;min-height:44px;cursor:pointer;touch-action:manipulation}
+.qsel:focus{outline:none;border-color:var(--accent)}
+.qinp-sm{background:var(--bg3);border:1.5px solid var(--border2);border-radius:6px;
+  color:var(--text);padding:.4rem .5rem;font-size:.9rem;font-family:'Space Mono',monospace;
+  width:100%;min-height:44px;touch-action:manipulation;text-align:center}
+.qinp-sm:focus{outline:none;border-color:var(--accent);background:var(--bg4)}
+
+/* Info row below main inputs */
+.qf-info{display:flex;align-items:center;gap:.75rem;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--muted)}
+.qf-nr-val{color:var(--dim);font-weight:700;font-size:.82rem}
+.utc-v{color:var(--accent3);font-weight:700;font-size:.88rem}
+.local-v{color:var(--dim);font-size:.78rem}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead{position:sticky;top:0;z-index:2}
+th{background:var(--bg3);border-bottom:1px solid var(--border2);
+  padding:.42rem .6rem;text-align:left;white-space:nowrap;
+  font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+td{padding:.38rem .6rem;border-bottom:.5px solid var(--border);vertical-align:middle;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+td.call{font-family:'Space Mono',monospace;font-weight:700;color:var(--call)}
+td.loc{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)}
+td.num{font-family:'Space Mono',monospace;color:var(--dim);font-size:11px}
+td.km{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent2)}
+tr.is-dup{background:rgba(240,165,0,.08)}
+tr.is-dup td.call{color:var(--accent3)}
+tr.is-xf td{background:rgba(224,92,77,.06)}
+tr:hover td{background:rgba(77,157,224,.04)}
+#tBody tr{cursor:pointer}
+#tBody tr.editing td{background:rgba(77,157,224,.14)!important}
+#tBody tr.editing td.call{color:var(--accent)}
+.edit-bar{display:flex;align-items:center;gap:.6rem;padding:.3rem .6rem;
+  background:rgba(77,157,224,.1);border:1px solid rgba(77,157,224,.3);border-radius:4px;flex-wrap:wrap}
+.edit-badge{font-family:'Space Mono',monospace;font-size:.75rem;font-weight:700;color:var(--accent);white-space:nowrap}
+.edit-utc{font-family:'Space Mono',monospace;font-size:.8rem;background:var(--bg3);
+  border:1px solid var(--border2);border-radius:4px;color:var(--text);padding:.2rem .5rem;width:88px}
+.mdg{display:inline-block;font-size:9px;padding:1px 4px;border-radius:2px;
+  font-family:'Space Mono',monospace;vertical-align:middle;margin-left:2px}
+.mdg-ssb{background:rgba(77,157,224,.2);color:var(--call)}
+.mdg-cw{background:rgba(46,204,138,.2);color:#3fb950}
+.mdg-fm{background:rgba(240,165,0,.2);color:var(--accent3)}
+.mdg-dup{background:rgba(240,165,0,.25);color:var(--accent3)}
+.mdg-x{background:rgba(224,92,77,.2);color:var(--danger)}
+.btn-del{background:none;border:none;color:var(--border2);cursor:pointer;padding:4px 8px;
+  border-radius:3px;font-size:11px;transition:color .1s;line-height:1;min-width:32px;min-height:32px}
+.btn-del:hover{color:var(--danger)}
+
+/* Export modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
+  z-index:500;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+  padding:1.4rem;min-width:300px;max-width:420px;width:calc(100% - 2rem)}
+.modal-title{font-family:'Space Mono',monospace;font-size:.88rem;color:var(--accent);margin-bottom:1rem}
+.exp-row{display:flex;align-items:center;gap:.75rem;margin-bottom:.55rem}
+.exp-band{font-family:'Space Mono',monospace;color:var(--call);min-width:60px;font-weight:700}
+.exp-info{color:var(--muted);font-size:.78rem}
+
+/* Toast */
+#toast{position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;
+  background:var(--bg3);border:1px solid var(--accent2);border-radius:var(--r);
+  padding:.55rem .95rem;font-size:.78rem;color:var(--accent2);
+  transform:translateY(100px);opacity:0;transition:all .3s;pointer-events:none;
+  font-family:'Space Mono',monospace}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.err{border-color:var(--danger);color:var(--danger)}
+
+@media(max-width:768px){
+  #screen-logger.active{height:calc(100dvh - 52px)}
+  .qf-main{flex-wrap:wrap}
+  .qf-call{flex-basis:55%;min-width:120px}
+  .qf-wwl{flex-basis:40%;min-width:100px}
+  .stats-bar{gap:.75rem}
+  .brow{grid-template-columns:14px 90px 90px 60px 1fr 24px;gap:.3rem}
+}
+@media(max-width:360px){
+  .qf-mode{width:64px}
+  .qf-rst,.qf-nrr{width:46px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">VHF<span class="icon">◉</span>Logger</div>
+  <span class="version">v1.0</span>
+  <div class="hdr-info" id="hdrInfo"></div>
+  <div class="lang-wrap">
+    <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" aria-label="Preklopi temo / Toggle theme">☀</button>
+    <button class="lang-btn active" id="btnSL" onclick="setLang('sl')">SL</button>
+    <button class="lang-btn"        id="btnEN" onclick="setLang('en')">EN</button>
+  </div>
+</header>
+
+<!-- HOME -->
+<div id="screen-home" class="screen active">
+  <div class="home-hdr">
+    <div class="home-title" data-i18n="homeTitle">VHF Logger</div>
+    <span class="base-tag" id="homeBaseTag" style="display:none"></span>
+    <button class="btn btn-primary" onclick="showSetup()" data-i18n="btnNewLog">+ Nov dnevnik</button>
+  </div>
+  <div class="log-list" id="logList"></div>
+</div>
+
+<!-- SETUP -->
+<div id="screen-setup" class="screen">
+  <div class="setup-wrap">
+    <div class="setup-title" id="setupTitle" data-i18n="setupNew">Nov dnevnik</div>
+    <div class="fsec">
+      <div class="fsec-hdr"><span data-i18n="setupStation">Postaja</span></div>
+      <div class="frow">
+        <div class="field">
+          <label data-i18n="lblMyCall">Moj klicni znak</label>
+          <input class="inp mono" id="fMyCall" placeholder="S56OA" oninput="this.value=this.value.toUpperCase()">
+        </div>
+        <div class="field">
+          <label data-i18n="lblMyLoc">Moj lokator</label>
+          <input class="inp mono" id="fMyLoc" placeholder="JN65WP" maxlength="6" oninput="this.value=this.value.toUpperCase()">
+        </div>
+      </div>
+      <div class="frow">
+        <div class="field" style="flex:2">
+          <label data-i18n="lblContest">Tekmovanje</label>
+          <input class="inp" id="fContest" placeholder="IARU R1 UHF Contest">
+        </div>
+        <div class="field">
+          <label data-i18n="lblOperator">Operator</label>
+          <input class="inp mono" id="fOperator" placeholder="S56OA">
+        </div>
+        <div class="field">
+          <label data-i18n="lblClub">Klub (EDI PClub)</label>
+          <input class="inp mono" id="fClub" placeholder="S59DGO" oninput="this.value=this.value.toUpperCase()">
+        </div>
+      </div>
+    </div>
+    <div class="fsec">
+      <div class="fsec-hdr">
+        <span data-i18n="setupBands">Pasovi</span>
+        <button class="btn btn-secondary btn-sm" onclick="addBandRow()" data-i18n="btnAddBand">+ Dodaj pas</button>
+      </div>
+      <div class="band-rows" id="bandRows"></div>
+    </div>
+    <div class="setup-act">
+      <button class="btn btn-success btn-lg" onclick="startSession()" data-i18n="btnStart">▶ Začni logiranje</button>
+      <button class="btn btn-secondary" onclick="showHome()" data-i18n="btnCancel">Prekliči</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOGGER -->
+<div id="screen-logger" class="screen">
+  <div class="stats-bar" id="statsBar">
+    <div class="st"><span class="st-val" id="stQso">0</span><span class="st-lbl">QSO</span></div>
+    <div class="st-sep"></div>
+    <div class="st"><span class="st-val" id="stKm">0</span><span class="st-lbl">km</span></div>
+    <div class="st-sep"></div>
+    <div class="st"><span class="st-val" id="stSq">0</span><span class="st-lbl" data-i18n="statSq">kvadratov</span></div>
+    <div class="st-sep"></div>
+    <div class="st"><span class="st-val" id="stODX">—</span><span class="st-lbl">ODX km</span></div>
+    <div class="st-sep push"></div>
+    <button class="btn btn-secondary btn-sm" onclick="pauseSession()" data-i18n="btnPause">⏸ Pavza</button>
+    <button class="btn btn-secondary btn-sm" onclick="showExportModal()" data-i18n="btnExport">⬇ EDI</button>
+  </div>
+  <div class="band-tabs" id="bandTabs"></div>
+
+  <!-- Table — fills available space, newest QSO at bottom -->
+  <div class="tbl-panel">
+    <div class="tbl-bar">
+      <select class="tbl-sel" id="tblFilt" onchange="renderTable()">
+        <option value="" data-i18n="fAllBands">— vsi pasovi —</option>
+      </select>
+      <span class="tbl-cnt" id="tblCnt"></span>
+    </div>
+    <div class="tbl-wrap" id="tblWrap">
+      <table><thead><tr id="tHead"></tr></thead><tbody id="tBody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- QSO entry form — compact horizontal bar at bottom -->
+  <div class="qso-panel">
+    <!-- Edit mode indicator -->
+    <div class="edit-bar" id="editBar" style="display:none">
+      <span class="edit-badge" id="editBadge">✎ Urejanje</span>
+      <button class="btn btn-secondary btn-sm" onclick="cancelEdit()" data-i18n="btnCancelEdit" style="margin-left:auto">✕ Prekliči</button>
+    </div>
+    <!-- Contextual hints: xcheck info + dupe warning -->
+    <div class="qf-hints">
+      <div class="xhint" id="xhint"><div class="xh-row" id="xhRow"></div></div>
+      <div class="dupe-warn" id="dupeWarn" data-i18n="dupeWarn">⚠ DUPLIKAT na tem pasu!</div>
+    </div>
+
+    <!-- Main input row -->
+    <div class="qf-main">
+      <div class="qf-call">
+        <div class="qf-lbl" data-i18n="lblCall">Klicni znak</div>
+        <div class="call-wrap">
+          <input class="qinp" id="inCall" autocomplete="off" autocorrect="off" spellcheck="false"
+            placeholder="CALL" oninput="onCallInput()" onkeydown="onCallKey(event)">
+          <div class="acdrop" id="acDrop"></div>
+        </div>
+      </div>
+      <div class="qf-wwl">
+        <div class="qf-lbl-row">
+          <span class="qf-lbl" data-i18n="lblWwl">WWL</span>
+          <div class="loc-hint" id="locHint">
+            <span class="lh-lbl">↳</span>
+            <span class="lh-val" id="lhVal"></span>
+            <span class="lh-cnt" id="lhCnt"></span>
+          </div>
+        </div>
+        <input class="qinp wwl" id="inWwl" autocomplete="off" autocorrect="off" spellcheck="false"
+          placeholder="JN65ar" maxlength="6"
+          oninput="onWwlInput()" onkeydown="onWwlKey(event)">
+      </div>
+      <div class="qf-mode">
+        <div class="qf-lbl" data-i18n="lblMode">Način</div>
+        <select class="qsel" id="inMode" onchange="onModeChange()">
+          <option value="SSB">SSB</option>
+          <option value="CW">CW</option>
+          <option value="FM">FM</option>
+          <option value="AM">AM</option>
+          <option value="RTTY">RTTY</option>
+        </select>
+      </div>
+      <div class="qf-rst">
+        <div class="qf-lbl" data-i18n="lblRstS">RST↑</div>
+        <input class="qinp-sm" id="inRstS" value="59" maxlength="3">
+      </div>
+      <div class="qf-rst">
+        <div class="qf-lbl" data-i18n="lblRstR">RST↓</div>
+        <input class="qinp-sm" id="inRstR" value="59" maxlength="3">
+      </div>
+      <div class="qf-nrr">
+        <div class="qf-lbl" data-i18n="lblNrR">Nr↓</div>
+        <input class="qinp-sm" id="inNrR" maxlength="4">
+      </div>
+      <button class="btn btn-success" onclick="logQso()" style="align-self:flex-end;min-height:44px;padding:.4rem 1.1rem;white-space:nowrap;flex-shrink:0" data-i18n="btnLog">✓ Zapiši QSO</button>
+    </div>
+
+    <!-- Info row: auto serial + clock (normal) / UTC edit fields (edit mode) -->
+    <div class="qf-info">
+      <span class="qf-lbl" data-i18n="lblNrS">Nr↑</span>
+      <span class="qf-nr-val" id="inNrS">—</span>
+      <div style="flex:1"></div>
+      <!-- Live clock — hidden in edit mode -->
+      <span id="clockRow" style="display:flex;align-items:center;gap:.4rem">
+        <span class="qf-lbl">UTC</span>
+        <span class="utc-v" id="utcDisp">--:--</span>
+        <span class="qf-lbl" style="margin-left:.4rem" data-i18n="lblLocal">lok.</span>
+        <span class="local-v" id="localDisp">--:--</span>
+      </span>
+      <!-- Editable UTC — shown in edit mode -->
+      <span id="editTimeRow" style="display:none;align-items:center;gap:.4rem">
+        <span class="qf-lbl" data-i18n="lblUtcDate">Datum UTC:</span>
+        <input class="edit-utc" id="editUtcDate" placeholder="YYYYMMDD" maxlength="8" style="width:94px">
+        <span class="qf-lbl" data-i18n="lblUtcTime">Čas UTC:</span>
+        <input class="edit-utc" id="editUtcTime" placeholder="HH:MM" maxlength="5" style="width:60px">
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div class="modal-bg" id="exportModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-title" data-i18n="exportTitle">Izvoz EDI</div>
+    <div id="exportRows"></div>
+    <div style="margin-top:1rem">
+      <button class="btn btn-secondary btn-sm" onclick="closeModal()" data-i18n="btnClose">✕ Zapri</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" aria-live="polite"></div>
+
+<script>
+// ════════════════════════════════════════
+//  I18N
+// ════════════════════════════════════════
+const S = {
+sl:{
+  homeTitle:'VHF Logger',
+  btnNewLog:'+ Nov dnevnik',
+  setupNew:'Nov dnevnik',
+  setupStation:'Postaja',
+  setupBands:'Pasovi',
+  btnAddBand:'+ Dodaj pas',
+  btnStart:'▶ Začni logiranje',
+  btnCancel:'Prekliči',
+  btnPause:'⏸ Pavza',
+  btnExport:'⬇ EDI',
+  btnLog:'✓ Zapiši QSO',
+  btnClose:'✕ Zapri',
+  lblMyCall:'Moj klicni znak',
+  lblMyLoc:'Moj lokator',
+  lblContest:'Tekmovanje',
+  lblOperator:'Operator',
+  lblCall:'Klicni znak',
+  lblWwl:'Lokator (WWL)',
+  lblMode:'Način',
+  lblRstS:'RST↑',lblRstR:'RST↓',
+  lblNrS:'Nr↑ (auto)',lblNrR:'Nr↓',
+  lblLocal:'Lokalni čas',
+  lblBaseline:'Baseline:',
+  statSq:'kvadratov',
+  dupeWarn:'⚠ DUPLIKAT na tem pasu!',
+  fAllBands:'— vsi pasovi —',
+  bandFreqPh:'Freq. (MHz)',bandPwrPh:'Moč (W)',bandAntPh:'Antena',
+  errNoCall:'Vnesi klicni znak',
+  errNoMyCall:'Vnesi moj klicni znak',
+  errNoMyLoc:'Neveljavni lokator (6 znakov, npr. JN65WP)',
+  errNoBand:'Dodaj vsaj en pas',
+  errNoContest:'Vnesi ime tekmovanja',
+  toastAdded:'QSO dodan (#${nr}, ${km} km)',
+  toastEdited:'QSO posodobljen',
+  toastPaused:'Dnevnik shranjen',
+  toastDelQso:'QSO izbrisan',
+  toastDelLog:'Dnevnik izbrisan',
+  exportTitle:'Izvoz EDI',
+  expBandInfo:'${n} QSO — ${km} km',
+  confirmDelLog:'Izbriši dnevnik "${name}"?',
+  confirmDelQso:'Izbriši QSO z ${call}?',
+  noLogs:'Ni shranjenih dnevnikov',
+  noLogsSub:'Klikni "+ Nov dnevnik" za začetek.',
+  baseLine:'Baseline: ${n} znakov (${v})',
+  baseLineShort:'Baseline: ${n}',
+  thNr:'#',thCall:'Klicni znak',thWwl:'WWL',thMode:'Način',thBand:'Pas',
+  thRst:'RST',thNrQ:'Nr',thKm:'km',thBrg:'°',thUtc:'UTC',thDel:'',
+  xhHist:'Hist.:',xhSim:'Podoben:',xhNone:'Ni v bazi',
+  btnCont:'▶ Nadaljuj',btnDel:'✕',
+  resuming:'Nadaljevanje dnevnika',
+  btnSaveEdit:'✓ Shrani popravek',
+  btnCancelEdit:'✕ Prekliči',
+  editBadge:'✎ Urejanje',
+  lblUtcDate:'Datum UTC:',
+  lblUtcTime:'Čas UTC:',
+  lblClub:'Klub (EDI PClub)',
+  errStorageFull:'Shranjevanje neuspešno — lokalni prostor poln',
+  ariaTheme:'Preklopi temo',
+  ariaDelLog:'Izbriši dnevnik',
+  ariaDelQso:'Izbriši QSO',
+},
+en:{
+  homeTitle:'VHF Logger',
+  btnNewLog:'+ New log',
+  setupNew:'New log',
+  setupStation:'Station',
+  setupBands:'Bands',
+  btnAddBand:'+ Add band',
+  btnStart:'▶ Start logging',
+  btnCancel:'Cancel',
+  btnPause:'⏸ Pause',
+  btnExport:'⬇ EDI',
+  btnLog:'✓ Log QSO',
+  btnClose:'✕ Close',
+  lblMyCall:'My callsign',
+  lblMyLoc:'My locator',
+  lblContest:'Contest',
+  lblOperator:'Operator',
+  lblCall:'Callsign',
+  lblWwl:'Locator (WWL)',
+  lblMode:'Mode',
+  lblRstS:'RST↑',lblRstR:'RST↓',
+  lblNrS:'Nr↑ (auto)',lblNrR:'Nr↓',
+  lblLocal:'Local time',
+  lblBaseline:'Baseline:',
+  statSq:'squares',
+  dupeWarn:'⚠ DUPLICATE on this band!',
+  fAllBands:'— all bands —',
+  bandFreqPh:'Freq. (MHz)',bandPwrPh:'Power (W)',bandAntPh:'Antenna',
+  errNoCall:'Enter callsign',
+  errNoMyCall:'Enter my callsign',
+  errNoMyLoc:'Invalid locator (6 chars, e.g. JN65WP)',
+  errNoBand:'Add at least one band',
+  errNoContest:'Enter contest name',
+  toastAdded:'QSO logged (#${nr}, ${km} km)',
+  toastEdited:'QSO updated',
+  toastPaused:'Log saved',
+  toastDelQso:'QSO deleted',
+  toastDelLog:'Log deleted',
+  exportTitle:'Export EDI',
+  expBandInfo:'${n} QSOs — ${km} km',
+  confirmDelLog:'Delete log "${name}"?',
+  confirmDelQso:'Delete QSO with ${call}?',
+  noLogs:'No saved logs',
+  noLogsSub:'Click "+ New log" to begin.',
+  baseLine:'Baseline: ${n} calls (${v})',
+  baseLineShort:'Baseline: ${n}',
+  thNr:'#',thCall:'Callsign',thWwl:'WWL',thMode:'Mode',thBand:'Band',
+  thRst:'RST',thNrQ:'Nr',thKm:'km',thBrg:'°',thUtc:'UTC',thDel:'',
+  xhHist:'Hist.:',xhSim:'Similar:',xhNone:'Not in DB',
+  btnCont:'▶ Resume',btnDel:'✕',
+  resuming:'Resuming log',
+  btnSaveEdit:'✓ Save correction',
+  btnCancelEdit:'✕ Cancel',
+  editBadge:'✎ Editing',
+  lblUtcDate:'UTC date:',
+  lblUtcTime:'UTC time:',
+  lblClub:'Club (EDI PClub)',
+  errStorageFull:'Save failed — local storage full',
+  ariaTheme:'Toggle theme',
+  ariaDelLog:'Delete log',
+  ariaDelQso:'Delete QSO',
+}};
+let _lang = localStorage.getItem('vhf-lang')||'sl';
+function t(k, vars){
+  let s = (S[_lang]||S.sl)[k]||(S.sl[k]||k);
+  if(vars) for(const[key,val] of Object.entries(vars)) s=s.split('${'+key+'}').join(val);
+  return s;
+}
+function setLang(l){
+  _lang=l; localStorage.setItem('vhf-lang',l);
+  document.getElementById('btnSL').classList.toggle('active',l==='sl');
+  document.getElementById('btnEN').classList.toggle('active',l==='en');
+  document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));
+  renderHome(); if(_current) { renderBandTabs(); renderTable(); renderStats(); }
+}
+
+// ════════════════════════════════════════
+//  BAND CONFIG
+// ════════════════════════════════════════
+const BAND_MAP = [
+  [/50\s*MHz|^6m$/i,                                      '6m'    ],
+  [/70\s*MHz|^4m$/i,                                      '4m'    ],
+  [/144|145|^2m$/i,                                       '2m'    ],
+  [/432|430|^70\s*cm$/i,                                  '70cm'  ],
+  [/1[,.]2[0-9]*\s*GHz|1[,.]3[0-9]*\s*GHz|1296|^23\s*cm$/i,'23cm'],
+  [/2[,.]3[0-9]*\s*GHz|2320|^13\s*cm$/i,                 '13cm'  ],
+  [/3[,.]4[0-9]*\s*GHz|3400|^9\s*cm$/i,                  '9cm'   ],
+  [/5[,.]7[0-9]*\s*GHz|5760|^6\s*cm$/i,                  '6cm'   ],
+  [/^10\s*GHz|10[,.]3[0-9]*\s*GHz|10368|^3\s*cm$/i,     '3cm'   ],
+  [/24\s*GHz|24048|1[,.]25?\s*cm/i,                       '1.25cm'],
+  [/47\s*GHz/i,                                            '6mm'  ],
+];
+function normBand(s){ if(!s) return ''; for(const[re,b] of BAND_MAP) if(re.test(s.trim())) return b; return s.trim(); }
+
+const BAND_OPTS = [
+  {band:'6m',  freq:'50.150',   edi:'50 MHz'    },
+  {band:'4m',  freq:'70.200',   edi:'70 MHz'    },
+  {band:'2m',  freq:'144.300',  edi:'144 MHz'   },
+  {band:'70cm',freq:'432.200',  edi:'432 MHz'   },
+  {band:'23cm',freq:'1296.200', edi:'1296 MHz'  },
+  {band:'13cm',freq:'2320.100', edi:'2320 MHz'  },
+  {band:'9cm', freq:'3400.100', edi:'3400 MHz'  },
+  {band:'6cm', freq:'5760.100', edi:'5760 MHz'  },
+  {band:'3cm', freq:'10368.100',edi:'10368 MHz' },
+  {band:'1.25cm',freq:'24048.100',edi:'24048 MHz'},
+  {band:'6mm', freq:'47000.100',edi:'47000 MHz' },
+];
+
+// ════════════════════════════════════════
+//  GEO UTILITIES
+// ════════════════════════════════════════
+function locToLatLon(loc){
+  if(!loc || !/^[A-R]{2}[0-9]{2}[A-X]{2}$/i.test(loc)) return null;
+  const s = loc.toUpperCase();
+  const lon = (s.charCodeAt(0)-65)*20 + (s.charCodeAt(2)-48)*2 + (s.charCodeAt(4)-65)*5/60 + 2.5/60 - 180;
+  const lat = (s.charCodeAt(1)-65)*10 + (s.charCodeAt(3)-48)   + (s.charCodeAt(5)-65)*2.5/60 + 1.25/60 - 90;
+  return {lat, lon};
+}
+function haversine(la1,lo1,la2,lo2){
+  const R=6371, dL=(la2-la1)*Math.PI/180, dO=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dL/2)**2 + Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dO/2)**2;
+  return Math.round(R*2*Math.asin(Math.sqrt(a)));
+}
+function calcBearing(la1,lo1,la2,lo2){
+  const dO=(lo2-lo1)*Math.PI/180;
+  const y=Math.sin(dO)*Math.cos(la2*Math.PI/180);
+  const x=Math.cos(la1*Math.PI/180)*Math.sin(la2*Math.PI/180)-Math.sin(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.cos(dO);
+  return Math.round((Math.atan2(y,x)*180/Math.PI+360)%360);
+}
+
+// ════════════════════════════════════════
+//  UTILITIES
+// ════════════════════════════════════════
+function htmlEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function baseCall(c){
+  const u=c.toUpperCase(), i=u.lastIndexOf('/');
+  if(i<=0) return u;
+  return /\d/.test(u.slice(0,i)) ? u.slice(0,i) : u;
+}
+function levenshtein(a,b,mx){
+  const na=a.length,nb=b.length;
+  if(Math.abs(na-nb)>mx) return mx+1;
+  let prev=Array.from({length:nb+1},(_,i)=>i);
+  for(let i=1;i<=na;i++){
+    const cur=[i]; let rm=i;
+    for(let j=1;j<=nb;j++){
+      const v=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+      cur.push(v); if(v<rm) rm=v;
+    }
+    if(rm>mx) return mx+1; prev=cur;
+  }
+  return prev[nb];
+}
+function genId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+let _toastT=null, _xhintT=null;
+function debouncedXhint(call){ clearTimeout(_xhintT); _xhintT=setTimeout(()=>updateXhint(call),150); }
+function showToast(msg,err=false){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className='show'+(err?' err':'');
+  clearTimeout(_toastT); _toastT=setTimeout(()=>el.className='',2800);
+}
+function dl(content,name,type='text/plain'){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type}));
+  a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
+// ════════════════════════════════════════
+//  CROSSCHECK / BASELINE
+// ════════════════════════════════════════
+const _histDB = new Map();
+let _baselineCalls=0, _baselineVer='', _baselineRaw=null;
+const BASELINE_WEIGHT=3;
+
+function applyBaseline(json){
+  if(!json||!json.c) return;
+  let cnt=0;
+  for(const call of Object.keys(json.c)){
+    cnt++;
+    if(!_histDB.has(call)) _histDB.set(call,{locators:new Map(),locatorsRaw:new Map(),total:0,totalRaw:0});
+    const e=_histDB.get(call);
+    for(const idxStr of Object.keys(json.c[call])){
+      for(const li of json.c[call][idxStr]){
+        const loc=li[0].toUpperCase(), raw=li[1], w=raw*BASELINE_WEIGHT;
+        e.total+=w; e.totalRaw+=raw;
+        e.locators.set(loc,(e.locators.get(loc)||0)+w);
+        e.locatorsRaw.set(loc,(e.locatorsRaw.get(loc)||0)+raw);
+      }
+    }
+  }
+  _baselineCalls=cnt; _baselineVer=json.v||'';
+}
+
+async function loadBaseline(){
+  try{
+    const r=await fetch('./crosscheck-baseline.json');
+    if(!r.ok) return;
+    const j=await r.json();
+    _baselineRaw=j; applyBaseline(j);
+    const tag=document.getElementById('homeBaseTag');
+    tag.textContent=t('baseLineShort',{n:_baselineCalls});
+    tag.style.display='';
+  } catch(e){}
+}
+
+function getModeLocRaw(entry){
+  if(!entry||!entry.locatorsRaw.size) return null;
+  const s=[...entry.locatorsRaw.entries()].sort((a,b)=>b[1]-a[1]);
+  return {loc:s[0][0],count:s[0][1],total:entry.totalRaw};
+}
+
+function lookupCall(call){
+  const base=baseCall(call.toUpperCase());
+  const e=_histDB.get(base);
+  if(e&&e.totalRaw>0){
+    const ml=getModeLocRaw(e);
+    return {found:true,modeLoc:ml?.loc||'',modeCount:ml?.count||0,total:e.totalRaw};
+  }
+  const similar=[];
+  for(const[k,ev] of _histDB){
+    const d=levenshtein(base,k,2);
+    if(d>0&&d<=2){
+      const ml=getModeLocRaw(ev);
+      similar.push({call:k,dist:d,total:ev.totalRaw,modeLoc:ml?.loc||''});
+    }
+  }
+  similar.sort((a,b)=>a.dist-b.dist||b.total-a.total);
+  return {found:false,similar:similar.slice(0,3)};
+}
+
+function searchCalls(prefix){
+  if(!prefix||prefix.length<2) return [];
+  const p=prefix.toUpperCase();
+  const res=[];
+  for(const[call,e] of _histDB){
+    if(call.startsWith(p)){
+      const ml=getModeLocRaw(e);
+      res.push({call,total:e.totalRaw,modeLoc:ml?.loc||''});
+    }
+  }
+  res.sort((a,b)=>b.total-a.total);
+  return res.slice(0,6);
+}
+
+// ════════════════════════════════════════
+//  STATE + PERSISTENCE
+// ════════════════════════════════════════
+const STORE='vhf-logger-v1';
+let _sessions=[], _current=null, _clockId=null, _editingQso=null;
+let _acItems=[], _acIdx=-1, _bandRowN=0;
+
+function loadSessions(){ try{ _sessions=JSON.parse(localStorage.getItem(STORE)||'[]'); } catch{ _sessions=[]; } }
+function saveSessions(){
+  try{ localStorage.setItem(STORE,JSON.stringify(_sessions)); }
+  catch(e){ showToast(t('errStorageFull'),true); }
+}
+function syncCurrent(){
+  if(!_current) return;
+  _current.modified=Date.now();
+  const i=_sessions.findIndex(s=>s.id===_current.id);
+  if(i>=0) _sessions[i]=_current; else _sessions.push(_current);
+  saveSessions();
+}
+
+// ════════════════════════════════════════
+//  CLOCK
+// ════════════════════════════════════════
+function tickClock(){
+  const n=new Date();
+  const u=`${String(n.getUTCHours()).padStart(2,'0')}:${String(n.getUTCMinutes()).padStart(2,'0')}`;
+  const l=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  if(!_editingQso){
+    const ud=document.getElementById('utcDisp'), ld=document.getElementById('localDisp');
+    if(ud) ud.textContent=u;
+    if(ld) ld.textContent=l;
+  }
+}
+
+// ════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function showHome(){
+  if(_clockId){ clearInterval(_clockId); _clockId=null; }
+  _current=null;
+  document.getElementById('hdrInfo').innerHTML='';
+  renderHome();
+  showScreen('screen-home');
+}
+
+function showSetup(){
+  _bandRowN=0;
+  document.getElementById('bandRows').innerHTML='';
+  document.getElementById('fMyCall').value='';
+  document.getElementById('fMyLoc').value='';
+  document.getElementById('fContest').value='';
+  document.getElementById('fOperator').value='';
+  document.getElementById('fClub').value='';
+  document.getElementById('setupTitle').textContent=t('setupNew');
+  addBandRow({band:'70cm'});
+  showScreen('screen-setup');
+}
+
+function showLogger(session){
+  _current=session;
+  document.getElementById('hdrInfo').innerHTML=
+    `<span class="hdr-call">${htmlEsc(session.myCall)}</span>`+
+    `<span>${htmlEsc(session.myLoc)}</span>`+
+    `<span style="color:var(--dim)">${htmlEsc(session.contest)}</span>`;
+  renderBandTabs();
+  renderStats();
+  renderTable();
+  updateNrS();
+  resetForm();
+  tickClock();
+  if(_clockId) clearInterval(_clockId);
+  _clockId=setInterval(tickClock,5000);
+  showScreen('screen-logger');
+}
+
+function pauseSession(){
+  syncCurrent();
+  showToast(t('toastPaused'));
+  showHome();
+}
+
+// ════════════════════════════════════════
+//  HOME SCREEN
+// ════════════════════════════════════════
+function renderHome(){
+  const el=document.getElementById('logList');
+  document.querySelectorAll('[data-i18n]').forEach(e=>e.textContent=t(e.dataset.i18n));
+  if(_sessions.length===0){
+    el.innerHTML=`<div class="empty-state"><div class="empty-ico">📡</div>`+
+      `<div class="empty-title">${htmlEsc(t('noLogs'))}</div>`+
+      `<div class="empty-sub">${htmlEsc(t('noLogsSub'))}</div></div>`;
+    return;
+  }
+  el.innerHTML=[..._sessions].reverse().map(s=>{
+    const bStats={};
+    for(const q of s.qsos){
+      if(!bStats[q.band]) bStats[q.band]={qso:0,km:0};
+      bStats[q.band].qso++; bStats[q.band].km+=q.qrb||0;
+    }
+    const chips=Object.entries(bStats).map(([b,st])=>
+      `<span class="bchip"><b>${htmlEsc(b)}</b> <span class="bc">${st.qso}</span> `+
+      `<span class="bk">${Math.round(st.km).toLocaleString()}km</span></span>`
+    ).join('');
+    const mod=new Date(s.modified).toLocaleDateString(_lang==='sl'?'sl-SI':'en-GB');
+    return `<div class="log-card">
+      <div class="lc-title"><span class="lc-call">${htmlEsc(s.myCall)}</span><span>${htmlEsc(s.contest)}</span></div>
+      <div class="lc-meta"><span>${htmlEsc(s.myLoc)}</span><span>${mod}</span><span>${s.qsos.length} QSO</span></div>
+      <div class="lc-bands">${chips||'—'}</div>
+      <div class="lc-act">
+        <button class="btn btn-primary btn-sm" onclick="resumeSession('${s.id}')">${t('btnCont')}</button>
+        <button class="btn btn-secondary btn-sm" onclick="showExportFor('${s.id}')">⬇ EDI</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSession('${s.id}')" aria-label="${t('ariaDelLog')} ${htmlEsc(s.myCall)}">${t('btnDel')}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function resumeSession(id){
+  const s=_sessions.find(x=>x.id===id);
+  if(!s) return;
+  showLogger(s);
+}
+
+function deleteSession(id){
+  const s=_sessions.find(x=>x.id===id);
+  if(!s) return;
+  if(!confirm(t('confirmDelLog',{name:s.myCall+' — '+s.contest}))) return;
+  _sessions=_sessions.filter(x=>x.id!==id);
+  saveSessions(); renderHome();
+  showToast(t('toastDelLog'));
+}
+
+// ════════════════════════════════════════
+//  SETUP SCREEN
+// ════════════════════════════════════════
+function addBandRow(def={}){
+  _bandRowN++;
+  const rowId=_bandRowN;
+  const opts=BAND_OPTS.map(o=>`<option value="${o.band}"${o.band===def.band?' selected':''}>${htmlEsc(o.band)}</option>`).join('');
+  const defOpt=BAND_OPTS.find(o=>o.band===def.band)||BAND_OPTS[3];
+  const row=document.createElement('div');
+  row.className='brow'; row.dataset.rid=rowId;
+  row.innerHTML=
+    `<span class="brow-idx">${rowId}</span>`+
+    `<select class="bsel" onchange="onBandSel(this,${rowId})">${opts}</select>`+
+    `<input class="inp-sm" placeholder="${t('bandFreqPh')}" value="${def.freq||defOpt.freq}">`+
+    `<input class="inp-sm" type="number" placeholder="${t('bandPwrPh')}" value="${def.power||100}" min="1" max="9999">`+
+    `<input class="inp-sm" placeholder="${t('bandAntPh')}" value="${htmlEsc(def.antenna||'')}">`+
+    `<button class="btn btn-danger btn-sm" onclick="removeBandRow(${rowId})" style="padding:0;width:22px;min-height:22px;font-size:10px">✕</button>`;
+  document.getElementById('bandRows').appendChild(row);
+}
+
+function onBandSel(sel,rowId){
+  const row=document.querySelector(`.brow[data-rid="${rowId}"]`);
+  if(!row) return;
+  const opt=BAND_OPTS.find(o=>o.band===sel.value);
+  if(opt) row.querySelectorAll('input')[0].value=opt.freq;
+}
+
+function removeBandRow(rowId){
+  const row=document.querySelector(`.brow[data-rid="${rowId}"]`);
+  if(row) row.remove();
+}
+
+function collectSetup(){
+  const myCall=document.getElementById('fMyCall').value.trim().toUpperCase();
+  const myLoc=document.getElementById('fMyLoc').value.trim().toUpperCase();
+  const contest=document.getElementById('fContest').value.trim();
+  const operator=document.getElementById('fOperator').value.trim().toUpperCase()||myCall;
+  const club=document.getElementById('fClub').value.trim().toUpperCase();
+  if(!myCall){ showToast(t('errNoMyCall'),true); return null; }
+  if(!/^[A-R]{2}[0-9]{2}[A-X]{2}$/i.test(myLoc)){ showToast(t('errNoMyLoc'),true); return null; }
+  if(!contest){ showToast(t('errNoContest'),true); return null; }
+  const bands=[];
+  for(const row of document.querySelectorAll('.brow')){
+    const sel=row.querySelector('select');
+    const [fInp,pInp,aInp]=row.querySelectorAll('input');
+    if(sel&&sel.value) bands.push({band:sel.value,freq:fInp.value.trim(),power:parseInt(pInp.value)||100,antenna:aInp.value.trim()});
+  }
+  if(bands.length===0){ showToast(t('errNoBand'),true); return null; }
+  return {myCall,myLoc,contest,operator,club,bands};
+}
+
+function startSession(){
+  const cfg=collectSetup();
+  if(!cfg) return;
+  const session={
+    id:genId(),
+    contest:cfg.contest,
+    myCall:cfg.myCall,
+    myLoc:cfg.myLoc,
+    operator:cfg.operator,
+    club:cfg.club,
+    created:Date.now(),
+    modified:Date.now(),
+    activeBand:cfg.bands[0].band,
+    bands:cfg.bands,
+    qsos:[],
+  };
+  _sessions.push(session);
+  saveSessions();
+  showLogger(session);
+}
+
+// ════════════════════════════════════════
+//  LOGGER CORE
+// ════════════════════════════════════════
+function nextSerial(band){
+  if(!_current) return 1;
+  const used=_current.qsos.filter(q=>q.band===band).map(q=>q.nrS);
+  return used.length===0 ? 1 : Math.max(...used)+1;
+}
+function isDupe(call,band,excludeId){
+  if(!_current) return false;
+  const bc=baseCall(call);
+  return _current.qsos.some(q=>q.band===band&&baseCall(q.call)===bc&&q._id!==excludeId);
+}
+function recalcDupes(){
+  if(!_current) return;
+  const seen=new Map();
+  for(const q of _current.qsos){
+    if(!seen.has(q.band)) seen.set(q.band,new Set());
+    const bc=baseCall(q.call);
+    q.dupe=seen.get(q.band).has(bc);
+    seen.get(q.band).add(bc);
+  }
+}
+function updateNrS(){
+  const el=document.getElementById('inNrS');
+  if(el&&_current) el.textContent=String(nextSerial(_current.activeBand)).padStart(3,'0');
+}
+
+function switchBand(band){
+  if(!_current) return;
+  _current.activeBand=band;
+  renderBandTabs();
+  updateNrS();
+  resetForm();
+  renderTable();
+}
+
+function renderBandTabs(){
+  if(!_current) return;
+  const el=document.getElementById('bandTabs');
+  el.innerHTML=_current.bands.map(b=>{
+    const n=_current.qsos.filter(q=>q.band===b.band).length;
+    const active=b.band===_current.activeBand;
+    return `<button class="btab${active?' active':''}" onclick="switchBand('${b.band}')">${htmlEsc(b.band)}<span class="tn">${n}</span></button>`;
+  }).join('');
+}
+
+function renderStats(){
+  if(!_current) return;
+  const qsos=_current.qsos;
+  const totalQso=qsos.length;
+  const totalKm=qsos.reduce((s,q)=>s+(q.qrb||0),0);
+  const squares=new Set(qsos.filter(q=>q.wwl&&q.wwl.length===6).map(q=>q.wwl.slice(0,4).toUpperCase())).size;
+  const maxKm=qsos.reduce((m,q)=>Math.max(m,q.qrb||0),0);
+  document.getElementById('stQso').textContent=totalQso;
+  document.getElementById('stKm').textContent=Math.round(totalKm).toLocaleString();
+  document.getElementById('stSq').textContent=squares;
+  document.getElementById('stODX').textContent=maxKm>0?Math.round(maxKm).toLocaleString():'—';
+}
+
+function renderTable(){
+  if(!_current) return;
+  const filt=document.getElementById('tblFilt');
+  // rebuild band filter options
+  const bands=[..._current.bands.map(b=>b.band)];
+  const curFilt=filt.value;
+  filt.innerHTML=`<option value="">${t('fAllBands')}</option>`+
+    bands.map(b=>`<option value="${b}"${b===curFilt?' selected':''}>${htmlEsc(b)}</option>`).join('');
+  filt.value=curFilt;
+
+  const activeBand=filt.value;
+  const pool=activeBand ? _current.qsos.filter(q=>q.band===activeBand) : _current.qsos;
+  const rows=[...pool]; // chronological: newest at bottom (chat-style)
+
+  document.getElementById('tHead').innerHTML=
+    `<th>${t('thNr')}</th><th>${t('thCall')}</th><th>${t('thWwl')}</th>`+
+    `<th>${t('thMode')}</th><th>${t('thBand')}</th><th>${t('thKm')}</th>`+
+    `<th>${t('thBrg')}</th><th>${t('thRst')}</th><th>${t('thNrQ')}</th><th>${t('thUtc')}</th><th>${t('thDel')}</th>`;
+
+  document.getElementById('tBody').innerHTML=rows.map(q=>{
+    const isEditing=_editingQso&&_editingQso._id===q._id;
+    const cls=(q.dupe?'is-dup ':'')+((q.xFlags&&q.xFlags.length)?'is-xf ':'')+( isEditing?'editing':'');
+    const mdCls=q.mode==='CW'?'cw':q.mode==='FM'?'fm':'ssb';
+    const dupBadge=q.dupe?`<span class="mdg mdg-dup">DUP</span>`:'';
+    const xBadge=(q.xFlags&&q.xFlags.length)?`<span class="mdg mdg-x">!</span>`:'';
+    const utc=`${q.utcDate.slice(6)}/${q.utcDate.slice(4,6)} ${q.utcTime.slice(0,2)}:${q.utcTime.slice(2)}`;
+    return `<tr class="${cls}" data-qid="${q._id}">
+      <td class="num">${q.nrS}</td>
+      <td class="call">${htmlEsc(q.call)}${dupBadge}${xBadge}</td>
+      <td class="loc">${htmlEsc(q.wwl||'—')}</td>
+      <td><span class="mdg mdg-${mdCls}">${htmlEsc(q.mode)}</span></td>
+      <td>${htmlEsc(q.band)}</td>
+      <td class="km">${q.qrb?Math.round(q.qrb).toLocaleString():'—'}</td>
+      <td class="num">${q.brg!==null&&q.brg!==undefined?q.brg+'°':'—'}</td>
+      <td class="num">${htmlEsc(q.rstS)}/${htmlEsc(q.rstR)}</td>
+      <td class="num">${String(q.nrS).padStart(3,'0')}/${String(q.nrR||0).padStart(3,'0')}</td>
+      <td class="num" style="color:var(--dim);font-size:10px">${htmlEsc(utc)}</td>
+      <td><button class="btn-del" onclick="event.stopPropagation();deleteQso('${q._id}')" aria-label="${t('ariaDelQso')} ${htmlEsc(q.call)}" title="${t('ariaDelQso')} ${htmlEsc(q.call)}">✕</button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('tblCnt').textContent=`${rows.length} QSO`;
+}
+function scrollTableBottom(){
+  const w=document.getElementById('tblWrap');
+  if(w) w.scrollTop=w.scrollHeight;
+}
+
+// ════════════════════════════════════════
+//  QSO EDITING
+// ════════════════════════════════════════
+function editQso(qsoId){
+  if(!_current) return;
+  const q=_current.qsos.find(x=>x._id===qsoId);
+  if(!q) return;
+  _editingQso=q;
+  document.getElementById('inCall').value=q.call;
+  document.getElementById('inWwl').value=q.wwl||'';
+  document.getElementById('inMode').value=q.mode||'SSB';
+  document.getElementById('inRstS').value=q.rstS||'59';
+  document.getElementById('inRstR').value=q.rstR||'59';
+  document.getElementById('inNrR').value=q.nrR||'';
+  // Switch info row: hide live clock, show editable UTC fields
+  document.getElementById('clockRow').style.display='none';
+  document.getElementById('editTimeRow').style.display='flex';
+  document.getElementById('editUtcDate').value=q.utcDate||'';
+  const tt=q.utcTime||'0000';
+  document.getElementById('editUtcTime').value=tt.slice(0,2)+':'+tt.slice(2);
+  // Show own serial in Nr↑ field instead of next-serial
+  const nrEl=document.getElementById('inNrS');
+  if(nrEl) nrEl.textContent='#'+q.nrS;
+  // Show edit bar and rename button
+  document.getElementById('editBar').style.display='';
+  document.getElementById('editBadge').textContent=t('editBadge')+' #'+q.nrS+' '+q.call;
+  const btn=document.querySelector('[data-i18n="btnLog"]');
+  if(btn){ btn.textContent=t('btnSaveEdit'); btn.dataset.i18n='btnSaveEdit'; }
+  renderTable();
+  updateXhint(q.call); updateLocHint(); checkDupeField();
+  document.getElementById('inCall').focus();
+}
+
+function cancelEdit(){
+  _editingQso=null;
+  document.getElementById('editBar').style.display='none';
+  document.getElementById('clockRow').style.display='flex';
+  document.getElementById('editTimeRow').style.display='none';
+  const btn=document.querySelector('[data-i18n="btnSaveEdit"]');
+  if(btn){ btn.textContent=t('btnLog'); btn.dataset.i18n='btnLog'; }
+  resetForm();
+  renderTable();
+}
+
+function saveEditedQso(){
+  const call=document.getElementById('inCall').value.trim().toUpperCase();
+  if(!call){ showToast(t('errNoCall'),true); return; }
+  const wwlRaw=document.getElementById('inWwl').value.trim().toUpperCase();
+  const wwl=wwlRaw.length===6 ? wwlRaw.slice(0,4)+wwlRaw.slice(4).toLowerCase() : wwlRaw;
+  const myPos=locToLatLon(_current.myLoc);
+  const thPos=locToLatLon(wwl);
+  const qrb=(myPos&&thPos)?haversine(myPos.lat,myPos.lon,thPos.lat,thPos.lon):(_editingQso.qrb||0);
+  const brg=(myPos&&thPos)?calcBearing(myPos.lat,myPos.lon,thPos.lat,thPos.lon):_editingQso.brg;
+  const rawDate=document.getElementById('editUtcDate').value.trim().replace(/\D/g,'')||_editingQso.utcDate;
+  const rawTime=document.getElementById('editUtcTime').value.trim().replace(/\D/g,'')||_editingQso.utcTime;
+  const utcDate=rawDate.slice(0,8).padEnd(8,'0');
+  const utcTime=rawTime.slice(0,4).padEnd(4,'0');
+  const mode=document.getElementById('inMode').value;
+  const xFlags=[];
+  if(_baselineCalls>0&&wwl.length===6){
+    const lk=lookupCall(call);
+    if(lk.found&&lk.modeLoc&&lk.modeLoc!==wwl.toUpperCase()){
+      xFlags.push({type:'LOC_MISMATCH',histLoc:lk.modeLoc});
+    } else if(!lk.found&&lk.similar&&lk.similar.length){
+      xFlags.push({type:'CALL_SIMILAR',similar:lk.similar.slice(0,2)});
+    }
+  }
+  Object.assign(_editingQso,{
+    call, wwl, mode,
+    rstS:document.getElementById('inRstS').value||(mode==='CW'?'599':'59'),
+    rstR:document.getElementById('inRstR').value||(mode==='CW'?'599':'59'),
+    nrR:parseInt(document.getElementById('inNrR').value)||0,
+    utcDate, utcTime, qrb, brg, xFlags,
+  });
+  recalcDupes();
+  const saved=_editingQso;
+  _editingQso=null;
+  syncCurrent();
+  document.getElementById('editBar').style.display='none';
+  document.getElementById('clockRow').style.display='flex';
+  document.getElementById('editTimeRow').style.display='none';
+  const btn=document.querySelector('[data-i18n="btnSaveEdit"]');
+  if(btn){ btn.textContent=t('btnLog'); btn.dataset.i18n='btnLog'; }
+  renderTable(); renderStats();
+  showToast(t('toastEdited'));
+  // Scroll to the edited row
+  const row=document.querySelector(`tr[data-qid="${saved._id}"]`);
+  if(row) row.scrollIntoView({block:'nearest'});
+  resetForm();
+}
+
+// Row click → edit (set up once after page load)
+function setupTableClickHandler(){
+  document.getElementById('tBody').addEventListener('click',function(e){
+    if(e.target.closest('.btn-del')) return;
+    const row=e.target.closest('tr[data-qid]');
+    if(row) editQso(row.dataset.qid);
+  });
+}
+
+function deleteQso(id){
+  if(!_current) return;
+  const q=_current.qsos.find(x=>x._id===id);
+  if(!q) return;
+  if(!confirm(t('confirmDelQso',{call:q.call}))) return;
+  if(_editingQso&&_editingQso._id===id) cancelEdit();
+  _current.qsos=_current.qsos.filter(x=>x._id!==id);
+  recalcDupes();
+  syncCurrent(); renderTable(); renderStats(); renderBandTabs(); updateNrS();
+  showToast(t('toastDelQso'));
+}
+
+// ════════════════════════════════════════
+//  QSO FORM
+// ════════════════════════════════════════
+let _acCallLookup=null; // cached lookup result for current call
+
+function onCallInput(){
+  const v=document.getElementById('inCall').value.toUpperCase();
+  document.getElementById('inCall').value=v;
+  _acIdx=-1;
+  const items=_baselineCalls>0 ? searchCalls(v) : [];
+  _acItems=items;
+  renderAc(items);
+  _acCallLookup=null;
+  updateLocHint();
+  debouncedXhint(v);
+  checkDupeField();
+}
+
+function renderAc(items){
+  const drop=document.getElementById('acDrop');
+  if(!items.length){ drop.className='acdrop'; return; }
+  drop.innerHTML=items.map((it,i)=>
+    `<div class="aci" data-i="${i}" onclick="selectAc(${i})">
+       <span class="aci-call">${htmlEsc(it.call)}</span>
+       <span class="aci-loc">${htmlEsc(it.modeLoc.slice(0,4)+(it.modeLoc.length===6?it.modeLoc.slice(4).toLowerCase():''))}</span>
+       <span class="aci-cnt">×${it.total}</span>
+     </div>`
+  ).join('');
+  drop.className='acdrop open';
+}
+
+function selectAc(i){
+  if(i<0||i>=_acItems.length) return;
+  const it=_acItems[i];
+  document.getElementById('inCall').value=it.call;
+  document.getElementById('acDrop').className='acdrop';
+  _acItems=[]; _acIdx=-1;
+  _acCallLookup={found:true,modeLoc:it.modeLoc,modeCount:it.total,total:it.total};
+  updateLocHint(); updateXhint(it.call); checkDupeField();
+  document.getElementById('inWwl').focus();
+}
+
+function onCallKey(e){
+  const drop=document.getElementById('acDrop');
+  if(!drop.classList.contains('open')){
+    if(e.key==='Tab'||e.key==='Enter'){ e.preventDefault(); document.getElementById('inWwl').focus(); }
+    return;
+  }
+  if(e.key==='ArrowDown'){ e.preventDefault(); _acIdx=Math.min(_acIdx+1,_acItems.length-1); highlightAc(); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); _acIdx=Math.max(_acIdx-1,-1); highlightAc(); }
+  else if(e.key==='Enter'||e.key==='Tab'){
+    e.preventDefault();
+    if(_acIdx>=0) selectAc(_acIdx);
+    else { drop.className='acdrop'; document.getElementById('inWwl').focus(); }
+  } else if(e.key==='Escape'){ drop.className='acdrop'; }
+}
+
+function highlightAc(){
+  document.querySelectorAll('.aci').forEach((el,i)=>el.classList.toggle('hi',i===_acIdx));
+}
+
+function updateLocHint(){
+  if(!_current) return;
+  const call=document.getElementById('inCall').value.trim().toUpperCase();
+  const hint=document.getElementById('locHint');
+  if(!call||_baselineCalls===0){ hint.className='loc-hint'; return; }
+  const lk=_acCallLookup||(lookupCall(call));
+  if(lk.found&&lk.modeLoc){
+    const locDisp=lk.modeLoc.slice(0,4)+(lk.modeLoc.length===6?lk.modeLoc.slice(4).toLowerCase():'');
+    document.getElementById('lhVal').textContent=locDisp;
+    document.getElementById('lhCnt').textContent='×'+lk.total;
+    hint.className='loc-hint show';
+  } else {
+    hint.className='loc-hint';
+  }
+}
+
+function calcAzimuth(locStr){
+  if(!_current||!locStr||locStr.length<6) return null;
+  const my=locToLatLon(_current.myLoc);
+  const th=locToLatLon(locStr);
+  if(!my||!th) return null;
+  return calcBearing(my.lat,my.lon,th.lat,th.lon);
+}
+
+function updateXhint(call){
+  const el=document.getElementById('xhint');
+  const row=document.getElementById('xhRow');
+  const wwlNow=document.getElementById('inWwl').value.trim();
+  const hasWwl=wwlNow.length===6;
+  const hasBL=_baselineCalls>0;
+
+  if(!call){ el.className='xhint'; return; }
+
+  const lk=hasBL ? lookupCall(call) : {found:false,similar:[]};
+  const parts=[];
+
+  // ── call history ──
+  if(hasBL){
+    if(lk.found){
+      const ld=lk.modeLoc.slice(0,4)+(lk.modeLoc.length===6?lk.modeLoc.slice(4).toLowerCase():'');
+      parts.push(`<span class="xh-lbl">${t('xhHist')}</span>`+
+        `<span class="xh-val">${htmlEsc(ld)}</span>`+
+        `<span class="xbadge xb-ok">×${lk.total}</span>`);
+    } else if(lk.similar&&lk.similar.length){
+      const sim=lk.similar.slice(0,2).map(s=>`<span class="xbadge xb-warn">${htmlEsc(s.call)}</span>`).join(' ');
+      parts.push(`<span class="xh-lbl">${t('xhSim')}</span>${sim}`);
+    } else if(call.length>=3){
+      parts.push(`<span class="xbadge xb-dim">${t('xhNone')}</span>`);
+    }
+  }
+
+  // ── azimuth ──
+  if(hasWwl){
+    // confirmed azimuth from entered locator (green)
+    const az=calcAzimuth(wwlNow);
+    if(az!==null) parts.push(`<span class="xbadge xb-ok" style="font-size:.8rem;padding:2px 7px">⟹ ${az}°</span>`);
+  } else if(lk.found&&lk.modeLoc){
+    // approximate azimuth from baseline (muted)
+    const az=calcAzimuth(lk.modeLoc);
+    if(az!==null) parts.push(`<span class="xbadge xb-dim" style="font-size:.8rem;padding:2px 7px">~ ${az}°</span>`);
+  }
+
+  if(!parts.length){ el.className='xhint'; return; }
+  row.innerHTML=parts.join('<span style="color:var(--border2);margin:0 .25rem">·</span>');
+  el.className='xhint show';
+}
+
+function onWwlInput(){
+  let v=document.getElementById('inWwl').value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+  if(v.length===6) v=v.slice(0,4)+v.slice(4).toLowerCase();
+  document.getElementById('inWwl').value=v;
+  updateWwlColor();
+  checkDupeField();
+  const call=document.getElementById('inCall').value.trim().toUpperCase();
+  if(call) debouncedXhint(call);
+}
+
+function updateWwlColor(){
+  const inp=document.getElementById('inWwl');
+  const wwl=inp.value.toUpperCase();
+  const lk=_acCallLookup;
+  if(!lk||!lk.found||!lk.modeLoc||wwl.length<4){ inp.className='qinp wwl'; return; }
+  if(wwl.length===6){
+    inp.className='qinp wwl '+(wwl===lk.modeLoc?'ok':'warn');
+  } else {
+    inp.className='qinp wwl';
+  }
+}
+
+function onWwlKey(e){
+  if(e.key==='Enter'||e.key==='Tab'){
+    e.preventDefault();
+    document.getElementById('inMode').focus();
+  }
+}
+
+function onModeChange(){
+  const mode=document.getElementById('inMode').value;
+  const def=mode==='CW'?'599':'59';
+  document.getElementById('inRstS').value=def;
+  document.getElementById('inRstR').value=def;
+}
+
+function checkDupeField(){
+  if(!_current) return;
+  const call=document.getElementById('inCall').value.trim().toUpperCase();
+  const dupe=call&&isDupe(call,_current.activeBand,_editingQso?._id);
+  document.getElementById('dupeWarn').className='dupe-warn'+(dupe?' show':'');
+}
+
+function logQso(){
+  if(!_current) return;
+  if(_editingQso){ saveEditedQso(); return; }
+  const call=document.getElementById('inCall').value.trim().toUpperCase();
+  if(!call){ showToast(t('errNoCall'),true); return; }
+  const band=_current.activeBand;
+  const now=new Date();
+  const utcDate=`${now.getUTCFullYear()}${String(now.getUTCMonth()+1).padStart(2,'0')}${String(now.getUTCDate()).padStart(2,'0')}`;
+  const utcTime=`${String(now.getUTCHours()).padStart(2,'0')}${String(now.getUTCMinutes()).padStart(2,'0')}`;
+  const wwlRaw=document.getElementById('inWwl').value.trim().toUpperCase();
+  const wwl=wwlRaw.length===6 ? wwlRaw.slice(0,4)+wwlRaw.slice(4).toLowerCase() : wwlRaw;
+  const myPos=locToLatLon(_current.myLoc);
+  const thPos=locToLatLon(wwl);
+  const qrb=(myPos&&thPos)?haversine(myPos.lat,myPos.lon,thPos.lat,thPos.lon):0;
+  const brg=(myPos&&thPos)?calcBearing(myPos.lat,myPos.lon,thPos.lat,thPos.lon):null;
+  const mode=document.getElementById('inMode').value;
+  const rstS=document.getElementById('inRstS').value||(mode==='CW'?'599':'59');
+  const rstR=document.getElementById('inRstR').value||(mode==='CW'?'599':'59');
+  const nrS=nextSerial(band);
+  const nrR=parseInt(document.getElementById('inNrR').value)||0;
+  const dupe=isDupe(call,band);
+
+  // Crosscheck flags
+  const xFlags=[];
+  if(_baselineCalls>0&&wwl.length===6){
+    const lk=lookupCall(call);
+    if(lk.found&&lk.modeLoc&&lk.modeLoc!==wwl.toUpperCase()){
+      xFlags.push({type:'LOC_MISMATCH',histLoc:lk.modeLoc});
+    } else if(!lk.found&&lk.similar&&lk.similar.length){
+      xFlags.push({type:'CALL_SIMILAR',similar:lk.similar.slice(0,2)});
+    }
+  }
+
+  const qso={
+    _id:genId(),band,mode,call,wwl,rstS,rstR,nrS,nrR,
+    utcDate,utcTime,qrb,brg,dupe,xFlags,
+  };
+  _current.qsos.push(qso);
+  syncCurrent();
+  renderTable(); renderStats(); renderBandTabs(); updateNrS();
+  scrollTableBottom();
+  showToast(t('toastAdded',{nr:nrS,km:qrb?Math.round(qrb).toLocaleString():'?'}));
+  resetForm();
+  document.getElementById('inCall').focus();
+}
+
+function resetForm(){
+  document.getElementById('inCall').value='';
+  document.getElementById('inWwl').value='';
+  document.getElementById('inNrR').value='';
+  document.getElementById('inWwl').className='qinp wwl';
+  document.getElementById('acDrop').className='acdrop';
+  document.getElementById('locHint').className='loc-hint';
+  document.getElementById('xhint').className='xhint';
+  document.getElementById('dupeWarn').className='dupe-warn';
+  _acItems=[]; _acIdx=-1; _acCallLookup=null; _editingQso=null;
+  updateNrS();
+}
+
+// ════════════════════════════════════════
+//  EDI EXPORT
+// ════════════════════════════════════════
+const MODE_NUM={SSB:1,CW:2,FM:6,AM:5,RTTY:7};
+
+function buildEdi(session,band){
+  const bc=session.bands.find(b=>b.band===band)||{};
+  const qsos=session.qsos.filter(q=>q.band===band)
+    .sort((a,b)=>(a.utcDate+a.utcTime)<(b.utcDate+b.utcTime)?-1:1);
+  if(!qsos.length) return null;
+  const opt=BAND_OPTS.find(o=>o.band===band);
+  const ediBand=opt?opt.edi:(bc.freq?bc.freq+' MHz':band);
+  const first=qsos[0];
+  const yymmdd=first.utcDate.slice(2);
+  let out='[REG1TEST]\r\n';
+  out+=`TDate=${yymmdd}\r\nTTime=${first.utcTime}\r\n`;
+  out+=`TCall=${session.myCall}\r\nTLocator=${session.myLoc}\r\n`;
+  out+=`TName=${session.operator||session.myCall}\r\n`;
+  out+=`RName=${session.contest}\r\nRBand=${ediBand}\r\nRAZ=28\r\nRHBBS=\r\n`;
+  out+=`PWWLo=${session.myLoc}\r\nPWWLr=\r\nPCall=${session.myCall}\r\nPBand=${ediBand}\r\n`;
+  out+=`PSect=\r\nPClub=${session.club||''}\r\nRClub=\r\nMOpe1=${session.operator||session.myCall}\r\n`;
+  out+=`PWatt=${bc.power||100}\r\nPAntn=${bc.antenna||''}\r\nSTXEq=\r\nOPEqu=\r\n`;
+  out+='\r\n[Remarks]\r\n\r\n';
+  out+=`[QSORecords ${qsos.length}]\r\n`;
+  for(const q of qsos){
+    const d=q.utcDate.slice(2);
+    const mn=MODE_NUM[q.mode]||1;
+    const ns=String(q.nrS).padStart(3,'0');
+    const nr=String(q.nrR||0).padStart(3,'0');
+    const wwl=(q.wwl||'').toUpperCase();
+    const qrb=Math.round(q.qrb||0);
+    out+=`${d};${q.utcTime};${q.call};${mn};${q.rstS};${ns};${q.rstR};${nr};;${wwl};${qrb};;;${q.dupe?'D':''}\r\n`;
+  }
+  return out;
+}
+
+function showExportModal(){
+  const session=_current;
+  if(!session) return;
+  _showExportFor(session);
+}
+
+function showExportFor(id){
+  const session=_sessions.find(s=>s.id===id);
+  if(!session) return;
+  _showExportFor(session);
+}
+
+function _showExportFor(session){
+  const bands=[...new Set(session.qsos.map(q=>q.band))];
+  if(!bands.length){ showToast(t('errNoBand'),true); return; }
+  const rows=bands.map(b=>{
+    const n=session.qsos.filter(q=>q.band===b).length;
+    const km=session.qsos.filter(q=>q.band===b).reduce((s,q)=>s+(q.qrb||0),0);
+    return `<div class="exp-row">
+      <span class="exp-band">${htmlEsc(b)}</span>
+      <span class="exp-info">${t('expBandInfo',{n,km:Math.round(km).toLocaleString()})}</span>
+      <button class="btn btn-primary btn-sm" style="margin-left:auto"
+        onclick="_exportBand('${session.id}','${b}')">⬇ EDI</button>
+    </div>`;
+  });
+  document.getElementById('exportRows').innerHTML=rows.join('');
+  document.getElementById('exportModal').className='modal-bg open';
+}
+
+function _exportBand(sessionId,band){
+  const session=_sessions.find(s=>s.id===sessionId)||(_current&&_current.id===sessionId?_current:null);
+  if(!session) return;
+  const content=buildEdi(session,band);
+  if(!content){ showToast(t('errNoBand'),true); return; }
+  const slug=`${session.myCall}_${band}_${session.contest}`.replace(/[^\w]/g,'_');
+  dl(content,`${slug}.edi`);
+  closeModal();
+}
+
+function closeModal(){ document.getElementById('exportModal').className='modal-bg'; }
+
+// ════════════════════════════════════════
+//  THEME + INIT
+// ════════════════════════════════════════
+function toggleTheme(){
+  const isLight=document.documentElement.getAttribute('data-theme')==='light';
+  document.documentElement.setAttribute('data-theme',isLight?'':'light');
+  localStorage.setItem('vhf-theme',isLight?'':'light');
+  document.getElementById('btnTheme').textContent=isLight?'☀':'☾';
+}
+
+function init(){
+  const theme=localStorage.getItem('vhf-theme')||'';
+  document.documentElement.setAttribute('data-theme',theme);
+  document.getElementById('btnTheme').textContent=theme==='light'?'☾':'☀';
+  if(_lang==='en'){
+    document.getElementById('btnSL').classList.remove('active');
+    document.getElementById('btnEN').classList.add('active');
+  }
+  document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));
+  loadSessions();
+  renderHome();
+  loadBaseline();
+  setupTableClickHandler();
+}
+
+init();
+</script>
+</body>
+</html>

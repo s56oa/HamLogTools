@@ -13,6 +13,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
+| `vhf-logger.test.js` | `vhf-logger.html` | 77 | 10 |
 
 The sections below document each test file in detail.
 
@@ -24,6 +25,7 @@ The sections below document each test file in detail.
 node --test --test-reporter=spec edi2adif.test.js
 node --test --test-reporter=spec edi-crosscheck.test.js
 node --test --test-reporter=spec adif-qrz-filter.test.js
+node --test --test-reporter=spec vhf-logger.test.js
 ```
 
 Requires **Node.js v18 or later** (`node:test` was stabilised in v18;
@@ -190,6 +192,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
+| `vhf-logger.test.js` | `vhf-logger.html` | 77 | 10 |
 
 Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 
@@ -201,6 +204,7 @@ Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 node --test --test-reporter=spec edi2adif.test.js
 node --test --test-reporter=spec edi-crosscheck.test.js
 node --test --test-reporter=spec adif-qrz-filter.test.js
+node --test --test-reporter=spec vhf-logger.test.js
 ```
 
 Zahteva **Node.js v18 ali novejši** (`node:test` je bil stabiliziran v v18;
@@ -468,6 +472,106 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 ---
 
+## `vhf-logger.test.js` — 77 tests · 10 groups
+
+Covers the pure logic of `vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, and crosscheck lookup.
+
+### How the tests work
+
+`vhf-logger.html` is evaluated inside a `node:vm` context using the same Proxy-based DOM mock as `edi-crosscheck.html`. Because module-level `let _current` is not a ctx property, two helper functions are injected via a second `vm.runInContext` call:
+- `_setCurrentForTest(session)` — sets the active session for dupe-related tests
+- `_getCurrentForTest()` — reads the active session back
+
+### Test groups
+
+#### 1 · `baseCall` (10 tests)
+Verifies suffix stripping used for dupe detection and crosscheck lookup.
+
+- `/P`, `/M`, `/MM`, `/AM`, `/QRP` suffixes stripped from trailing position.
+- Numerical district suffixes (`/1`, `/2`) stripped.
+- Prefix-slash callsigns (`OE/S59DGO`) kept unchanged (heuristic: slash before digit-containing part = suffix, otherwise = prefix).
+- Plain callsigns unchanged; result always uppercased.
+
+#### 2 · `normBand` (10 tests)
+Verifies the band mapping table.
+
+- Canonical band names returned for MHz strings (`144 MHz`, `432 MHz`), wavelength strings (`2m`, `70cm`), and GHz strings (`1.3 GHz`).
+- Empty/unknown input returns `{band:'', freq:''}`.
+- Whitespace trimmed before matching.
+
+#### 3 · `locToLatLon` (7 tests)
+Verifies Maidenhead locator → latitude/longitude conversion.
+
+- `JN65VP` → approx. lat 45.5°N, lon 13.8°E (Ajdovščina area).
+- `IO91wm` → approx. lat 51.3°N, lon -0.1°E (London area).
+- Sub-square letters (3rd pair) converted correctly.
+- Invalid input (wrong length, wrong characters) returns `null`.
+- 4-character locators return `null` (only 6-character supported).
+
+#### 4 · `haversine` (4 tests)
+Verifies great-circle distance calculation.
+
+- `JN65VP` → `JN58UD` ≈ 320 km (±30).
+- Same locator → distance `0`.
+- Result is an integer (floored).
+- Distance is symmetric.
+
+#### 5 · `calcBearing` (5 tests)
+Verifies great-circle bearing calculation.
+
+- Result is in range 0–359.
+- Result is an integer.
+- Due north → 0, due east → 90, due south → 180, due west → 270 (±2° tolerance for sub-square centre offset).
+
+#### 6 · `levenshtein` (7 tests)
+Verifies the Levenshtein distance function with `maxDist=2` early exit.
+
+- Distance 0 for identical strings.
+- Distance 1 for single substitution, insertion, or deletion.
+- Returns `maxDist+1` when length difference alone exceeds `maxDist` (early exit).
+- Handles empty strings correctly.
+
+#### 7 · `isDupe` (7 tests)
+Verifies dupe detection using `baseCall()` normalization and `excludeId`.
+
+- Same call + band → dupe detected.
+- Same base call with `/P` suffix → also detected as dupe.
+- Different band → not a dupe.
+- `excludeId` param prevents false-dupe when checking the QSO being edited.
+- No session (`_current = null`) → always returns `false`.
+
+#### 8 · `recalcDupes` (4 tests)
+Verifies full dupe-flag recalculation across a session.
+
+- First occurrence of a base call per band → `dupe=false`; subsequent → `dupe=true`.
+- `/P` portable call normalizes to base call — counted as dupe of plain base call.
+- Per-band isolation: same call on different bands both get `dupe=false`.
+- After `recalcDupes`, the `_current.qsos` array is mutated in place.
+
+#### 9 · `buildEdi` (17 tests)
+Verifies REG1TEST EDI v1 output format.
+
+- File starts with `[REG1TEST;1]` header.
+- `TName`, `TDate`, `PCall`, `PWWLo`, `PBand`, `PClub`, `MOpe1` headers present and correct.
+- `[QSORecords N]` section present with correct count.
+- QSO line has exactly 14 semicolon-separated fields (col 0–13).
+- Dupe flag at col 13: `D` for duped QSO, empty for normal QSO.
+- `nrS` / `nrR` zero-padded to 3 digits.
+- `WWL` in QSO line is 6 characters uppercase.
+- `PClub` header populated from `session.club`.
+- Modes: `SSB` → `1`, `CW` → `2`, `FM` → `6`.
+
+#### 10 · `lookupCall` (6 tests)
+Verifies crosscheck lookup against the weighted+raw baseline DB.
+
+- Call in baseline → `found=true`, `modeLoc` set to most common locator.
+- `/P` portable → base call looked up correctly.
+- Call not in baseline → `found=false`, `similar` array populated from Levenshtein search.
+- `similar` list sorted by distance ASC, then count DESC.
+- Call completely unknown with no close match → `found=false`, `similar=[]`.
+
+---
+
 ## `edi-crosscheck.test.js` — 56 testov · 8 skupin
 
 Pokriva čisto logiko `edi-crosscheck.html`: odstranjevanje pripon, razdalja urejanja, razčlenjevanje EDI in vse algoritme crosschecka, vključno z nastavljivimi pragovi in predlogi za manjkajoče lokatorje.
@@ -590,6 +694,106 @@ node --test --test-reporter=spec adif-qrz-filter.test.js
 CLI orodje se izvede znotraj konteksta `node:vm`, ki nadomesti `fs`, `https`, `process` in `console`. Čiste funkcije (`parseAdif`, `extractField`, `usesQslBuro`, `loadCache`, `saveCache`) se izvlečejo in testirajo neposredno.
 
 > **Opomba o `deepStrictEqual`:** Tako kot pri testih `edi2adif.html` v vm kontekstu lahko `assert.deepStrictEqual` na vm-ustvarjenih objektih ne uspe, čeprav so lastnosti identične. Testi predpomnilnika zato uporabljajo `assert.equal` na posameznih lastnostih ali `Object.keys().length` za preverjanje praznih objektov.
+
+---
+
+## `vhf-logger.test.js` — 77 testov · 10 skupin
+
+Pokriva čisto logiko `vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI in crosscheck poizvedbe.
+
+### Kako testi delujejo
+
+`vhf-logger.html` se izvede znotraj konteksta `node:vm` z enakim nadomestkom DOM na osnovi Proxy kot `edi-crosscheck.html`. Ker modularni `let _current` ni lastnost ctx, se prek drugega klica `vm.runInContext` vbrizgata dve pomožni funkciji:
+- `_setCurrentForTest(seja)` — nastavi aktivno sejo za teste, ki preverjajo duplikate
+- `_getCurrentForTest()` — prebere aktivno sejo
+
+### Skupine testov
+
+#### 1 · `baseCall` (10 testov)
+Preverja odstranjevanje pripon, ki se uporablja pri zaznavanju duplikatov in crosscheck poizvedbah.
+
+- Pripone `/P`, `/M`, `/MM`, `/AM`, `/QRP` se odstranijo z zadnjega mesta.
+- Številčni sufiksi okrajev (`/1`, `/2`) se odstranijo.
+- Klicni znaki s predponsko poševnico (`OE/S59DGO`) ostanejo nespremenjeni (hevristika: poševnica pred delom s številko = sufiks, sicer = predpona).
+- Navadni klicni znaki nespremenjeni; rezultat je vedno z velikimi črkami.
+
+#### 2 · `normBand` (10 testov)
+Preverja tabelo za mapiranje pasov.
+
+- Kanonska imena pasov se vrnejo za nize MHz (`144 MHz`, `432 MHz`), nize valovnih dolžin (`2m`, `70cm`) in nize GHz (`1.3 GHz`).
+- Prazen/neznan vnos vrne `{band:'', freq:''}`.
+- Beli prostor se obreže pred ujemanjem.
+
+#### 3 · `locToLatLon` (7 testov)
+Preverja pretvorbo Maidenhead lokatorja → zemljepisna širina/dolžina.
+
+- `JN65VP` → pribl. lat 45,5°S, lon 13,8°V (območje Ajdovščine).
+- `IO91wm` → pribl. lat 51,3°S, lon −0,1°V (območje Londona).
+- Podskvadratne črke (3. par) pravilno pretvorjene.
+- Neveljaven vnos (napačna dolžina, napačni znaki) vrne `null`.
+- 4-znakovni lokatorji vrnejo `null` (podprti so samo 6-znakovni).
+
+#### 4 · `haversine` (4 testi)
+Preverja izračun razdalje po velikem krogu.
+
+- `JN65VP` → `JN58UD` ≈ 320 km (±30).
+- Enak lokator → razdalja `0`.
+- Rezultat je celo število (zaokroženo navzdol).
+- Razdalja je simetrična.
+
+#### 5 · `calcBearing` (5 testov)
+Preverja izračun smeri po velikem krogu.
+
+- Rezultat je v obsegu 0–359.
+- Rezultat je celo število.
+- Sever → 0, vzhod → 90, jug → 180, zahod → 270 (toleranca ±2° za odmik sredine podskvadrata).
+
+#### 6 · `levenshtein` (7 testov)
+Preverja funkcijo Levenshteinove razdalje z zgodnjim izhodom pri `maxDist=2`.
+
+- Razdalja 0 za enake nize.
+- Razdalja 1 za eno zamenjavo, vstavljanje ali brisanje.
+- Vrne `maxDist+1`, ko razlika v dolžini sama presega `maxDist` (zgodnji izhod).
+- Pravilno obravnava prazne nize.
+
+#### 7 · `isDupe` (7 testov)
+Preverja zaznavanje duplikatov z normalizacijo `baseCall()` in parametrom `excludeId`.
+
+- Enak klicni znak + pas → duplikat zaznan.
+- Enak bazni klicni znak s pripono `/P` → prav tako zaznan kot duplikat.
+- Različen pas → ni duplikat.
+- Parameter `excludeId` preprečuje lažni duplikat pri preverjanju QSO, ki se ureja.
+- Brez seje (`_current = null`) → vedno vrne `false`.
+
+#### 8 · `recalcDupes` (4 testi)
+Preverja popolni preračun zastavic duplikatov v seji.
+
+- Prva pojavitev baznega klicnega znaka per pas → `dupe=false`; kasnejše → `dupe=true`.
+- Prenosni klicni znak s `/P` se normalizira v bazni — šteje kot duplikat navadnega baznega klicnega znaka.
+- Izolacija po pasovih: enak klicni znak na različnih pasovih oba dobita `dupe=false`.
+- Po `recalcDupes` je polje `_current.qsos` mutirano na mestu.
+
+#### 9 · `buildEdi` (17 testov)
+Preverja izhodni format REG1TEST EDI v1.
+
+- Datoteka se začne z glavo `[REG1TEST;1]`.
+- Prisotne in pravilne glave `TName`, `TDate`, `PCall`, `PWWLo`, `PBand`, `PClub`, `MOpe1`.
+- Razdelek `[QSORecords N]` prisoten s pravilnim številom.
+- Vrstica QSO ima natanko 14 polj, ločenih s podpičji (stolpci 0–13).
+- Zastavica duplikata v stolpcu 13: `D` za podvojeni QSO, prazno za normalnega.
+- `nrS` / `nrR` dopolnjeni z ničlami na 3 znake.
+- `WWL` v vrstici QSO je 6 znakov z velikimi črkami.
+- Glava `PClub` izpolnjena iz `session.club`.
+- Načini: `SSB` → `1`, `CW` → `2`, `FM` → `6`.
+
+#### 10 · `lookupCall` (6 testov)
+Preverja crosscheck poizvedbo v uteženi+raw baseline bazi.
+
+- Klicni znak v baseline → `found=true`, `modeLoc` nastavljen na najpogostejši lokator.
+- Prenosni `/P` → bazni klicni znak se pravilno poišče.
+- Klicni znak ni v baseline → `found=false`, polje `similar` izpolnjeno iz Levenshteinove iskanja.
+- Seznam `similar` razvrščen po razdalji naraščajoče, nato po številu padajoče.
+- Povsem neznan klicni znak brez bližnjega ujemanja → `found=false`, `similar=[]`.
 
 ---
 
