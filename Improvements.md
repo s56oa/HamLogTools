@@ -1,485 +1,208 @@
-# Improvements & Code Review — edi2adif.html
+# Izboljšave — HamLogTools
 
-*[Slovenska različica / Slovenian version below](#izboljšave--pregled-kode--edi2adifhtml)*
+*Datum pregleda: 2026-05-15 · Različica: v1.8*
 
----
-
-## Code Review: Bugs & Issues
-
-### Critical (fixed)
-
-1. **Dead variable `dt` in `exportDARC()`**
-   `dt` was computed but never used; `dateTime` was the variable actually inserted into the CSV. The dead line was removed.
-
-2. **`_sel` Set was always empty**
-   `_sel` was declared and cleared in `resetApp()` but never populated. The expression `!_sel.has(q._bandKey)||true` always evaluated to `true`. The variable `isSelected` was also computed and then never used. Both were removed.
-
-3. **Sort by `#` column was broken**
-   `COL_KEYS[0]` was `'_idx'` but no QSO object had an `_idx` property — values were always `undefined`. Sorting the `#` column had no effect. Fixed by assigning `q._idx = i` to every QSO in `finishLoad()`.
-
-4. **`URL.createObjectURL` memory leak**
-   The Blob URL was never revoked after download. Fixed by adding `setTimeout(()=>URL.revokeObjectURL(a.href), 0)` in `dl()`.
-
-5. **`FREQ` ADIF field used a hardcoded nominal frequency**
-   The value (e.g. `144.3`) was a band-centre constant, not the actual operating frequency. EDI does not store operating frequency precisely. The field was removed; `BAND` is sufficient for all downstream tools.
-
-### Minor (fixed)
-
-6. **`rebuildTable()` was a one-liner wrapper**
-   Only called `renderTable()`. Removed; all callers now call `renderTable()` directly.
-
-7. **Band column used the same badge colour as the Mode column**
-   `mBadge` (computed from mode) was applied to both the band cell and the mode cell, giving them identical colouring. A new neutral CSS class `badge-band` was added for the band column.
-
-8. **Global `drop` handler suppressed all drag-over events**
-   The document-level `dragover` listener called `preventDefault()` unconditionally, interfering with text-selection drags. Handler now checks `e.dataTransfer.types.includes('Files')` before preventing default, and the `drop` handler returns early if no files are present.
-
-9. **XSS: raw QSO fields inserted directly into innerHTML**
-   Callsigns, filenames, locators, and other user-supplied strings were interpolated into HTML without escaping. Added `htmlEsc()` helper (escapes `&`, `<`, `>`, `"`) applied in `renderTable()`, `restoreCell()`, and `rebuildFileTags()`.
-
-10. **`updateExportCount()` did not exclude duplicates**
-    The export-count badge showed the total number of selected rows regardless of dupe status, diverging from `getExportPool()` which always excludes dupes. Fixed to use the same pool logic.
-
-11. **`toggleAll(false)` only deselected visible (filtered) rows**
-    Deselecting all added only `_filtered` QSO band-keys to `_desel`. After changing a filter, previously deselected rows outside the view reappeared selected. Fixed to iterate `_all` instead.
-
-12. **`commitEdit()` silently ignored invalid input**
-    Rejected date, time, callsign, and locator values were discarded without any user feedback. Added `showToast()` calls for each rejected case using i18n keys `errDate`, `errTime`, `errCall`, `errLoc`.
+Dokument zajema odprte predloge izboljšav za vsa orodja projekta. Gre samo naprej — brez zgodovine opravljenih popravkov.
 
 ---
 
-## Bug Fixes — Session 2026-05-09/10
-
-13. **Mode mapping was wrong (3=FM, 6=SSB, 7=CW)**
-    The EDI mode table was incorrect. Corrected to `1=SSB, 2=CW, 3=CW, 4=SSB, 5=AM, 6=FM, 7=RTTY, 8=SSTV, 9=ATV` per the adi2edi Rust tool and M1GEO+DH5YM Python tool. Mode dropdown in inline edit extended to include AM, RTTY, SSTV, ATV.
-
-14. **Received locator stored fully uppercase**
-    Maidenhead convention requires first 4 chars uppercase + chars 5–6 lowercase (e.g. `JN65ar`). Some tools reject all-uppercase 6-char locators. Fixed in `parseEDI()` and in inline edit `commitEdit()`. My locator (`myLoc`) remains fully uppercase.
-
-15. **qslshop.de ADIF export rejected by qslshop.de**
-    The existing DARC-derived export had: `ADIF_VER` (not `ADIF_VERS`), trailing spaces between fields, CRLF line endings, and decimal FREQ values. Rewrote `exportQSLShop()` to match the reference file format: `<ADIF_VERS:3>3.1` header, no inter-field spaces, LF-only endings, integer FREQ (`Math.round`), `TIME_OFF` equal to `TIME_ON`, and `RST_RCVD` included.
-
-16. **ADIF field names non-standard**
-    `MY_CALL` is not a valid ADIF 3.1.7 field; replaced with `STATION_CALLSIGN`. `CONTEST_ID` is an enumerated ADIF field requiring a specific value from the spec; replaced with `APP_EDIADIF_CONTEST` (application-defined field) for free-text contest names.
-
----
-
-## Release v1.1 — 2026-05-10
-
-### Removed redundant export formats
-- **`exportLoTW()`** removed — LoTW ADIF was a strict subset of the full ADIF export. Users can import the full ADIF into LoTW directly; the LoTW-specific field subset provided no advantage.
-- **`exportQSLShop()`** removed — qslshop.de accepts standard ADIF 3.1; the custom format (no inter-field spaces, `ADIF_VERS`, integer `FREQ`, `TIME_OFF`) was only needed because the previous broken ADIF output was rejected. With the ADIF fixes in v1.0, the generic `exportADIF()` now produces valid ADIF that qslshop.de accepts.
-
-### Refactoring
-- Introduced **`runExport(makeContent, filename, mime, toastKey)`** helper — eliminates the repeated `getExportPool()` → empty-check → `dl()` → `showToast()` pattern that existed in every export function.
-- Extracted **`getUniqueBands()`** to remove duplication between `updateStats()` and `buildFilters()`.
-
-### Fixes
-- **`csvEsc()`** now escapes strings containing newlines (`\n`) and carriage returns (`\r`), preventing corrupted CSV rows when fields contain line breaks.
-- **`modeBadge()`** corrected: `AM` now maps to `badge-ssb` (analog voice) instead of the generic `badge-digi` fallback.
-- **`BAND_MAP`** deduplicated: the redundant `24 GHz` regex entry was merged into the existing `1.25cm` pattern.
-- **Accessibility**: Toast notification container now has `aria-live="polite"` for screen-reader announcements.
-
-### Tests
-- Test suite expanded from **109 → 120 tests** (9 groups).
-- Added `modeBadge` test group (8 tests) covering all 7 supported modes plus unknown fallback.
-- Added 3 `csvEsc` tests for newline/carriage-return escaping.
-
----
-
-## Release v1.2 — 2026-05-10
-
-### New tool: ADIF QRZ BURO Filter (`adif-qrz-filter.js`)
-
-Node.js CLI tool that filters an ADIF log to keep only stations that accept QSL cards via the QSL Bureau.
-
-**How it works:**
-1. Parse the input ADIF file (preserving original header and record format)
-2. Deduplicate callsigns — one QRZ.com API query per unique `CALL`, even if it appears in multiple QSOs
-3. If a QSO has a `QSL_VIA` field, also query the manager's callsign
-4. Apply fuzzy logic on the `qslmgr` text returned by QRZ to determine BURO acceptance
-5. Keep QSO if **either** the station itself OR its manager accepts BURO
-6. Write filtered ADIF with original header + kept records
-
-**Features:**
-- **QRZ.com XML API** integration with session-key auth (`--username`/`--password` or `--key`)
-- **Local JSON cache** (7-day TTL) keyed by callsign — avoids re-querying
-- **Rate limiting** — configurable delay (default 1200 ms) between API calls
-- **QSL manager support** — reads `QSL_VIA` from ADIF and checks the manager too
-- **Fuzzy logic** — hard negations (explicit bureau denial) + 7 bureau inclusion patterns incl. European variants
-- **Terminal summary** — shows kept/discarded counts, cache hits, and manager-mediated QSOs
-
-**CLI usage:**
-```bash
-node adif-qrz-filter.js contest.adi --username=S59ABC --password=secret
-node adif-qrz-filter.js contest.adi --key=a1b2c3d4 --output=buro.adi --delay=800
-```
-
-### Tests
-- Added `adif-qrz-filter.test.js` with **48 tests** in 7 groups (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`).
-
----
-
-## Bug Fixes — Session 2026-05-11
-
-17. **`usesQslBuro` — false negatives for European bureau spellings**
-    Cache analysis (736 real QRZ entries) revealed 11 false negatives from unrecognised bureau spellings. Added inclusion patterns: `buero`, `büro` (German/Austrian), `buerau` (common typo), `boureau` (French-influenced), `burea` (partial typo), `buiro` (typo of buro).
-
-18. **`usesQslBuro` — false negatives when "bureau" follows "via direct"**
-    Exclusion patterns `/\bvia\s+direct\b/` and `/\bqsl\s+(via\s+)?direct\b/` were applied before checking for bureau keywords, causing entries like "Via Direct or Bureau" and "QSL DIRECT. BUREAU (on request)" to return false. These patterns were redundant (strings without bureau already return false) and removed. Net effect: 2 additional false negatives fixed (IU7EDW, IZ6JPK).
-
-19. **`usesQslBuro` — 2 false positives from removed `/\bqsl\s+via\b/` inclusion**
-    Removing the "QSL via" inclusion pattern (done in prior session) also correctly fixed: OE8IDK "QSL VIA DK3ID DARC CLUB" (manager reference, not bureau) and 9A2RI "QSL VIA E-mail" (email QSL, not bureau).
-
----
-
-## edi-crosscheck.html Improvements — 2026-05-11
-
-### Missing locator suggestions (`LOC_MISSING`)
-When a QSO in the new log has no locator but the callsign exists in the historical database, the tool now raises a `LOC_MISSING` issue suggesting the historical mode locator. Severity is `high` when mode confidence ≥ threshold, otherwise `med`. Empty historical locators are skipped and do not affect mode calculation.
-
-### Configurable thresholds (toolbar sliders)
-Two slider controls added to the results toolbar:
-- **Min. pojavitev / Min. appearances** — range 1–10, default 3. Callsigns with fewer historical appearances than this value are not checked for locator issues.
-- **Confidence** — range 10–100%, default 60%. Determines the `high` vs `med` severity cutoff for both `LOC_MISMATCH` and `LOC_MISSING`.
-
-Changing either slider reveals a **Ponovi / Re-run** button that re-runs the crosscheck on the last loaded new log without requiring a file reload.
-
-### HTML export of flagged QSOs
-A new **Izvoz problemov / Export issues** button generates a self-contained HTML file with all flagged QSOs, including:
-- Original callsign, band, mode, date
-- Correction suggestions (`LOC_MISMATCH` → suggested locator, `LOC_MISSING` → suggested locator, `CALL_SIMILAR` → similar callsigns)
-- Summary header showing flag count, percentage, and active threshold values
-
-### Accessibility
-- Toast notification container now has `aria-live="polite"` for screen-reader announcements.
-
----
-
-## Release v1.4 — 2026-05-13
-
-### Prebuilt OEVSV IARU R1 baseline
-
-`edi-crosscheck.html` now auto-loads a prebuilt baseline database on startup (`./crosscheck-baseline.json`) when served over HTTP. The baseline contains ~3 240 IARU R1 contest callsigns with their declared locators, sourced from public OEVSV CSV exports (<https://iaru.oevsv.at/v_upld/prg_list.php>).
-
-Behaviour:
-- **Authoritative source.** Each baseline entry weighs `BASELINE_WEIGHT` (= 3) × a single EDI QSO. Robotically-validated own-locator declarations outweigh partner-reported locators in user EDI logs.
-- **Silent fallback.** If `fetch('./crosscheck-baseline.json')` fails (most commonly `file://` CORS, or missing file), the tool runs with EDI-only history exactly like v1.3 — no error shown.
-- **Persistent.** The "Clear history" button now clears only the user's EDI contributions; baseline is re-injected from the cached JSON.
-- **dbCard shows baseline tag** with version date (`v2026-05-13`) and call count alongside the existing EDI stats.
-
-### New tool: `build-baseline.js`
-
-Node.js CLI that builds `crosscheck-baseline.json` from a directory of OEVSV CSV exports. No external dependencies. Output: ~220 KB compact JSON with per-call, per-band locator histograms (16 bands from 50 MHz to 300 GHz). Recommended rebuild cadence: quarterly or after major IARU R1 contests.
-
-### Weighted vs. raw counts
-
-The `_histDB` entry was extended with parallel `locatorsRaw` / `totalRaw` maps. Algorithmic decisions (threshold, mode locator selection, severity) continue to use weighted counts; display surfaces (chips, exports, HTML export) now show **raw counts** to remain intuitive. Without this split, baseline-derived chips would show inflated counts like `IK3GHY × 144` instead of the actual `× 48`.
-
-The `modeConf` ratio is invariant under uniform weighting (weighted/weighted = raw/raw), so threshold semantics remain stable.
-
-### Files
-
-- New: `build-baseline.js`, `crosscheck-baseline.json` (output), `iaru_oevsv_csv/` (input directory convention)
-- Modified: `edi-crosscheck.html` (v1.0 → v1.4)
-- All 56 existing unit tests still pass; no algorithmic changes.
-
----
-
-## Proposed New Features
-
-### High Priority
-
-#### ~~1. CSV / spreadsheet export~~ ✓ implemented
-~~Export a generic CSV with all parsed fields (serial numbers, exchange, locator, distance) for import into spreadsheet applications or further analysis.~~
-
-#### 2. Log statistics panel
-Show a summary after loading: total QSOs per band/mode, unique callsigns worked, total distance, best DX, locator square coverage.
-
-#### ~~3. Editable QSO fields~~ ✓ implemented
-~~Allow clicking a cell (RST, locator, mode) to edit it before export — useful for correcting obvious logging errors without going back to the original software.~~
-
-#### 4. Per-file header inspector
-A collapsible panel showing the parsed EDI header fields for each loaded file (operator, contest, club, antenna, power) — useful for verifying correct file selection before export.
-
-#### 5. Duplicate resolution UI
-Currently duplicates are auto-flagged but the user cannot choose which copy to keep. Add a "resolve duplicates" view that shows both copies side by side.
-
-### Medium Priority
-
-#### 6. Cabrillo export
-Cabrillo format is required for many contest submissions. Generate a Cabrillo file from the loaded EDI data.
-
-#### 7. SOTA / POTA CSV export
-Dedicated export for SOTA and POTA activation CSV formats, which have their own field requirements.
-
-#### 8. Locator map visualization
-Render worked squares on a Maidenhead grid map using Canvas or SVG. Show the operator's own square highlighted.
-
-#### 9. Callsign lookup / enrichment
-Optional integration with a public callsign API (HamDB) to enrich records with operator name and country before export.
-
-#### 10. QSO time-proximity conflict detection
-Flag QSOs where the same callsign was worked within a configurable time window on the same band (possible bust or log error), distinct from exact duplicates.
-
-#### 11. Multi-file merge duplicate report
-When merging multiple EDI files, show a dedicated report listing all cross-file duplicates with source filenames.
-
-### Lower Priority
-
-#### ~~12. Dark/light theme toggle~~ ✓ implemented
-~~The current dark theme is hardcoded. A light mode option would improve readability in bright environments.~~
-
-#### 13. Persistent settings via `localStorage`
-Remember language preference, column sort state, and "hide duplicates" toggle between sessions.
-
-#### 14. Keyboard navigation
-Arrow keys to navigate rows, Enter to toggle selection, `E` to trigger export.
-
-#### 15. Clipboard paste input
-Allow pasting EDI file content directly as an alternative to drag-and-drop — useful when only the file content can be copied from a remote machine.
-
-#### 16. Additional tool: ADIF merge/dedup
-A standalone tool to merge multiple ADIF files, deduplicate QSOs, and re-export.
-
-#### 17. Additional tool: EDI validator / linter
-Parse an EDI file and report structural errors, missing mandatory fields, impossible times, invalid locators.
-
-#### 18. PWA / offline support
-Add a Service Worker and `manifest.json` so the tool can be installed and used fully offline — relevant for field day and portable operation where internet access is limited.
-
----
----
-
-# Izboljšave & Pregled kode — edi2adif.html
-
-## Pregled kode: Hrošči in težave
-
-### Kritično (popravljeno)
-
-1. **Mrtva spremenljivka `dt` v `exportDARC()`**
-   `dt` je bila izračunana, a nikoli uporabljena; v CSV je bila dejansko vstavljena spremenljivka `dateTime`. Mrtva vrstica je bila odstranjena.
-
-2. **Množica `_sel` je bila vedno prazna**
-   `_sel` je bila deklarirana in čiščena v `resetApp()`, a nikoli polnjena. Izraz `!_sel.has(q._bandKey)||true` je vedno vrnil `true`. Spremenljivka `isSelected` je bila prav tako izračunana in nikoli uporabljena. Obe sta bili odstranjeni.
-
-3. **Razvrščanje po stolpcu `#` ni delovalo**
-   `COL_KEYS[0]` je bil `'_idx'`, vendar noben objekt QSO ni imel lastnosti `_idx` — vrednosti so bile vedno `undefined`. Razvrščanje po stolpcu `#` ni imelo učinka. Popravljeno z dodelitvijo `q._idx = i` vsakemu QSO v `finishLoad()`.
-
-4. **Uhajanje pomnilnika pri `URL.createObjectURL`**
-   URL bloba po prenosu ni bil nikoli sproščen. Popravljeno z dodajanjem `setTimeout(()=>URL.revokeObjectURL(a.href), 0)` v `dl()`.
-
-5. **Polje ADIF `FREQ` je uporabljalo trdo kodirano nominalno frekvenco**
-   Vrednost (npr. `144.3`) je bila konstanta sredine pasu, ne dejanska delovna frekvenca. EDI natančne delovne frekvence ne shranjuje. Polje je bilo odstranjeno; za vsa orodja zadostuje `BAND`.
-
-### Manjše (popravljeno)
-
-6. **`rebuildTable()` je bil enolinijski ovoj**
-   Klical je le `renderTable()`. Odstranjen; vsi klicatelji zdaj kličejo `renderTable()` neposredno.
-
-7. **Stolpec Band je imel enako barvo značke kot stolpec Mode**
-   `mBadge` (izračunan iz načina) je bil uporabljen tako za celico pasu kot za celico načina, kar je dalo obema enako barvno kodiranje. Za stolpec pasu je bil dodan nov nevtralen razred CSS `badge-band`.
-
-8. **Globalni obravnavalnik `drop` je zaustavljal vse drag-over dogodke**
-   Listener `dragover` na ravni dokumenta je brezpogojno klical `preventDefault()`, kar je motilo vlečenje za izbiro besedila. Obravnavalnik zdaj preveri `e.dataTransfer.types.includes('Files')` pred preprečitvijo privzetega vedenja, obravnavalnik `drop` pa se prezgodaj vrne, če ni prisotnih datotek.
-
-9. **XSS: neobdelana polja QSO neposredno vstavljena v innerHTML**
-   Klicni znaki, imena datotek, lokatorji in drugi nizi, ki jih vnese uporabnik, so bili interpolirani v HTML brez ubežanja. Dodan pomočnik `htmlEsc()` (ubežanje `&`, `<`, `>`, `"`) uporabljen v `renderTable()`, `restoreCell()` in `rebuildFileTags()`.
-
-10. **`updateExportCount()` ni izključeval duplikatov**
-    Znački s številom izvoznih QSO je prikazoval skupno število izbranih vrstic, ne glede na status duplikata, kar je odstopalo od `getExportPool()`, ki vedno izključuje duplikate. Popravljeno z enakim skupinskim postopkom.
-
-11. **`toggleAll(false)` je odznačil samo vidne (filtrirane) vrstice**
-    Odznačitev vsega je dodala band-ključe QSO samo iz `_filtered` v `_desel`. Po spremembi filtra so se prej odznačene vrstice zunaj pogleda znova pojavile kot izbrane. Popravljeno z iteracijo `_all`.
-
-12. **`commitEdit()` je tiho ignoriral neveljavni vnos**
-    Zavrnjene vrednosti datuma, časa, klicnega znaka in lokatorja so bile zavržene brez povratne informacije za uporabnika. Dodani klici `showToast()` za vsak zavrnjen primer z i18n ključi `errDate`, `errTime`, `errCall`, `errLoc`.
-
----
-
-## Popravki hroščev — seja 2026-05-09/10
-
-13. **Mapiranje načinov je bilo napačno (3=FM, 6=SSB, 7=CW)**
-    Tabela načinov EDI je bila napačna. Popravljeno na `1=SSB, 2=CW, 3=CW, 4=SSB, 5=AM, 6=FM, 7=RTTY, 8=SSTV, 9=ATV` skladno z orodjema adi2edi (Rust) in M1GEO+DH5YM (Python). Spustni meni v urejanju v živo razširjen z AM, RTTY, SSTV, ATV.
-
-14. **Prejeti lokator shranjen v celoti z velikimi črkami**
-    Maidenhead konvencija zahteva prve 4 znake z velikimi + znaka 5–6 z malimi (npr. `JN65ar`). Nekatera orodja zavrnejo 6-znakovne lokatorje z vsemi velikimi črkami. Popravljeno v `parseEDI()` in v urejanju v živo `commitEdit()`. Moj lokator (`myLoc`) ostane v celoti z velikimi črkami.
-
-15. **Izvoz qslshop.de ADIF je bil zavrnjen pri qslshop.de**
-    Obstoječi izvoz je imel: `ADIF_VER` (ne `ADIF_VERS`), presledke med polji, zaključke CRLF in decimalne vrednosti FREQ. `exportQSLShop()` je bil prepisano skladno z referenčno datoteko: glava `<ADIF_VERS:3>3.1`, brez presledkov med polji, zaključki LF, celo število FREQ (`Math.round`), `TIME_OFF` enak `TIME_ON` in vključen `RST_RCVD`.
-
-16. **Imena polj ADIF nestandardna**
-    `MY_CALL` ni veljavno polje ADIF 3.1.7; nadomeščeno z `STATION_CALLSIGN`. `CONTEST_ID` je naštevano polje ADIF z zahtevano specifično vrednostjo iz specifikacije; nadomeščeno z `APP_EDIADIF_CONTEST` (polje, ki ga definira aplikacija) za prosto-tekstovna imena tekmovanj.
-
----
-
-## Izdaja v1.1 — 10. 5. 2026
-
-### Odstranjeni odvečni izvozni formati
-- **`exportLoTW()`** odstranjen — LoTW ADIF je bila stroga podmnožica polnega ADIF izvoza. Uporabniki lahko polni ADIF uvozijo v LoTW neposredno; LoTW-specifična podmnožica polj ni prinesla nobene prednosti.
-- **`exportQSLShop()`** odstranjen — qslshop.de sprejema standardni ADIF 3.1; posebni format (brez presledkov med polji, `ADIF_VERS`, celo število `FREQ`, `TIME_OFF`) je bil potreben le zaradi prejšnjega pokvarjenega ADIF izvoza. S popravki ADIF v v1.0 generični `exportADIF()` zdaj ustvarja veljaven ADIF, ki ga qslshop.de sprejema.
-
-### Refaktor
-- Uveden pomožnik **`runExport(makeContent, filename, mime, toastKey)`** — odpravi ponavljajoč se vzorec `getExportPool()` → preverjanje praznosti → `dl()` → `showToast()`, ki je obstajal v vsaki izvozni funkciji.
-- Izvlečena **`getUniqueBands()`** — odstrani podvojitev med `updateStats()` in `buildFilters()`.
-
-### Popravki
-- **`csvEsc()`** zdaj ubeža tudi nize z novimi vrsticami (`\n`) in zaključki vrstic (`\r`), kar preprečuje pokvarjene CSV vrstice, če polja vsebujejo prelome vrstic.
-- **`modeBadge()`** popravljen: `AM` se zdaj preslika v `badge-ssb` (analogni govor) namesto generičnega rezervnega `badge-digi`.
-- **`BAND_MAP`** dedupliciran: odvečen vnos za `24 GHz` je bil združen v obstoječi vzorec `1.25cm`.
-- **Dostopnost**: vsebnik obvestil `toast` ima zdaj `aria-live="polite"` za napovedi bralnikom zaslonov.
-
-### Testi
-- Testna zbirka razširjena iz **109 → 120 testov** (9 skupin).
-- Dodana skupina `modeBadge` (8 testov), ki pokriva vseh 7 podprtih načinov plus rezervni način.
-- Dodani 3 testi `csvEsc` za ubežanje novih vrstic/zaključkov vrstic.
-
----
-
-## Izdaja v1.2 — 10. 5. 2026
-
-### Novo orodje: ADIF QRZ BURO Filter (`adif-qrz-filter.js`)
-
-Node.js CLI orodje, ki filtrira ADIF dnevnik in ohrani samo postaje, ki sprejemajo QSL kartice preko QSL biroja.
-
-**Kako deluje:**
-1. Razčleni vhodno ADIF datoteko (ohrani izvirno glavo in format zapisov)
-2. Deduplicira klicne znake — en poizvedbeni klic QRZ.com API na unikaten `CALL`, tudi če se pojavi v več zvezah
-3. Če ima zapis polje `QSL_VIA`, poizvede tudi klicni znak managerja
-4. Uporabi fuzzy logiko na besedilu `qslmgr`, ki ga vrne QRZ, za določitev sprejetja BURO
-5. Ohrani zvezo, če **bodisi** sama postaja **bodisi** njen manager sprejema BURO
-6. Zapiše filtrirano ADIF z izvirno glavo + ohranjenimi zapisi
-
-**Lastnosti:**
-- **Integracija QRZ.com XML API** z avtentikacijo prek ključa seje (`--username`/`--password` ali `--key`)
-- **Lokalni JSON predpomnilnik** (7-dnevni TTL) s ključem po klicnem znaku — preprečuje ponovne poizvedbe
-- **Omejevanje hitrosti** — nastavljiv zamik (privzeto 1200 ms) med API klici
-- **Podpora QSL managerjem** — prebere `QSL_VIA` iz ADIF in preveri tudi managerja
-- **Fuzzy logika** — 14 izključitvenih + 3 vključitveni regex na malih črkah besedila `qslmgr`
-- **Povzetek v terminalu** — prikaže število ohranjenih/odstranjenih zvez, zadetkov predpomnilnika in QSO-jev preko managerja
-
-**Uporaba v terminalu:**
-```bash
-node adif-qrz-filter.js contest.adi --username=S59ABC --password=secret
-node adif-qrz-filter.js contest.adi --key=a1b2c3d4 --output=buro.adi --delay=800
-```
-
-### Testi
-- Dodana `adif-qrz-filter.test.js` z **36 testi** v 7 skupinah (`parseAdif`, `extractField`, `usesQslBuro`, `cache`).
-
----
-
-## Izboljšave edi-crosscheck.html — 11. 5. 2026
-
-### Predlogi za manjkajoče lokatorje (`LOC_MISSING`)
-Ko zveza v novem dnevniku nima lokatorja, a klicni znak obstaja v zgodovinski bazi, orodje zdaj sproži težavo `LOC_MISSING` s predlaganim zgodovinskim modus lokatorjem. Resnost je `high`, ko je zaupanje v modus ≥ pragu, sicer `med`. Prazni zgodovinski lokatorji so preskočeni in ne vplivajo na izračun modusa.
-
-### Nastavljivi pragovi (drsniki v orodni vrstici)
-Dodana sta dva drsnika v orodno vrstico rezultatov:
-- **Min. pojavitev** — razpon 1–10, privzeto 3. Klicni znaki z manj zgodovinskimi pojavitvami se ne preverjajo za težave z lokatorjem.
-- **Confidence** — razpon 10–100%, privzeto 60%. Določa mejo med resnostjo `high` in `med` za `LOC_MISMATCH` in `LOC_MISSING`.
-
-Sprememba katerega koli drsnika razkrije gumb **Ponovi**, ki ponovi crosscheck na zadnjem naloženem novem dnevniku brez ponovnega nalaganja datoteke.
-
-### HTML izvoz označenih QSO
-Nov gumb **Izvoz problemov** ustvari samostojno HTML datoteko z vsemi označenimi QSO, vključno z:
-- izvirnim klicnim znakom, pasom, načinom, datumom
-- predlogi popravkov (`LOC_MISMATCH` → predlagan lokator, `LOC_MISSING` → predlagan lokator, `CALL_SIMILAR` → podobni klicni znaki)
-- povzetkom v glavi s številom označenih, deležem in vrednostmi aktivnih pragov
-
-### Dostopnost
-- Vsebnik obvestil `toast` ima zdaj `aria-live="polite"` za napovedi bralnikom zaslonov.
-
----
-
-## Izdaja v1.4 — 13. 5. 2026
-
-### Pred-zgrajen OEVSV IARU R1 baseline
-
-`edi-crosscheck.html` zdaj samodejno naloži pred-zgrajeno bazo ob zagonu (`./crosscheck-baseline.json`), ko je strežena preko HTTP-ja. Baseline vsebuje ~3 240 IARU R1 tekmovalnih klicnih znakov z deklariranimi lokatorji, izpeljano iz javnih OEVSV CSV exportov (<https://iaru.oevsv.at/v_upld/prg_list.php>).
-
-Vedenje:
-- **Avtoritativen vir.** Vsak baseline vnos šteje `BASELINE_WEIGHT` (= 3) × en EDI QSO. Robotsko-validirane deklaracije lastnega lokatorja prevladajo nad lokatorji, ki jih je v EDI dnevniku zapisal partner.
-- **Tih fallback.** Če `fetch('./crosscheck-baseline.json')` ne uspe (najpogosteje `file://` CORS ali manjkajoča datoteka), orodje deluje samo z EDI zgodovino natanko kot v1.3 — brez prikaza napake.
-- **Trajen.** Gumb "Počisti zgodovino" zdaj počisti samo uporabnikove EDI prispevke; baseline se re-injecta iz cache-ranega JSON.
-- **dbCard kaže baseline tag** z datumom verzije (`v2026-05-13`) in številom klicnih znakov ob obstoječi EDI statistiki.
-
-### Novo orodje: `build-baseline.js`
-
-Node.js CLI, ki gradi `crosscheck-baseline.json` iz mape OEVSV CSV exportov. Brez zunanjih odvisnosti. Izhod: ~220 KB kompakten JSON z per-call, per-band histogrami lokatorjev (16 pasov od 50 MHz do 300 GHz). Priporočen interval obnavljanja: kvartalno ali po večjih IARU R1 tekmovanjih.
-
-### Weighted vs. raw števec
-
-Zapis `_histDB` je razširjen z vzporednima `locatorsRaw` / `totalRaw` mapama. Algoritmične odločitve (prag, izbira modus lokatorja, severity) še naprej uporabljajo weighted števec; prikazne površine (chip-i, izvozi, HTML izvoz) zdaj kažejo **raw števec**, da ostanejo intuitivni. Brez te razdelitve bi baseline-izhajajoči chip-i kazali napihnjena števila kot `IK3GHY × 144` namesto dejanskega `× 48`.
-
-Razmerje `modeConf` je invariantno pod uniformnim weighting-om (weighted/weighted = raw/raw), tako da threshold semantika ostane stabilna.
-
-### Datoteke
-
-- Nove: `build-baseline.js`, `crosscheck-baseline.json` (izhod), `iaru_oevsv_csv/` (konvencija za vhodno mapo)
-- Spremenjene: `edi-crosscheck.html` (v1.0 → v1.4)
-- Vseh 56 obstoječih unit testov še gre; brez algoritmičnih sprememb.
-
----
-
-## Predlagane nove funkcionalnosti
+## 1. edi2adif.html
 
 ### Visoka prioriteta
 
-#### ~~1. Izvoz CSV / preglednica~~ ✓ implementirano
-~~Izvoz generičnega CSV z vsemi razčlenjenimi polji (serijske številke, izmenjava, lokator, razdalja) za uvoz v pregledničarje ali nadaljnjo analizo.~~
+**1.1 Statistični panel**
+Po nalaganju prikaži povzetek: skupaj QSO po pasu/načinu, unikatni klicni znaki, skupna razdalja, najboljši DX, pokritost kvadrantov lokatorja. Brez sprememb podatkovnega modela — vse iz obstoječega `_all[]`.
 
-#### 2. Statistični panel dnevnika
-Prikaz povzetka po nalaganju: skupaj QSO po pasu/načinu, edinstveni klicni znaki, skupna razdalja, najboljši DX, pokritost kvadrantov lokatorja.
+**1.2 Pregled glave EDI**
+Zložljiva plošča z razčlenjenimi polji glave za vsako naloženo datoteko (operator, tekmovanje, klub, antena, moč). Koristno za preverjanje pred izvozom, da je bila izbrana prava datoteka.
 
-#### ~~3. Urejevanje polj QSO~~ ✓ implementirano
-~~Možnost klika na celico (RST, lokator, način) za urejanje pred izvozom — koristno za popravljanje očitnih napak beleženja brez vračanja v izvirno programsko opremo.~~
-
-#### 4. Pregledovalnik glave za vsako datoteko
-Zložljiva plošča s prikazom razčlenjenih polj glave EDI za vsako naloženo datoteko (operater, tekmovanje, klub, antena, moč) — koristno za preverjanje pravilnega izbora datoteke pred izvozom.
-
-#### 5. Vmesnik za razreševanje duplikatov
-Duplikati so trenutno avtomatično označeni, a uporabnik ne more izbrati, katero kopijo ohraniti. Dodaj pogled "razreši duplikate", ki pokaže obe kopiji vzporedno.
+**1.3 Cabrillo izvoz**
+Format Cabrillo je zahtevan za nekatere tekmovalne oddaje. Osnovna implementacija za IARU R1 VKV tekmovanje je ~50–80 vrstic; format je fiksen in dokumentiran.
 
 ### Srednja prioriteta
 
-#### 6. Izvoz Cabrillo
-Format Cabrillo je zahtevan za številne tekmovalne oddaje. Generiraj datoteko Cabrillo iz naloženih EDI podatkov.
+**1.4 Razreševanje duplikatov**
+Duplikati so samodejno označeni, a uporabnik ne more izbrati, katero kopijo ohraniti. Pogled »reši duplikate« bi pokazal obe kopiji vzporedno z možnostjo ročne izbire.
 
-#### 7. Izvoz CSV za SOTA / POTA
-Namenski izvoz za aktivacijske formate CSV SOTA in POTA, ki imata lastne zahteve po poljih.
+**1.5 Vizualizacija karte lokatorjev**
+Prikaži delane kvadrante na Maidenhead mreži (Canvas ali SVG). Funkciji `locToLatLon` in `haversine` sta implementirani v `vhf-logger.html` — portabilni brez predelave.
 
-#### 8. Vizualizacija karte lokatorjev
-Prikaži delane kvadrante na Maidenhead mreži z uporabo Canvas ali SVG. Označi operaterjev lastni kvadrant.
-
-#### 9. Iskanje / obogatitev klicnih znakov
-Neobvezna integracija z javnim API-jem za klicne znake (HamDB) za obogatitev zapisov z imenom operaterja in državo pred izvozom.
-
-#### 10. Zaznavanje konfliktov QSO v časovni bližini
-Označi QSO-je, kjer je bil isti klicni znak delان v nastavljenem časovnem oknu na istem pasu (možna napaka ali napačen zapis), ločeno od točnih duplikatov.
-
-#### 11. Poročilo o duplikatih pri spajanju več datotek
-Pri spajanju več EDI datotek prikaži namenska poročilo z vsemi medDatotečnimi duplikati in imeni izvornih datotek.
+**1.6 Vnos iz odložišča**
+Dovoli lepljenje vsebine EDI datoteke neposredno v polje namesto povleci-in-spusti — koristno pri oddaljenih strojih ali kopiranju iz e-pošte.
 
 ### Nizka prioriteta
 
-#### ~~12. Preklop med temno/svetlo temo~~ ✓ implementirano
-~~Trenutna temna tema je trdo kodirana. Svetla možnost bi izboljšala berljivost v svetlih okoljih.~~
+**1.7 Izvoz za SOTA/POTA**
+Namenski CSV format za SOTA in POTA aktivacijo s specifičnimi zahtevami po poljih.
 
-#### 13. Trajne nastavitve prek `localStorage`
-Zapomni si jezikovne nastavitve, stanje razvrščanja stolpcev in preklop "skrij duplikate" med sejami.
+**1.8 Trajne nastavitve**
+Zapomni si jezikovno nastavitev in stanje razvrščanja stolpcev v `localStorage` med sejami brskalnika.
 
-#### 14. Navigacija s tipkovnico
+**1.9 Navigacija s tipkovnico**
 Puščične tipke za navigacijo po vrsticah, Enter za preklop izbire, `E` za sprožitev izvoza.
 
-#### 15. Vnos z lepljenjem iz odložišča
-Dovoli lepljenje vsebine EDI datoteke neposredno kot alternativo povleci-in-spusti — koristno, ko je mogoče kopirati le vsebino datoteke z oddaljenega računalnika.
+---
 
-#### 16. Dodatno orodje: Spajanje/deduplikacija ADIF
-Samostojno orodje za spajanje več ADIF datotek, odstranjevanje duplikatov QSO in ponovni izvoz.
+## 2. edi-crosscheck.html
 
-#### 17. Dodatno orodje: Validator/linter EDI
-Razčleni EDI datoteko in poroča o strukturnih napakah, manjkajočih obveznih poljih, nemogočih časih, neveljavnih lokatorjih.
+Orodje pokriva statistični crosscheck (LOC_MISMATCH, LOC_MISSING, CALL_SIMILAR, CALL_BY_LOC, CALL_UNKNOWN) z možnostjo nastavljanja pragov. Naslednje predloge so razvrščene po potrebnih vhodnih podatkih.
 
-#### 18. PWA / podpora brez povezave
-Dodaj Service Worker in `manifest.json`, da je orodje mogoče namestiti in uporabljati popolnoma brez interneta — relevantno za terensko delovanje in prenosno delovanje, kjer je dostop do interneta omejen.
+### Razred A — razširitve obstoječe statistike (brez novih virov)
+
+**A1. Band-aware modus lokatorja** *(visoka prioriteta)*
+Trenutna agregacija lokatorjev poteka čez vse pasove skupaj. Postaja, fiksna na 2m, je pogosto portable na 6m — to povzroča lažne pozitivne pri LOC_MISMATCH. Rešitev: `Map<call → Map<band → {locators, total}>>`. Per-band modus kot primarni; agregat čez vse pasove kot fallback, ko je per-band premalo zapisov. Ocena: ~30–50 vrstic JS + razširitev `_histDB`.
+
+**A2. Suffix-aware lokator** *(visoka prioriteta)*
+`/P` in `/M` zveze imajo legitimno drug lokator od fiksnega QTH in povzročajo flood LOC_MISMATCH opozoril. Rešitev: ohrani `q.suffix` v parserju; za `/P`/`/M` zniži resnost na `info` ali preskoči; za `/MM` lokator sploh ne preverja. V zgodovinski statistiki ločeno beleži fiksne in portable zveze. Ocena: ~20 vrstic.
+
+**A3. Self-QSO check** *(visoka prioriteta)*
+Operator je morda zalogiral samega sebe (testni QSO, tipkarska napaka lastnega znaka). Preberi `PCall` iz header; če `baseCall(q.call) === baseCall(PCall)`, označi `SELF_QSO` resnost `high`. Trivialno, a ujame realne napake. Ocena: ~10 vrstic.
+
+**A4. Kronološka validacija** *(visoka prioriteta)*
+Časi QSO niso preverjeni. `TIME_BACKWARDS`: če `time[i] < time[i-1] − 5 min` (toleranca za sočasne zveze) → resnost `med`. `TIME_OUTSIDE_WINDOW`: log, ki obsega > 48 ur, je sumljiv za večino VKV tekmovanj. Parser mora prebrati `time` iz stolpca 1 — trenutno se ne bere. Ocena: ~30 vrstic + razširitev parserja.
+
+**A5. Header validacija** *(visoka prioriteta)*
+`PCall`, `PWWLo`, `PBand`, `PSect` — vsako manjkajoče pomeni formalno neveljaven log za robota. Validacija:
+- `PCall`: ITU pattern `^[A-Z0-9]{1,3}[0-9][A-Z0-9]*[A-Z]$`
+- `PWWLo`: 6-znakovni Maidenhead, regex
+- `PBand`: ujemanje z `BAND_MAP`
+- `PSect`: neprazen niz
+
+Prikaži ločen **panel »Težave v glavi«** nad QSO tabelo — ločeno od QSO crosschecka, ker so to strukturne napake, ne statistične. Ocena: ~40 vrstic.
+
+**A6. Razdalja QRB: interna doslednost** *(srednja prioriteta)*
+EDI stolpec 10 = razdalja v km, ki jo operator deklarira. Izračunaj iz lokatorjev (Maidenhead → haversine; funkciji sta v `vhf-logger.html`, portabilni brez sprememb). Če `|deklarirana − izračunana| > 5 % IN > 5 km` → `DIST_MISMATCH` resnost `med`; > 20 % → `high`. Brez zgodovine — samo self-consistency. Ocena: ~50 vrstic + port geo funkcij.
+
+**A7. Notranji duplikat check** *(srednja prioriteta)*
+Identifikacija duplikatov znotraj samega novega loga (`call|date|band|mode`), ne glede na EDI `dupe_flag`. Označi `DUPE_INTERNAL` resnost `med`. Opozori, kadar EDI flag in interna hevristika nista skladna (EDI trdi dupe, a ni dvojnika, ali obratno). Ocena: ~20 vrstic.
+
+**A8. Callsign-aware Levenshtein** *(srednja prioriteta)*
+Zamenjave `0↔O`, `1↔I`, `5↔S`, `2↔Z`, `8↔B` so pogoste tipkarske in slušne (CW, SSB fonetika) napake v radiu, a trenutno tehtajo enako kot katerakoli druga zamenjava. Definiraj `CONFUSION_PAIRS` s substitucijsko težo 0.4 namesto 1.0 — bolj realistični podobni predlogi z manjšim šumom. Ocena: ~25 vrstic.
+
+**A9. Outlier filter pred modusom** *(nizka prioriteta)*
+Enkraten tipkarski lokator v zgodovinski bazi (npr. JN65ab namesto JN65ax v 1 od 100 QSO) se pojavi v chip-listi kot »alternativa« in zmede uporabnika. Pred izračunom modusa odstrani lokatorje z `count == 1 AND count/total < 0.02 AND total ≥ 10`. Prikaži ločen indikator: *»X potencialnih outlierjev odstranjenih«*. Ocena: ~15 vrstic.
+
+**A10. Time-aware modus z eksponentnim zmanjšanjem teže** *(nizka prioriteta)*
+Postaje se selijo; stare zveze (5+ let) bi morale tehtati manj. Uteži: `weight = 0.85 ^ (currentYear − qsoYear)`. Faktor nastavljiv. Modus postane »centroid recentnih zapisov«. Zahteva `dateDisp` v parserju (že delno prisotno). Ocena: ~20 vrstic.
+
+**A11. Per-call mode preference** *(nizka prioriteta)*
+Nekatere postaje so izključno CW (EME, tekmovalne), druge SSB. Razširi `entry.modes: Map<mode, count>`. Nov check `MODE_UNEXPECTED` resnost `low`: historični mode-of-mode ≠ nov mode pri dovolj zaupanja. Manj kritično od lokatorja. Ocena: ~30 vrstic.
+
+**A12. RST format check** *(nizka prioriteta)*
+Stolpca RST_S in RST_R se ne bereta. Pravila: CW = 3 znaki (5NN/599), SSB/FM = 2 znaki (59). Check `RST_FORMAT` resnost `med` — formalna napaka, ki jo bo robot ujel. Zahteva razširitev parserja. Ocena: ~25 vrstic.
+
+**A13. Konsistentnost lastnega lokatorja** *(nizka prioriteta)*
+Beleži `_histOwnLocators: Map<PCall, Map<PWWLo, count>>` pri nalaganju zgodovinskih EDI datotek. Pri novem logu primerja `header.PWWLo` z modus-om iz preteklih logov. Odkriva pozabljene posodobitve QTH pri nastavljanju loggerja. Ocena: ~20 vrstic.
+
+### Razred B — razširitve z interno tabelo (brez zunanjih klicev)
+
+**B1. Razdalja plausibility per pas** *(srednja prioriteta)*
+Interna tabela tipičnih maksimalnih dosegov po pasovih (npr. 2m = 2500 km tropo/MS, 24 GHz = 200 km). Check `DIST_IMPLAUSIBLE` resnost `med` (> max) ali `high` (> 2× max). Hevristika, ne strogo pravilo. Ocena: ~30 vrstic + tabela.
+
+**B2. ITU prefiks → DXCC + lokator območje** *(srednja prioriteta)*
+Minimalna tabela IARU R1 prefiksov z pričakovanimi Maidenhead območji (~80 vnosov: S5→JN65–76, DL→JN/JO/JP, OE→JN77–JO02 ...). Check `PREFIX_LOC_MISMATCH`: DL prefiks z JN65 lokatorjem (Slovenija) → resnost `high`. Ocena: ~50 vrstic + tabela.
+
+**B3. Morski/oceanski lokator** *(nizka prioriteta)*
+Lokatorji AA00–AA99 so v Atlantiku — neveljavni za fiksne postaje. Filter na IARU R1 »kopenske« grids. Check `LOC_OCEAN` resnost `med`. Ocena: ~20 vrstic + tabela območij.
+
+**B4. Dovoljene kombinacije (pas, način)** *(nizka prioriteta)*
+Tabela `ALLOWED_BAND_MODE` za IARU R1 (npr. FM na 6m ni tekmovalni način v večini sekcij). Check `BAND_MODE_INVALID` resnost `low`. Zahteva vzdrževanje tabele ob spremembi pravil. Ocena: ~25 vrstic + tabela.
+
+### Znane odprte napake
+
+- 3 napake pri renderiranju `LOC_MISSING` (chip prikaz, display polja) — zavestno nepopravljene, brez vpliva na algoritem crosschecka.
+
+---
+
+## 3. vhf-logger/vhf-logger.html
+
+### Visoka prioriteta
+
+**3.1 Cabrillo izvoz**
+Cabrillo je zahtevan za nekatere IARU R1 tekmovalne oddaje poleg EDI. Osnovna implementacija za VKV tekmovanje je ~60–80 vrstic; format je fiksen in javno dokumentiran. Vzporedno z ZIP izvozom obstoječih EDI datotek.
+
+**3.2 Iskanje/filter v tabeli QSO**
+Pri večjem številu QSO (300+) je tabela neuporabna brez iskanja. Polje za hitro iskanje po klicnem znaku ali lokatorju — ni potrebna celotna filter infrastruktura iz edi2adif; zadostuje `filter()` na `_current.qsos` per band.
+
+**3.3 Sprememba pasu obstoječega QSO**
+`editQso()` ne dovoli spremembe pasu — QSO v napačnem pasu je treba zbrisati in na novo vnesti, pri čemer se izgubi serijska številka. Rešitev: v obrazcu za urejanje dodaj selektor pasu; `saveEditedQso()` premakne QSO na pravi pas, posodobi `nrS` in pokliče `recalcDupes()`.
+
+### Srednja prioriteta
+
+**3.4 Združevanje sej**
+Ni mogoče združiti dveh sej istega tekmovanja (npr. prekinitev + nadaljevanje na drugem računalniku). EDI uvoz delno reši problem, ampak ne za vse primere. Rešitev: funkcija »Spoji z drugo sejo«, ki preveri ujemanje pasu/datuma, vstavi QSO in pokliče `recalcDupes()`.
+
+**3.5 Vizualizacija karte lokatorjev**
+Prikaži delane kvadrante na Maidenhead mreži med ali po tekmovanju. Funkciji `locToLatLon` in `haversine` sta že v kodi. Koristno za navigacijo po kvadrantih in analizo pokritosti po tekmovanju.
+
+**3.6 Statistike: časovni histogram**
+Per-band statistike kažejo skupaj QSO in QRB, ne pa kdaj so bili QSO narejeni. Histogram QSO po uri tekmovanja (0–24 h) bi razkril aktivnostne vzorce in praznine. Koristno za post-contest analizo.
+
+**3.7 Interoperabilnost z edi2adif.html**
+edi2adif ne more uvoziti ADIF — le EDI. Tok `vhf-logger → EDI → edi2adif` deluje; obratni tok (`edi2adif → vhf-logger`) ne obstaja, ker edi2adif nima EDI izvoza. Možnosti:
+- Dodaj EDI izvoz per band v edi2adif (manjša sprememba)
+- Ali dokumentiraj obstoječi enosmerni tok bolj jasno v README
+
+### Nizka prioriteta
+
+**3.8 Opomba per QSO**
+Neformalno polje za opombo (npr. »slabo slišati«, »poslal URE«) — ne gre v EDI, ostane lokalno v `localStorage`. Lahek dodatek k QSO objektu brez vpliva na izvoz.
+
+**3.9 Tiskanje / poročilo**
+Gumb »Natisni dnevnik« generira print-friendly HTML s celotno tabelo QSO brez UI elementov. Brez zunanjih knjižnic — `window.print()` z `@media print` CSS.
+
+**3.10 Razširjen frekvenčni plan**
+BAND_OPTS ima eno frekvenco per pas. V setup obrazcu dodaj spustni seznam tipičnih frekvenc (SSB segment, CW segment, FM) za lažje nastavljanje brez ročnega vpisa.
+
+---
+
+## 4. adif-qrz-filter.js
+
+**4.1 HamQTH kot rezervni vir**
+QRZ.com zahteva plačljiv API ključ ali registracijo. HamQTH ponuja brezplačen XML API s podobnim formatom. Dodaj `--source=hamqth` parameter ali samodejni fallback ob napaki QRZ avtentikacije.
+
+**4.2 Nastavljiv TTL predpomnilnika**
+Predpomnilnik ima trdo kodiran 7-dnevni TTL. Dodaj `--cache-ttl=DAYS` parameter (privzeto 7). Omogoča daljši TTL za redko spreminjajoče se postaje.
+
+**4.3 Ponavljanje ob napaki API**
+Ob omrežni napaki ali rate-limit odgovoru (HTTP 429) orodje ne poskusi znova. Dodaj eksponentni backoff z do 3 ponovitvami pred preskočitvijo klicnega znaka.
+
+---
+
+## 5. build-baseline.js
+
+**5.1 Primerjava z obstoječim baseline (`--diff`)**
+Zastavica, ki primerja novo zgrajeni JSON z obstoječim `crosscheck-baseline.json` in izpiše:
+- koliko novih klicnih znakov / koliko odstranjenih
+- klicni znaki s spremembo modus lokatorja
+- sprememba skupnega števila vnošev
+
+Koristno pred zamenjavo produkcijskega baseline, da se oceni vpliv.
+
+**5.2 Eksponentna časovna teža pri gradnji**
+Skripta agregira vse CSV-je z enako težo ne glede na starost tekmovanja. Sinhronizacija z algoritmom A10 iz edi-crosscheck: pri gradnji uteži `entry.count` z `0.85 ^ (currentYear − contestYear)`. Starejši lokatorji dobijo manjšo težo pri izračunu modusa že pri gradnji baseline-a, ne šele v orodju.
+
+---
+
+## 6. Medorodna opažanja
+
+**6.1 Podvojena crosscheck logika**
+`baseCall()`, `levenshtein()`, `_histDB`, `applyBaseline()` in `lookupCall()` so skoraj identično implementirani v `edi-crosscheck.html` in `vhf-logger.html`. Popravek v enem orodju je treba ročno prenesti v drugega — potencialni vir razsinhronizacije. Ker ohranimo single-file pristop, ob vsaki spremembi crosscheck logike preverimo obe datoteki.
+
+**6.2 Geo funkcije samo v vhf-logger**
+`locToLatLon`, `haversine`, `calcBearing` obstajajo samo v `vhf-logger.html`. Za predloge A6 (razdalja plausibility) in B1 (razdalja per pas) v edi-crosscheck ter 1.5 (karta lokatorjev) v edi2adif jih je treba portirati. Funkcije so samozadostne (~40 vrstic skupaj) in brez odvisnosti.
+
+**6.3 Testna pokritost**
+
+| Orodje | Testi | Opomba |
+|---|---|---|
+| `edi2adif.test.js` | 122 | Dobra — algoritem, izvoz, i18n |
+| `edi-crosscheck.test.js` | 56 | Osnovna — pokrita algoritem, render/UI ne |
+| `adif-qrz-filter.test.js` | 48 | Dobra za logiko; API mock ni realen |
+| `vhf-logger/vhf-logger.test.js` | 163 | Dobra — jedro, backup, EDI uvoz/izvoz |
+
+Za vsako novo funkcionalnost iz zgornjih predlogov je treba dodati teste pred integracijo.
+
+---
+
+*Pregled opravil: Claude Sonnet 4.6 · 2026-05-15*
