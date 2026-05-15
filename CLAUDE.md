@@ -63,7 +63,7 @@ Follow the same single-file pattern. Reuse the CSS custom properties (`:root` co
 
 ## Domain Notes
 
-- **EDI format**: REG1TEST v1. Sections are `[...]` headers; QSO records are semicolon-delimited in `[QSORecords N]`. Field order is fixed: date, time, call, mode, rst_sent, nr_sent, rst_rcvd, nr_rcvd, exch, wwl, dist, …, dupe_flag (col 13, value `D`).
+- **EDI format**: REG1TEST v1. Sections are `[...]` headers; QSO records are semicolon-delimited in `[QSORecords;N]`. Field order is fixed: date, time, call, mode, rst_sent, nr_sent, rst_rcvd, nr_rcvd, exch, wwl, dist, new_exc, new_wwl, new_dxcc, dupe_flag (col 14, value `D`).
 - **ADIF**: Fields are `<TAG:length>value`. Records end with `<EOR>`. Header ends with `<EOH>`.
 - **Mode mapping** (EDI numeric → ADIF): `1=SSB, 2=CW, 3=CW, 4=SSB, 5=AM, 6=FM, 7=RTTY, 8=SSTV, 9=ATV`. Indices 3 and 4 are contest-specific sub-modes that map to the same ADIF mode.
 - **Maidenhead locator case**: Received locator (`wwl`) is stored as first 4 chars uppercase + last 2 chars lowercase (e.g. `JN65ar`). My locator (`myLoc`) is kept fully uppercase. ADIF spec is case-insensitive but some tools break on all-uppercase 6-char grids.
@@ -204,7 +204,7 @@ Single HTML file with three co-located layers (CSS → HTML → JavaScript). No 
 | ZIP export | `_crc32` (IIFE CRC-32 table), `makeZip(files)`, `exportAllZip()`. Builds a STORE-method ZIP from all bands with QSOs using `_exportingSession`; no external dependencies. |
 | EDI import | `parseEdiForImport(text)`, `triggerImport()`, `handleImportFile(input)`, `importEdi(text)`. Reads REG1TEST EDI; converts YYMMDD → YYYYMMDD, mode number → string, normalizes locator; appends QSOs to the matching band row if band exists in session. |
 | EDI export | `buildEdi()`, `showExportModal()`, `showExportFor()`, `_showExportFor()`, `_exportBand()`, `closeModal()`. |
-| Backup / Restore | `exportBackup()` — serialises `_sessions` to `{app:'vhf-logger', v:1, date, sessions}` JSON and downloads it. `validateBackup(obj)` — structural validation (app name, sessions array, per-session `id`/`myCall`/`bands`/`qsos`, per-QSO `_id`/`band`/`call`); returns sessions array or `null`. `triggerRestore()` + `handleRestoreFile(input)` — file picker → JSON parse → `validateBackup` → confirm → replace `_sessions` → `saveSessions()` → `showHome()`. |
+| Backup / Restore | `exportBackup()` — serialises `_sessions` to `{app:'vhf-logger', v:1, date, sessions}` JSON and downloads it. `validateBackup(obj)` — structural validation (app name, sessions array, per-session `id`/`myCall`/`bands`/`qsos`, per-QSO `_id`/`band`/`call`); `id` and `_id` fields are additionally checked against `_SAFE_ID=/^[a-z0-9]+$/` to block injection characters; returns sessions array or `null`. `triggerRestore()` + `handleRestoreFile(input)` — file picker (10 MB limit) → JSON parse → `validateBackup` → confirm → replace `_sessions` → `saveSessions()` → `showHome()`. |
 | Theme + init | `toggleTheme()`, `init()`. |
 
 **Key data structures:**
@@ -254,7 +254,7 @@ Col 8 = exchange (empty), col 11–12 = reserved (empty), col 13 = `D` if dupe, 
 8. ⚙ Edit button → `editSessionSetup()` pre-fills form → `startSession()` updates `_current` → `showLogger(_current)`
 9. ⬆ EDI button → `triggerImport()` → file picker → `handleImportFile()` → `parseEdiForImport()` → `importEdi()` → `recalcDupes()` → `renderTable()`
 
-**Tests:** `vhf-logger/vhf-logger.test.js` — 146 tests across 16 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`).
+**Tests:** `vhf-logger/vhf-logger.test.js` — 163 tests across 16 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`).
 
 ---
 
@@ -332,7 +332,7 @@ Sledi enakemu vzorcu z eno datoteko. Za doslednost med orodji ponovno uporabi CS
 
 ## Opombe o domeni
 
-- **Format EDI**: REG1TEST v1. Razdelki so glave `[...]`; zapisi QSO so ločeni s podpičji v `[QSORecords N]`. Vrstni red polj je fiksen: datum, čas, klicni znak, način, rst_oddano, nr_oddano, rst_sprejeto, nr_sprejeto, izmenjava, wwl, razdalja, …, zastavica duplikata (stolpec 13, vrednost `D`).
+- **Format EDI**: REG1TEST v1. Razdelki so glave `[...]`; zapisi QSO so ločeni s podpičji v `[QSORecords;N]`. Vrstni red polj je fiksen: datum, čas, klicni znak, način, rst_oddano, nr_oddano, rst_sprejeto, nr_sprejeto, izmenjava, wwl, razdalja, new_exc, new_wwl, new_dxcc, zastavica duplikata (stolpec 14, vrednost `D`).
 - **ADIF**: Polja so `<OZNAKA:dolžina>vrednost`. Zapisi se končajo z `<EOR>`. Glava se konča z `<EOH>`.
 - **Mapiranje načina** (EDI številka → ADIF): `1=SSB, 2=CW, 3=CW, 4=SSB, 5=AM, 6=FM, 7=RTTY, 8=SSTV, 9=ATV`. Indeksa 3 in 4 sta tekmovalna pod-načina, ki se preslikata v isti ADIF način.
 - **Velikost črk lokatorja**: Prejeti lokator (`wwl`) je shranjen z velikimi prvimi 4 znaki + malimi zadnjima 2 (npr. `JN65ar`). Moj lokator (`myLoc`) ostane v celoti z velikimi črkami. Specifikacija ADIF ne razlikuje velikosti, nekatera orodja pa se zatravnejo na 6-znakovnih lokatorjih z vsemi velikimi črkami.
@@ -438,7 +438,7 @@ Enojna HTML datoteka s tremi solociranimi plastmi (CSS → HTML → JavaScript).
 | ZIP izvoz | `_crc32` (IIFE tabela CRC-32), `makeZip(files)`, `exportAllZip()`. Zgradi STORE-method ZIP iz vseh pasov s QSO-ji prek `_exportingSession`; brez zunanjih odvisnosti. |
 | EDI uvoz | `parseEdiForImport(text)`, `triggerImport()`, `handleImportFile(input)`, `importEdi(text)`. Prebere REG1TEST EDI; pretvori YYMMDD → YYYYMMDD, številko načina → niz, normalizira lokator; doda QSO-je v ustrezno vrstico pasu, če pas obstaja v seji. |
 | EDI izvoz | `buildEdi()`, `showExportModal()`, `showExportFor()`, `_showExportFor()`, `_exportBand()`, `closeModal()`. |
-| Backup / Obnovi | `exportBackup()` — serializira `_sessions` v `{app:'vhf-logger', v:1, date, sessions}` JSON in ga prenese. `validateBackup(obj)` — strukturna validacija (ime app, polje sessions, per-seja `id`/`myCall`/`bands`/`qsos`, per-QSO `_id`/`band`/`call`); vrne polje sej ali `null`. `triggerRestore()` + `handleRestoreFile(input)` — izbira datoteke → razčlenitev JSON → `validateBackup` → potrditev → zamenja `_sessions` → `saveSessions()` → `showHome()`. |
+| Backup / Obnovi | `exportBackup()` — serializira `_sessions` v `{app:'vhf-logger', v:1, date, sessions}` JSON in ga prenese. `validateBackup(obj)` — strukturna validacija (ime app, polje sessions, per-seja `id`/`myCall`/`bands`/`qsos`, per-QSO `_id`/`band`/`call`); polji `id` in `_id` se dodatno preverita z `_SAFE_ID=/^[a-z0-9]+$/` za blokado znakov za injiciranje; vrne polje sej ali `null`. `triggerRestore()` + `handleRestoreFile(input)` — izbira datoteke (omejitev 10 MB) → razčlenitev JSON → `validateBackup` → potrditev → zamenja `_sessions` → `saveSessions()` → `showHome()`. |
 | Tema + inicializacija | `toggleTheme()`, `init()`. |
 
 **Ključne podatkovne strukture:**
@@ -488,7 +488,7 @@ Stolpec 8 = izmenjava (prazno), stolpci 11–12 = rezervirano (prazno), stolpec 
 8. Gumb ⚙ Uredi → `editSessionSetup()` predizpolni obrazec → `startSession()` posodobi `_current` → `showLogger(_current)`
 9. Gumb ⬆ EDI → `triggerImport()` → izbirnik datotek → `handleImportFile()` → `parseEdiForImport()` → `importEdi()` → `recalcDupes()` → `renderTable()`
 
-**Testi:** `vhf-logger/vhf-logger.test.js` — 146 testov v 16 skupinah (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`).
+**Testi:** `vhf-logger/vhf-logger.test.js` — 163 testov v 16 skupinah (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`).
 
 ---
 

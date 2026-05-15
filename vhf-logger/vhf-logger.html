@@ -339,7 +339,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
 
 <header>
   <div class="logo">S56OA VHF<span class="icon">◉</span>Logger</div>
-  <span class="version">v1.7</span>
+  <span class="version">v1.8</span>
   <div class="hdr-info" id="hdrInfo"></div>
   <div class="lang-wrap">
     <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" aria-label="Preklopi temo / Toggle theme">☀</button>
@@ -827,8 +827,8 @@ const BAND_COLORS={
 const BAND_OPTS = [
   {band:'6m',  freq:'50.150',   edi:'50 MHz'    },
   {band:'4m',  freq:'70.200',   edi:'70 MHz'    },
-  {band:'2m',  freq:'144.300',  edi:'144 MHz'   },
-  {band:'70cm',freq:'432.200',  edi:'432 MHz'   },
+  {band:'2m',  freq:'144.300',  edi:'145 MHz'   },
+  {band:'70cm',freq:'432.200',  edi:'435 MHz'   },
   {band:'23cm',freq:'1296.200', edi:'1296 MHz'  },
   {band:'13cm',freq:'2320.100', edi:'2320 MHz'  },
   {band:'9cm', freq:'3400.100', edi:'3400 MHz'  },
@@ -985,7 +985,17 @@ let _soundEnabled=true;       // init from localStorage in init()
 let _statsOpen=false;         // init from localStorage in init()
 let _exportingSession=null;   // tracks which session the export modal is for
 
-function loadSessions(){ try{ _sessions=JSON.parse(localStorage.getItem(STORE)||'[]'); } catch{ _sessions=[]; } }
+function loadSessions(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(STORE)||'[]');
+    _sessions=Array.isArray(raw)?raw.filter(s=>
+      s&&typeof s==='object'&&
+      typeof s.id==='string'&&_SAFE_ID.test(s.id)&&
+      typeof s.myCall==='string'&&
+      Array.isArray(s.bands)&&Array.isArray(s.qsos)
+    ):[];
+  }catch{ _sessions=[]; }
+}
 function saveSessions(){
   try{ localStorage.setItem(STORE,JSON.stringify(_sessions)); }
   catch(e){ showToast(t('errStorageFull'),true); }
@@ -1005,18 +1015,20 @@ function exportBackup(){
   showToast(t('toastBackupDone'));
 }
 
+const _SAFE_ID=/^[a-z0-9]+$/;
 function validateBackup(obj){
   if(!obj||typeof obj!=='object'||Array.isArray(obj)) return null;
   if(obj.app!=='vhf-logger') return null;
   if(!Array.isArray(obj.sessions)) return null;
   for(const s of obj.sessions){
     if(!s||typeof s!=='object') return null;
-    if(typeof s.id!=='string'||!s.id) return null;
+    if(typeof s.id!=='string'||!_SAFE_ID.test(s.id)) return null;
     if(typeof s.myCall!=='string') return null;
     if(!Array.isArray(s.bands)||!Array.isArray(s.qsos)) return null;
     for(const q of s.qsos){
       if(!q||typeof q!=='object') return null;
-      if(typeof q._id!=='string'||typeof q.band!=='string'||typeof q.call!=='string') return null;
+      if(typeof q._id!=='string'||!_SAFE_ID.test(q._id)) return null;
+      if(typeof q.band!=='string'||typeof q.call!=='string') return null;
     }
   }
   return obj.sessions;
@@ -1030,6 +1042,7 @@ function triggerRestore(){
 function handleRestoreFile(input){
   const file=input.files[0];
   if(!file) return;
+  if(file.size>10_000_000){ showToast(t('errRestoreInvalid'),true); return; }
   const reader=new FileReader();
   reader.onload=e=>{
     let obj;
@@ -1157,9 +1170,9 @@ function renderHome(){
       <div class="lc-meta"><span>${htmlEsc(s.myLoc)}</span><span>${mod}</span><span>${s.qsos.length} QSO</span></div>
       <div class="lc-bands">${chips||'—'}</div>
       <div class="lc-act">
-        <button class="btn btn-primary btn-sm" onclick="resumeSession('${s.id}')">${t('btnCont')}</button>
-        <button class="btn btn-secondary btn-sm" onclick="showExportFor('${s.id}')">⬇ EDI</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteSession('${s.id}')" aria-label="${t('ariaDelLog')} ${htmlEsc(s.myCall)}">${t('btnDel')}</button>
+        <button class="btn btn-primary btn-sm" data-action="resume" data-id="${htmlEsc(s.id)}">${t('btnCont')}</button>
+        <button class="btn btn-secondary btn-sm" data-action="export" data-id="${htmlEsc(s.id)}">⬇ EDI</button>
+        <button class="btn btn-danger btn-sm" data-action="delete" data-id="${htmlEsc(s.id)}" aria-label="${t('ariaDelLog')} ${htmlEsc(s.myCall)}">${t('btnDel')}</button>
       </div>
     </div>`;
   }).join('');
@@ -1435,7 +1448,7 @@ function renderTable(){
       <td class="num">${htmlEsc(q.rstS)}/${htmlEsc(q.rstR)}</td>
       <td class="num">${String(q.nrS).padStart(3,'0')}/${String(q.nrR||0).padStart(3,'0')}</td>
       <td class="num" style="color:var(--dim);font-size:10px">${htmlEsc(utc)}</td>
-      <td><button class="btn-del" onclick="event.stopPropagation();deleteQso('${q._id}')" aria-label="${t('ariaDelQso')} ${htmlEsc(q.call)}" title="${t('ariaDelQso')} ${htmlEsc(q.call)}">✕</button></td>
+      <td><button class="btn-del" aria-label="${t('ariaDelQso')} ${htmlEsc(q.call)}" title="${t('ariaDelQso')} ${htmlEsc(q.call)}">✕</button></td>
     </tr>`;
   }).join('');
   document.getElementById('tblCnt').textContent=`${rows.length} QSO`;
@@ -1542,7 +1555,12 @@ function saveEditedQso(){
 // Row click → edit (set up once after page load)
 function setupTableClickHandler(){
   document.getElementById('tBody').addEventListener('click',function(e){
-    if(e.target.closest('.btn-del')) return;
+    const del=e.target.closest('.btn-del');
+    if(del){
+      const row=del.closest('tr[data-qid]');
+      if(row) deleteQso(row.dataset.qid);
+      return;
+    }
     const row=e.target.closest('tr[data-qid]');
     if(row) editQso(row.dataset.qid);
   });
@@ -1828,6 +1846,7 @@ function buildEdi(session,band){
   const opt=BAND_OPTS.find(o=>o.band===band);
   const ediBand=opt?opt.edi:(bc.freq?bc.freq+' MHz':band);
   const first=qsos[0];
+  const last=qsos[qsos.length-1];
 
   // C* summary — computed from non-dupe QSOs
   const valid=qsos.filter(q=>!q.dupe);
@@ -1839,27 +1858,29 @@ function buildEdi(session,band){
   const dxSet=new Set();
   for(const q of valid){const m=baseCall(q.call).match(/^([A-Z]+[0-9])/);if(m)dxSet.add(m[1]);}
   const cDXCs=dxSet.size;
-  const cToSc=cQSOP+cWWLs;
+  // IARU-R1 VHF: total score = sum of QRB × (locator squares + DXCC countries)
+  const cToSc=cQSOP*(cWWLs+cDXCs);
   const odx=valid.reduce((best,q)=>(!best||(q.qrb||0)>(best.qrb||0))?q:best,null);
   const cODXC=odx?`${odx.call};${(odx.wwl||'').toUpperCase()};${Math.round(odx.qrb||0)}`:';;0';
+  const antH=bc.antH||'';
 
   let out='[REG1TEST;1]\r\n';
-  out+=`TDate=${first.utcDate}\r\nTTime=${first.utcTime}\r\n`;
+  out+=`TDate=${first.utcDate};${last.utcDate}\r\n`;
   out+=`TCall=${session.myCall}\r\nTLocator=${session.myLoc}\r\n`;
   out+=`TName=${session.operator||session.myCall}\r\n`;
   out+=`RName=${session.contest}\r\nRBand=${ediBand}\r\nRAZ=28\r\nRHBBS=\r\n`;
-  out+=`PWWLo=${session.myLoc}\r\nPWWLr=\r\nPCall=${session.myCall}\r\nPBand=${ediBand}\r\n`;
+  out+=`PWWLo=${session.myLoc}\r\nPCall=${session.myCall}\r\nPBand=${ediBand}\r\n`;
   out+=`PSect=${session.sect||''}\r\nPClub=${session.club||''}\r\nRClub=\r\n`;
   out+=`MOpe1=${session.operator||session.myCall}\r\nMOpe2=\r\n`;
   out+=`SPowe=${bc.power||100}\r\nSAnte=${bc.antenna||''}\r\n`;
-  out+=`STXEq=${bc.txEq||''}\r\nSRXEq=${bc.rxEq||''}\r\nSAntH=${bc.antH||''}\r\n`;
-  out+=`CQSOs=${cQSOs}\r\nCQSOP=${cQSOP}\r\n`;
-  out+=`CWWLs=${cWWLs}\r\nCWWLB=${cWWLs}\r\n`;
-  out+=`CExcs=${cExcs}\r\nCExcB=${cExcs}\r\n`;
-  out+=`CDXCs=${cDXCs}\r\nCDXCB=${cDXCs}\r\n`;
+  out+=`STXEq=${bc.txEq||''}\r\nSRXEq=${bc.rxEq||''}\r\nSAntH=${antH};${antH}\r\n`;
+  out+=`CQSOs=${cQSOs};${cWWLs+cDXCs}\r\nCQSOP=${cQSOP}\r\n`;
+  out+=`CWWLs=${cWWLs};0;${cWWLs}\r\nCWWLB=0\r\n`;
+  out+=`CExcs=${cExcs};0;${cExcs}\r\nCExcB=0\r\n`;
+  out+=`CDXCs=${cDXCs};0;${cDXCs}\r\nCDXCB=0\r\n`;
   out+=`CToSc=${cToSc}\r\nCODXC=${cODXC}\r\n`;
   out+='\r\n[Remarks]\r\n\r\n';
-  out+=`[QSORecords ${qsos.length}]\r\n`;
+  out+=`[QSORecords;${qsos.length}]\r\n`;
   for(const q of qsos){
     const d=q.utcDate.slice(2);
     const mn=MODE_NUM[q.mode]||1;
@@ -1867,7 +1888,7 @@ function buildEdi(session,band){
     const nr=String(q.nrR||0).padStart(3,'0');
     const wwl=(q.wwl||'').toUpperCase();
     const qrb=Math.round(q.qrb||0);
-    out+=`${d};${q.utcTime};${q.call};${mn};${q.rstS};${ns};${q.rstR};${nr};;${wwl};${qrb};;;${q.dupe?'D':''}\r\n`;
+    out+=`${d};${q.utcTime};${q.call};${mn};${q.rstS};${ns};${q.rstR};${nr};;${wwl};${qrb};;;;${q.dupe?'D':''}\r\n`;
   }
   return out;
 }
@@ -2133,7 +2154,7 @@ function parseEdiForImport(text){
     } else {
       const f=tr.split(';');
       if(f.length<10) continue;
-      const [yymmdd,hhmm,call,mn,rstS,nrS,rstR,nrR,,wwlRaw,qrbRaw,,,dupeFlag]=f;
+      const [yymmdd,hhmm,call,mn,rstS,nrS,rstR,nrR,,wwlRaw,qrbRaw,,,,dupeFlag]=f;
       if(!call||call.length<2) continue;
       const yy=parseInt(yymmdd.slice(0,2));
       const utcDate=`${yy>=80?1900+yy:2000+yy}${yymmdd.slice(2)}`;
@@ -2232,6 +2253,14 @@ function init(){
   renderHome();
   loadBaseline();
   setupTableClickHandler();
+  document.getElementById('logList').addEventListener('click',function(e){
+    const btn=e.target.closest('[data-action]');
+    if(!btn) return;
+    const id=btn.dataset.id, action=btn.dataset.action;
+    if(action==='resume') resumeSession(id);
+    else if(action==='export') showExportFor(id);
+    else if(action==='delete') deleteSession(id);
+  });
   // Global Esc handler
   document.addEventListener('keydown',function(e){
     if(!document.getElementById('screen-logger')?.classList.contains('active')) return;

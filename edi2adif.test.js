@@ -78,8 +78,8 @@ const { normBand, parseEDI, adifField, csvEsc, t, setLang, modeBadge } = ctx;
 //   [1] S56M  – CW,  valid locator JN86AO, not dupe
 //   [2] S58Z  – FM,  invalid locator JN75 (4 chars) → wwl=''
 //   [3] S59DGO – SSB, EDI dupe flag (col 13 = 'D')
-//   [4] S57A  – date 980102 → 1998 (YY≥90), invalid locator JN86
-//   [5] S57B  – date 000704 → 2000 (YY<90)
+//   [4] S57A  – date 980102 → 1998 (YY≥80), invalid locator JN86
+//   [5] S57B  – date 000704 → 2000 (YY<80)
 const SAMPLE_EDI = `
 [REG1TEST;1]
 TName=VHF UHF Contest
@@ -214,8 +214,16 @@ describe('parseEDI', () => {
   describe('date parsing', () => {
     it('YYYYMMDD stored correctly',            () => assert.equal(result.qsos[0].date,     '20230902'));
     it('display date as DD.MM.YYYY',           () => assert.equal(result.qsos[0].dateDisp, '02.09.2023'));
-    it('YY≥90 → 1900+YY  (980102 → 1998)',    () => assert.equal(result.qsos[4].date,     '19980102'));
-    it('YY<90 → 2000+YY  (000704 → 2000)',    () => assert.equal(result.qsos[5].date,     '20000704'));
+    it('YY≥80 → 1900+YY  (980102 → 1998)',    () => assert.equal(result.qsos[4].date,     '19980102'));
+    it('YY<80 → 2000+YY  (000704 → 2000)',    () => assert.equal(result.qsos[5].date,     '20000704'));
+    it('YY=80 → 1980 (cutoff inclusive)',      () => {
+      const edi = `[REG1TEST;1]\nPBand=144 MHz\n[QSORecords;1]\n800615;1200;S57X;1;59;001;59;001;;JN76ef;100;;;;\n`;
+      assert.equal(parseEDI(edi, 't.edi').qsos[0].date, '19800615');
+    });
+    it('YY=79 → 2079 (below cutoff)',          () => {
+      const edi = `[REG1TEST;1]\nPBand=144 MHz\n[QSORecords;1]\n790615;1200;S57X;1;59;001;59;001;;JN76ef;100;;;;\n`;
+      assert.equal(parseEDI(edi, 't.edi').qsos[0].date, '20790615');
+    });
   });
 
   describe('time parsing', () => {

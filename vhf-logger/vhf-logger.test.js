@@ -357,7 +357,7 @@ describe('buildEdi', () => {
 
   it('contains QSORecords section with correct count', () => {
     const out = buildEdi(session, '2m');
-    assert.ok(out.includes('[QSORecords 3]'), 'missing [QSORecords 3]');
+    assert.ok(out.includes('[QSORecords;3]'), 'missing [QSORecords;3]');
   });
 
   it('encodes SSB as mode 1', () => {
@@ -414,9 +414,30 @@ describe('buildEdi', () => {
     assert.ok(out.includes('SAnte=9el Yagi'), `SAnte not found; got: ${out.match(/SAnte=.*/)?.[0]}`);
   });
 
-  it('uses full YYYYMMDD for TDate in header', () => {
+  it('TDate uses YYYYMMDD;YYYYMMDD (start;end) format', () => {
     const out = buildEdi(session, '2m');
-    assert.ok(out.includes('TDate=20260510'), `TDate full year not found; got: ${out.match(/TDate=.*/)?.[0]}`);
+    // All QSOs are on 20260510 so start and end are the same date
+    assert.ok(out.includes('TDate=20260510;20260510'), `TDate start;end not found; got: ${out.match(/TDate=.*/)?.[0]}`);
+  });
+
+  it('TDate end date is last QSO date when spanning multiple days', () => {
+    const s2 = { ...session, qsos: [
+      ...session.qsos,
+      { _id:'q4', band:'2m', mode:'SSB', call:'HA6XY', wwl:'JN97nh',
+        rstS:'59', rstR:'59', nrS:4, nrR:5, utcDate:'20260511', utcTime:'0800', qrb:400, brg:120, dupe:false, xFlags:[] },
+    ]};
+    const out = buildEdi(s2, '2m');
+    assert.ok(out.includes('TDate=20260510;20260511'), `TDate end date not updated; got: ${out.match(/TDate=.*/)?.[0]}`);
+  });
+
+  it('TTime is not present (non-standard field removed)', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(!out.includes('TTime='), 'TTime must not appear in output');
+  });
+
+  it('PWWLr is not present (non-standard field removed)', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(!out.includes('PWWLr='), 'PWWLr must not appear in output');
   });
 
   it('PSect populated from session.sect', () => {
@@ -431,15 +452,45 @@ describe('buildEdi', () => {
     assert.ok(!out.includes('OPEqu'), `OPEqu must not appear (use SRXEq)`);
   });
 
-  it('CQSOs counts non-dupe QSOs', () => {
+  it('CQSOs counts non-dupe QSOs with multiplier (CWWLs+CDXCs)', () => {
     const out = buildEdi(session, '2m');
-    assert.ok(out.includes('CQSOs=2'), `CQSOs should be 2 (q3 is dupe); got: ${out.match(/CQSOs=.*/)?.[0]}`);
+    // q1 S59DGO, q2 OE5VRL/P valid; q3 dupe. DXCCs: S59→S5(1), OE5→OE(1) = 2; WWLs = 2; mult = 4
+    assert.ok(out.includes('CQSOs=2;'), `CQSOs=2; not found; got: ${out.match(/CQSOs=.*/)?.[0]}`);
+    const m = out.match(/CQSOs=(\d+);(\d+)/);
+    assert.ok(m && m[1]==='2', `CQSOs count should be 2; got: ${m?.[1]}`);
   });
 
-  it('CWWLs counts unique 4-char grid squares from non-dupe QSOs', () => {
+  it('CWWLs counts unique 4-char grid squares with format count;0;count', () => {
     const out = buildEdi(session, '2m');
     // q1: JN65vp → JN65, q2: JN78dg → JN78, q3 is dupe → excluded → 2 squares
-    assert.ok(out.includes('CWWLs=2'), `CWWLs should be 2; got: ${out.match(/CWWLs=.*/)?.[0]}`);
+    assert.ok(out.includes('CWWLs=2;0;2'), `CWWLs should be 2;0;2; got: ${out.match(/CWWLs=.*/)?.[0]}`);
+  });
+
+  it('CWWLB is 0', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('CWWLB=0\r\n'), `CWWLB should be 0; got: ${out.match(/CWWLB=.*/)?.[0]}`);
+  });
+
+  it('CDXCs format is count;0;count', () => {
+    const out = buildEdi(session, '2m');
+    const m = out.match(/CDXCs=(\d+);0;(\d+)/);
+    assert.ok(m && m[1]===m[2], `CDXCs count and multiplier should match; got: ${out.match(/CDXCs=.*/)?.[0]}`);
+  });
+
+  it('CDXCB is 0', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('CDXCB=0\r\n'), `CDXCB should be 0; got: ${out.match(/CDXCB=.*/)?.[0]}`);
+  });
+
+  it('CExcs format is count;0;count', () => {
+    const out = buildEdi(session, '2m');
+    const m = out.match(/CExcs=(\d+);0;(\d+)/);
+    assert.ok(m && m[1]===m[2], `CExcs count and multiplier should match; got: ${out.match(/CExcs=.*/)?.[0]}`);
+  });
+
+  it('CExcB is 0', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('CExcB=0\r\n'), `CExcB should be 0; got: ${out.match(/CExcB=.*/)?.[0]}`);
   });
 
   it('CQSOP is sum of QRB for non-dupe QSOs', () => {
@@ -453,6 +504,16 @@ describe('buildEdi', () => {
     assert.ok(out.includes('CODXC=OE5VRL/P;JN78DG;180'), `CODXC not correct; got: ${out.match(/CODXC=.*/)?.[0]}`);
   });
 
+  it('CToSc is CQSOP × (CWWLs + CDXCs)', () => {
+    const out = buildEdi(session, '2m');
+    // q1: S59DGO JN65vp 50km, q2: OE5VRL/P JN78dg 180km (valid); q3 dupe
+    // CQSOP=230, CWWLs=2 (JN65,JN78), CDXCs=2 (S5,OE) → CToSc=230×4=920
+    const m = out.match(/CToSc=(\d+)/);
+    assert.ok(m, 'CToSc not found');
+    const cqsop = 230, cwwls = 2, cdxcs = 2;
+    assert.equal(parseInt(m[1]), cqsop * (cwwls + cdxcs), `CToSc should be ${cqsop*(cwwls+cdxcs)}, got ${m[1]}`);
+  });
+
   it('PClub populated from session.club (LOW-EDI)', () => {
     const out = buildEdi(session, '2m');
     assert.ok(out.includes('PClub=S59DGO'), `PClub not found; got: ${out.match(/PClub=.*/)?.[0]}`);
@@ -464,32 +525,46 @@ describe('buildEdi', () => {
     assert.ok(out.includes('PClub=\r\n'), 'PClub should be empty');
   });
 
-  it('dupe flag D at col 13 for duplicate QSO (LOW-EDI)', () => {
+  it('dupe flag D at col 14 for duplicate QSO', () => {
     const out = buildEdi(session, '2m');
-    // The dupe QSO (q3) should end with ;;;D\r\n
+    // The dupe QSO (q3) should end with ;;;;D (4 empty cols after QRB, D at col 14)
     const lines = out.split('\r\n').filter(l => l.startsWith('260510'));
     const dupeLine = lines[2]; // third QSO chronologically = q3 (dupe)
-    assert.ok(dupeLine.endsWith(';D'), `dupe line should end with ;D, got: ${dupeLine}`);
+    const fields = dupeLine.split(';');
+    assert.equal(fields.length, 15, `dupe line should have 15 fields, got ${fields.length}: ${dupeLine}`);
+    assert.equal(fields[14], 'D', `dupe flag should be at col 14, got: ${fields[14]}`);
   });
 
-  it('non-dupe QSO has empty col 13 (LOW-EDI)', () => {
+  it('non-dupe QSO has empty col 14', () => {
     const out = buildEdi(session, '2m');
     const lines = out.split('\r\n').filter(l => l.startsWith('260510'));
     const cleanLine = lines[0]; // q1 — not a dupe
-    assert.ok(!cleanLine.endsWith(';D'), `clean line should not end with ;D: ${cleanLine}`);
-    assert.ok(cleanLine.endsWith(';'), `clean line col 13 should be empty (trailing ;): ${cleanLine}`);
+    const fields = cleanLine.split(';');
+    assert.equal(fields.length, 15, `clean line should have 15 fields, got ${fields.length}: ${cleanLine}`);
+    assert.equal(fields[14], '', `col 14 should be empty for non-dupe, got: ${fields[14]}`);
   });
 
-  it('QSO record has exactly 14 fields (col 0–13)', () => {
+  it('QSO record has exactly 15 fields (col 0–14)', () => {
     const out = buildEdi(session, '2m');
     const qsoLine = out.split('\r\n').find(l => l.startsWith('260510'));
     const fields = qsoLine.split(';');
-    assert.equal(fields.length, 14, `expected 14 fields, got ${fields.length}: ${qsoLine}`);
+    assert.equal(fields.length, 15, `expected 15 fields, got ${fields.length}: ${qsoLine}`);
   });
 
-  it('SAntH populated from band.antH', () => {
+  it('SAntH uses height;height format for ground and sea level', () => {
     const out = buildEdi(session, '2m');
-    assert.ok(out.includes('SAntH=1200'), `SAntH not found; got: ${out.match(/SAntH=.*/)?.[0]}`);
+    assert.ok(out.includes('SAntH=1200;1200'), `SAntH should be 1200;1200; got: ${out.match(/SAntH=.*/)?.[0]}`);
+  });
+
+  it('SAntH is empty;empty when antH not set', () => {
+    const s = { ...session, bands: [{ band:'2m', freq:'144.300', power:100, antenna:'Yagi' }] };
+    const out = buildEdi(s, '2m');
+    assert.ok(out.includes('SAntH=;\r\n'), `SAntH should be ;  when antH missing; got: ${out.match(/SAntH=.*/)?.[0]}`);
+  });
+
+  it('PBand uses 145 MHz for 2m band', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('PBand=145 MHz'), `PBand should be 145 MHz; got: ${out.match(/PBand=.*/)?.[0]}`);
   });
 });
 
@@ -588,15 +663,16 @@ describe('sessionEdit', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('parseEdiForImport', () => {
+  // 15 fields per QSO record (col 0–14); dupe flag at col 14 per spec
   const ediText = [
     '[REG1TEST;1]',
-    'TDate=20260510',
-    'PBand=144 MHz',
+    'TDate=20260510;20260510',
+    'PBand=145 MHz',
     'PCall=S56OA',
-    '[QSORecords 3]',
-    '260510;1030;S59DGO;1;59;001;59;001;;JN65vp;50;;;',
-    '260510;1045;OE5VRL/P;2;599;002;599;007;;JN78dg;180;;;',
-    '260510;1100;S59DGO;1;59;003;59;002;;JN65vp;50;;;D',
+    '[QSORecords;3]',
+    '260510;1030;S59DGO;1;59;001;59;001;;JN65vp;50;;;;',
+    '260510;1045;OE5VRL/P;2;599;002;599;007;;JN78dg;180;;;;',
+    '260510;1100;S59DGO;1;59;003;59;002;;JN65vp;50;;;;D',
     '',
   ].join('\r\n');
 
@@ -620,7 +696,7 @@ describe('parseEdiForImport', () => {
     assert.equal(qsos[1].mode, 'CW');
   });
 
-  it('detects dupe flag D in col 13', () => {
+  it('detects dupe flag D in col 14', () => {
     const {qsos} = parseEdiForImport(ediText);
     assert.equal(qsos[0].dupe, false);
     assert.equal(qsos[2].dupe, true);
@@ -639,7 +715,7 @@ describe('parseEdiForImport', () => {
 
   it('reads header fields', () => {
     const {header} = parseEdiForImport(ediText);
-    assert.equal(header['PBand'], '144 MHz');
+    assert.equal(header['PBand'], '145 MHz');
     assert.equal(header['PCall'], 'S56OA');
   });
 
@@ -650,9 +726,17 @@ describe('parseEdiForImport', () => {
   });
 
   it('handles YY >= 80 as 19xx', () => {
-    const old = '[REG1TEST;1]\r\n[QSORecords 1]\r\n850615;1200;DL1XYZ;1;59;001;59;001;;JO31ab;100;;;\r\n';
+    const old = '[REG1TEST;1]\r\n[QSORecords;1]\r\n850615;1200;DL1XYZ;1;59;001;59;001;;JO31ab;100;;;;\r\n';
     const {qsos} = parseEdiForImport(old);
     assert.equal(qsos[0].utcDate, '19850615');
+  });
+
+  it('tolerates old 14-field format (dupe at col 13) without crash', () => {
+    const old14 = '[REG1TEST;1]\r\n[QSORecords 3]\r\n260510;1030;S59DGO;1;59;001;59;001;;JN65vp;50;;;D\r\n';
+    const {qsos} = parseEdiForImport(old14);
+    // col 13 value 'D' is read into col 14 position (undefined) → dupe=false; no crash
+    assert.equal(qsos.length, 1);
+    assert.equal(qsos[0].dupe, false);
   });
 });
 
@@ -786,7 +870,7 @@ describe('manualTime', () => {
 
 describe('backup', () => {
   const minSession = {
-    id: 'test-001', myCall: 'S56OA', myLoc: 'JN65WP',
+    id: 'test001', myCall: 'S56OA', myLoc: 'JN65WP',
     contest: 'TEST', bands: [], qsos: [],
   };
   const minBackup = {
@@ -868,6 +952,24 @@ describe('backup', () => {
     const sessions = validateBackup({ ...minBackup, sessions: [{ ...minSession, qsos: [q] }] });
     assert.ok(Array.isArray(sessions) && sessions[0].qsos.length === 1);
   });
+
+  // ── ID content validation (XSS prevention) ──
+  it('returns null for session id containing single quote', () =>
+    assert.equal(validateBackup({ ...minBackup, sessions: [{ ...minSession, id: "');alert(1);//" }] }), null));
+
+  it('returns null for session id containing hyphen (non-alphanumeric)', () =>
+    assert.equal(validateBackup({ ...minBackup, sessions: [{ ...minSession, id: 'test-001' }] }), null));
+
+  it('returns null for session id containing uppercase letters', () =>
+    assert.equal(validateBackup({ ...minBackup, sessions: [{ ...minSession, id: 'Test001' }] }), null));
+
+  it('returns null for QSO _id containing injection chars', () => {
+    const q = { _id: "');deleteAll();//", band: '2m', call: 'S59DGO' };
+    assert.equal(validateBackup({ ...minBackup, sessions: [{ ...minSession, qsos: [q] }] }), null);
+  });
+
+  it('accepts session id with only lowercase alphanumeric chars', () =>
+    assert.ok(Array.isArray(validateBackup({ ...minBackup, sessions: [{ ...minSession, id: 'abc123xyz' }] }))));
 
   // ── i18n ──
   it('sl.btnBackup is non-empty', () =>

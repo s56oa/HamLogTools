@@ -156,7 +156,7 @@ Open the file in any modern browser (for baseline support, serve over HTTP).
 - **QSO sound** — 🔊 toggle enables a short 880 Hz beep on each successfully logged QSO (Web Audio API); two short lower-pitch pips warn on missing locator or serial; persisted in `localStorage`
 - **WWL auto-fill** — when a callsign is selected from the autocomplete dropdown, the known baseline locator is filled in automatically; can be overridden by typing
 - **Missing field warning** — if locator or received serial is absent when logging, a soft warning highlights the field in red and shows a **Save anyway** override button; does not block logging
-- **EDI export** — produces valid REG1TEST EDI v1.1 files (one per band): correct `[REG1TEST;1]` header, `SPowe`/`SAnte`/`STXEq`/`SRXEq`/`SAntH` equipment fields, `PSect` category, full C* score summary block (`CQSOs`, `CQSOP`, `CWWLs`, `CWWLs`, `CDXCs`, `CToSc`, `CODXC`), and correct 14-field QSO records
+- **EDI export** — produces valid REG1TEST EDI files (one per band): correct `[REG1TEST;1]` header, `SPowe`/`SAnte`/`STXEq`/`SRXEq`/`SAntH` equipment fields, `PSect` category, full C* score summary block (`CQSOs`, `CQSOP`, `CWWLs`, `CWWLB`, `CExcs`, `CExcB`, `CDXCs`, `CDXCB`, `CToSc`, `CODXC`), and correct 15-field QSO records (dupe flag at col 14 per spec)
 - **Session management** — multiple concurrent sessions; pause/resume between contest legs; delete individual QSOs or entire sessions
 - **Backup / Restore** — ⬇ Backup downloads all sessions as a versioned JSON file; ⬆ Restore replaces localStorage from a backup file after structure validation (protects against browser data loss or device transfer)
 - **Offline-capable PWA** — installable on iOS and Android home screen; service worker caches the app shell and baseline for fully offline use after first load
@@ -351,10 +351,10 @@ node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 
 | Test file | Tests | Groups |
 |---|---|---|
-| `edi2adif.test.js` | 120 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit) |
+| `edi2adif.test.js` | 122 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit) |
 | `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` locator mismatch ×6, `runCrosscheck` callsign ×8, missing locator ×4, thresholds ×3, callsign by locator ×4) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
-| `vhf-logger/vhf-logger.test.js` | 146 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
+| `vhf-logger/vhf-logger.test.js` | 163 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
 
 See [TESTING.md](TESTING.md) for full test documentation.
 
@@ -529,7 +529,7 @@ Datoteko odpri v katerem koli sodobnem brskalniku (za baseline podporo postreža
 - **Zvok QSO** — gumb 🔊 vklopi/izklopi kratek 880 Hz pip ob vsakem uspešno zabeleženenem QSO (Web Audio API); dva krajša pipa nižje frekvence opozorita na manjkajoč lokator ali serial; stanje ohranjeno v `localStorage`
 - **Samodejno zapolnjevanje WWL** — ob izbiri klicnega znaka iz autocomplete dropdowna se znani baseline lokator samodejno vnese v polje WWL; možno ručno prepisati
 - **Opozorilo o manjkajočih poljih** — če lokator ali sprejet serial manjkata ob vnosu QSO, se polje označi z rdečo in prikaže opozorilo z gumbom **Shrani vseeno**; ne blokira vnosa
-- **EDI izvoz** — ustvari veljavne REG1TEST EDI v1.1 datoteke (eno per pas): pravilna glava `[REG1TEST;1]`, polja opreme `SPowe`/`SAnte`/`STXEq`/`SRXEq`/`SAntH`, kategorija `PSect`, blok C* povzetka točkanja (`CQSOs`, `CQSOP`, `CWWLs`, `CDXCs`, `CToSc`, `CODXC`) in pravilni 14-polni zapisi QSO
+- **EDI izvoz** — ustvari veljavne REG1TEST EDI datoteke (eno per pas): pravilna glava `[REG1TEST;1]`, polja opreme `SPowe`/`SAnte`/`STXEq`/`SRXEq`/`SAntH`, kategorija `PSect`, blok C* povzetka točkanja (`CQSOs`, `CQSOP`, `CWWLs`, `CWWLB`, `CExcs`, `CExcB`, `CDXCs`, `CDXCB`, `CToSc`, `CODXC`) in pravilni 15-polni zapisi QSO (zastavica duplikata na stolpcu 14 po specifikaciji)
 - **Upravljanje sej** — več sočasnih sej; premor/nadaljevanje med deli tekmovanja; brisanje posameznih QSO ali celotnih sej
 - **Backup / Obnovi** — gumb ⬇ Backup prenese vse seje kot verzioniran JSON; gumb ⬆ Obnovi nadomesti localStorage iz backup datoteke po strukturni validaciji (zaščita pred izgubo podatkov ali prenosom na drugo napravo)
 - **PWA brez povezave** — namestitven na začetni zaslon iOS in Android; service worker predpomni lupino aplikacije in baseline za popolno delovanje brez interneta po prvem nalaganju
@@ -724,10 +724,10 @@ node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 
 | Testna datoteka | Testov | Skupin |
 |---|---|---|
-| `edi2adif.test.js` | 120 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplikati, CSV izvoz, urejanje v živo) |
+| `edi2adif.test.js` | 122 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplikati, CSV izvoz, urejanje v živo) |
 | `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` lokator ×6, `runCrosscheck` klicni znak ×8, manjkajoč lokator ×4, pragovi ×3, klicni znak po lokatorju ×4) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
-| `vhf-logger/vhf-logger.test.js` | 146 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
+| `vhf-logger/vhf-logger.test.js` | 163 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
 
 Celotna dokumentacija je v [TESTING.md](TESTING.md).
 

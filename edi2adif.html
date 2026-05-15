@@ -217,7 +217,7 @@ td.editing{background:rgba(77,157,224,.1)!important;outline:1px solid var(--acce
 
 <header>
   <div class="logo">S56OA EDI<span class="arr">→</span>ADIF<span class="fmt"> converter</span></div>
-  <span class="version">v1.6</span>
+  <span class="version">v1.8</span>
   <div class="stats-bar" id="statsBar" style="display:none">
     <div class="stat"><span class="stat-val" id="sSrc">0</span><span data-i18n="statFiles">datotek</span></div>
     <div class="stat"><span class="stat-val" id="sQso">0</span>QSO</div>
@@ -392,7 +392,7 @@ function parseEDI(text, filename){
       let yy=parseInt(dateRaw.substring(0,2));
       const mm=dateRaw.substring(2,4);
       const dd=dateRaw.substring(4,6);
-      const yyyy=(yy>=90?1900+yy:2000+yy);
+      const yyyy=(yy>=80?1900+yy:2000+yy);
 
       const hh=timeRaw.substring(0,2);
       const mi=timeRaw.substring(2,4);
