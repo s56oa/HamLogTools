@@ -13,7 +13,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger.test.js` | `vhf-logger.html` | 123 | 15 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 123 | 15 |
 
 The sections below document each test file in detail.
 
@@ -25,7 +25,7 @@ The sections below document each test file in detail.
 node --test --test-reporter=spec edi2adif.test.js
 node --test --test-reporter=spec edi-crosscheck.test.js
 node --test --test-reporter=spec adif-qrz-filter.test.js
-node --test --test-reporter=spec vhf-logger.test.js
+node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 ```
 
 Requires **Node.js v18 or later** (`node:test` was stabilised in v18;
@@ -192,7 +192,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger.test.js` | `vhf-logger.html` | 95 | 11 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 123 | 15 |
 
 Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 
@@ -204,7 +204,7 @@ Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 node --test --test-reporter=spec edi2adif.test.js
 node --test --test-reporter=spec edi-crosscheck.test.js
 node --test --test-reporter=spec adif-qrz-filter.test.js
-node --test --test-reporter=spec vhf-logger.test.js
+node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 ```
 
 Zahteva **Node.js v18 ali novejši** (`node:test` je bil stabiliziran v v18;
@@ -472,13 +472,13 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 ---
 
-## `vhf-logger.test.js` — 123 tests · 15 groups
+## `vhf-logger/vhf-logger.test.js` — 123 tests · 15 groups
 
-Covers the pure logic of `vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, crosscheck lookup, EDI import parsing, ZIP generation, band colors, and manual time state.
+Covers the pure logic of `vhf-logger/vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, crosscheck lookup, EDI import parsing, ZIP generation, band colors, and manual time state.
 
 ### How the tests work
 
-`vhf-logger.html` is evaluated inside a `node:vm` context using the same Proxy-based DOM mock as `edi-crosscheck.html`. Because module-level `let` bindings are not ctx properties, helpers are injected via a second `vm.runInContext` call. The ctx also explicitly receives `TextEncoder`, `TextDecoder`, `Uint8Array`, `DataView`, and `ArrayBuffer` so that `makeZip` can run correctly:
+`vhf-logger/vhf-logger.html` is evaluated inside a `node:vm` context using the same Proxy-based DOM mock as `edi-crosscheck.html`. Because module-level `let` bindings are not ctx properties, helpers are injected via a second `vm.runInContext` call. The ctx also explicitly receives `TextEncoder`, `TextDecoder`, `Uint8Array`, `DataView`, and `ArrayBuffer` so that `makeZip` can run correctly:
 - `_setCurrentForTest(session)` — sets the active session for dupe-related tests
 - `_getCurrentForTest()` — reads the active session back
 - `_getEditingExistingForTest()` — reads the `_editingExisting` flag for session-edit tests
@@ -750,13 +750,13 @@ CLI orodje se izvede znotraj konteksta `node:vm`, ki nadomesti `fs`, `https`, `p
 
 ---
 
-## `vhf-logger.test.js` — 123 testov · 15 skupin
+## `vhf-logger/vhf-logger.test.js` — 123 testov · 15 skupin
 
-Pokriva čisto logiko `vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI, crosscheck poizvedbe, razčlenjevanje uvoza EDI, generiranje ZIP, barve pasov in stanje ročnega časa.
+Pokriva čisto logiko `vhf-logger/vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI, crosscheck poizvedbe, razčlenjevanje uvoza EDI, generiranje ZIP, barve pasov in stanje ročnega časa.
 
 ### Kako testi delujejo
 
-`vhf-logger.html` se izvede znotraj konteksta `node:vm` z enakim nadomestkom DOM na osnovi Proxy kot `edi-crosscheck.html`. Ker modularni `let` vezani niso lastnosti ctx, se pomožne funkcije vbrizgajo prek drugega klica `vm.runInContext`. Ctx izrecno prejme `TextEncoder`, `TextDecoder`, `Uint8Array`, `DataView` in `ArrayBuffer` za pravilno delovanje `makeZip`:
+`vhf-logger/vhf-logger.html` se izvede znotraj konteksta `node:vm` z enakim nadomestkom DOM na osnovi Proxy kot `edi-crosscheck.html`. Ker modularni `let` vezani niso lastnosti ctx, se pomožne funkcije vbrizgajo prek drugega klica `vm.runInContext`. Ctx izrecno prejme `TextEncoder`, `TextDecoder`, `Uint8Array`, `DataView` in `ArrayBuffer` za pravilno delovanje `makeZip`:
 - `_setCurrentForTest(seja)` — nastavi aktivno sejo za teste duplikatov
 - `_getCurrentForTest()` — prebere aktivno sejo
 - `_getEditingExistingForTest()` — prebere zastavico `_editingExisting`

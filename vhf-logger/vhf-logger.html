@@ -9,7 +9,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="VHF Logger">
-<link rel="apple-touch-icon" href="icon-192.png">
+<!-- iOS icons: sized entries + generic fallback for unmatched devices -->
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="apple-touch-icon" sizes="167x167" href="icon-167.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icon-152.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<!-- Desktop favicon -->
+<link rel="icon" type="image/x-icon" href="favicon.ico">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -330,7 +336,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
 
 <header>
   <div class="logo">VHF<span class="icon">◉</span>Logger</div>
-  <span class="version">v1.2</span>
+  <span class="version">v1.3</span>
   <div class="hdr-info" id="hdrInfo"></div>
   <div class="lang-wrap">
     <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" aria-label="Preklopi temo / Toggle theme">☀</button>

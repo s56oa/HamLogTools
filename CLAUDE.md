@@ -11,9 +11,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Current tools:**
 - `edi2adif.html` — Converts REG1TEST EDI v1 contest logs to ADIF and other formats
 - `edi-crosscheck.html` — Cross-checks a new EDI log against historical logs (+ optional prebuilt OEVSV IARU R1 baseline) to flag callsign typos and locator mismatches
-- `vhf-logger.html` — Browser-based contest logger for IARU R1 VHF/UHF contests; touch-first, multi-band, exports per-band EDI, live crosscheck hints from baseline
+- `vhf-logger/vhf-logger.html` — Browser-based contest logger for IARU R1 VHF/UHF contests; touch-first, multi-band, exports per-band EDI, live crosscheck hints from baseline
 - `adif-qrz-filter.js` — Node.js CLI tool that filters an ADIF log to keep only BURO-accepting stations by querying the QRZ.com XML API
-- `build-baseline.js` — Node.js CLI tool that builds `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports, consumed by `edi-crosscheck.html` and `vhf-logger.html`
+- `build-baseline.js` — Node.js CLI tool that builds `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports, consumed by `edi-crosscheck.html` and `vhf-logger/vhf-logger.html`; mirrors output to `vhf-logger/crosscheck-baseline.json`
 
 ## Development
 
@@ -176,7 +176,7 @@ Node.js CLI script that builds `crosscheck-baseline.json` from a directory of OE
 
 ---
 
-## Architecture of vhf-logger.html
+## Architecture of vhf-logger/vhf-logger.html
 
 Single HTML file with three co-located layers (CSS → HTML → JavaScript). No external JS dependencies. Same CSS custom-property palette (`:root` dark/light variables) and `showToast()` / `dl()` pattern as the other tools. `crosscheck-baseline.json` loaded on startup via `fetch()` for live autocomplete and crosscheck hints during log entry.
 
@@ -253,7 +253,7 @@ Col 8 = exchange (empty), col 11–12 = reserved (empty), col 13 = `D` if dupe, 
 8. ⚙ Edit button → `editSessionSetup()` pre-fills form → `startSession()` updates `_current` → `showLogger(_current)`
 9. ⬆ EDI button → `triggerImport()` → file picker → `handleImportFile()` → `parseEdiForImport()` → `importEdi()` → `recalcDupes()` → `renderTable()`
 
-**Tests:** `vhf-logger.test.js` — 121 tests across 15 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`).
+**Tests:** `vhf-logger/vhf-logger.test.js` — 123 tests across 15 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`).
 
 ---
 
@@ -287,9 +287,9 @@ Node.js CLI script, no external dependencies. Pure Node.js `https` client for QR
 **Trenutna orodja:**
 - `edi2adif.html` — Pretvori REG1TEST EDI v1 tekmovalne dnevnike v format ADIF in druge formate
 - `edi-crosscheck.html` — Preveri nov EDI dnevnik proti zgodovinskim dnevnikom (+ opcijski pred-zgrajen OEVSV IARU R1 baseline) in označi morebitne napake v klicnih znakih in lokatorjih
-- `vhf-logger.html` — Brskalniški beležnik za VHF/UHF/SHF tekmovalne dnevnike z live crosscheckom, EDI izvozom in izračunom QRB/azimuta
+- `vhf-logger/vhf-logger.html` — Brskalniški beležnik za VHF/UHF/SHF tekmovalne dnevnike z live crosscheckom, EDI izvozom in izračunom QRB/azimuta
 - `adif-qrz-filter.js` — Node.js CLI orodje, ki filtrira ADIF dnevnik in ohrani samo postaje, ki sprejemajo QSL preko biroja, s poizvedovanjem prek QRZ.com XML API
-- `build-baseline.js` — Node.js CLI orodje, ki gradi `crosscheck-baseline.json` iz OEVSV IARU R1 contest CSV exportov, namenjeno za `edi-crosscheck.html` in `vhf-logger.html`
+- `build-baseline.js` — Node.js CLI orodje, ki gradi `crosscheck-baseline.json` iz OEVSV IARU R1 contest CSV exportov, namenjeno za `edi-crosscheck.html` in `vhf-logger/vhf-logger.html`; preslika izhod v `vhf-logger/crosscheck-baseline.json`
 
 ## Razvoj
 
@@ -409,7 +409,7 @@ call, mode, wwl, dateDisp, band, src
 
 ---
 
-## Arhitektura vhf-logger.html
+## Arhitektura vhf-logger/vhf-logger.html
 
 Enojna HTML datoteka s tremi solociranimi plastmi (CSS → HTML → JavaScript). Brez zunanjih JS odvisnosti. Enaka barvna paleta CSS spremenljivk (`:root` temne/svetle spremenljivke) in vzorec pomožnih funkcij `showToast()` / `dl()` kot pri ostalih orodjih. `crosscheck-baseline.json` se naloži ob zagonu prek `fetch()` za live avtodokončanje in crosscheck namige med vnosom dnevnika.
 
@@ -486,7 +486,7 @@ Stolpec 8 = izmenjava (prazno), stolpci 11–12 = rezervirano (prazno), stolpec 
 8. Gumb ⚙ Uredi → `editSessionSetup()` predizpolni obrazec → `startSession()` posodobi `_current` → `showLogger(_current)`
 9. Gumb ⬆ EDI → `triggerImport()` → izbirnik datotek → `handleImportFile()` → `parseEdiForImport()` → `importEdi()` → `recalcDupes()` → `renderTable()`
 
-**Testi:** `vhf-logger.test.js` — 121 testov v 15 skupinah (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`).
+**Testi:** `vhf-logger/vhf-logger.test.js` — 123 testov v 15 skupinah (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`).
 
 ---
 

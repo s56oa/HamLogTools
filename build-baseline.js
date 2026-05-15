@@ -8,10 +8,11 @@
  * Input  : directory of CSV files (one per contest section/band)
  * Output : compact JSON with per-call, per-band locator histograms
  *
- * The output is consumed by edi-crosscheck.html as a high-confidence
- * baseline data source (authoritative own-locator declarations from
- * robotically-validated contest logs), layered on top of user-supplied
- * EDI history.
+ * The output is consumed by edi-crosscheck.html and vhf-logger/ as a
+ * high-confidence baseline data source (authoritative own-locator declarations
+ * from robotically-validated contest logs), layered on top of user-supplied
+ * EDI history. The script mirrors the output to vhf-logger/crosscheck-baseline.json
+ * so the vhf-logger Service Worker can cache it for offline use.
  *
  * Usage:
  *   node build-baseline.js                              # defaults
@@ -287,8 +288,13 @@ function main(){
     b: bands,
     c: c,
   };
-  fs.writeFileSync(OUT, PRETTY ? JSON.stringify(out, null, 2) : JSON.stringify(out));
+  const json = PRETTY ? JSON.stringify(out, null, 2) : JSON.stringify(out);
+  fs.writeFileSync(OUT, json);
   const sizeKB = (fs.statSync(OUT).size / 1024).toFixed(1);
+
+  // Mirror into vhf-logger/ subfolder so its Service Worker can cache it offline
+  const vhfCopy = path.join(path.dirname(path.resolve(OUT)), 'vhf-logger', 'crosscheck-baseline.json');
+  try { fs.writeFileSync(vhfCopy, json); } catch(_){}
 
   // ═══ REPORT ═══
   const skipped = stats.rowsRead - stats.rowsAccepted;
@@ -297,6 +303,7 @@ function main(){
   console.log('━'.repeat(60));
   console.log(`Input directory   : ${IN_DIR}`);
   console.log(`Output file       : ${OUT}  (${sizeKB} KB)`);
+  console.log(`Mirror (vhf-logger): ${vhfCopy}`);
   console.log(`CSV files read    : ${stats.files}`);
   console.log(`Rows read         : ${stats.rowsRead}`);
   console.log(`Rows accepted     : ${stats.rowsAccepted}`);

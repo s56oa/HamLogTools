@@ -1,13 +1,17 @@
-// VHF Logger — Service Worker v1.5
+// VHF Logger — Service Worker v1.6
 // Cache version: bump this string when releasing a new version of the app
 // so that users automatically get fresh files on next online visit.
-const CACHE = 'vhf-logger-v1.5';
+const CACHE = 'vhf-logger-v1.6';
 
 // Files that must be cached on install (app shell)
 const PRECACHE = [
   './vhf-logger.html',
   './vhf-logger.webmanifest',
   './icon.svg',
+  './favicon.ico',
+  './icon-152.png',
+  './icon-167.png',
+  './icon-180.png',
   './icon-192.png',
   './icon-512.png',
 ];

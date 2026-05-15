@@ -12,9 +12,9 @@ Tools for amateur radio log processing and format conversion.
 |---|---|---|
 | [`edi2adif.html`](edi2adif.html) | Browser app | Convert REG1TEST EDI v1 contest logs to ADIF and CSV formats |
 | [`edi-crosscheck.html`](edi-crosscheck.html) | Browser app | Crosscheck a new EDI log against historical logs + optional OEVSV IARU R1 baseline — flags locator mismatches and callsign typos |
-| [`vhf-logger.html`](vhf-logger.html) | Browser app | Real-time VHF/UHF/SHF contest logger with live crosscheck hints, QRB/bearing display, and REG1TEST EDI export |
+| [`vhf-logger/vhf-logger.html`](vhf-logger/vhf-logger.html) | Browser app | Real-time VHF/UHF/SHF contest logger with live crosscheck hints, QRB/bearing display, and REG1TEST EDI export |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filter an ADIF log to keep only QSOs with BURO-accepting stations |
-| [`build-baseline.js`](build-baseline.js) | Node.js CLI | Build `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports for use with `edi-crosscheck.html` and `vhf-logger.html` |
+| [`build-baseline.js`](build-baseline.js) | Node.js CLI | Build `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports for use with `edi-crosscheck.html` and `vhf-logger/vhf-logger.html` |
 
 ---
 
@@ -132,12 +132,12 @@ No internet connection required. All processing is local in your browser.
 
 ---
 
-## VHF/UHF Contest Logger (`vhf-logger.html`)
+## VHF/UHF Contest Logger (`vhf-logger/vhf-logger.html`)
 
 Real-time contest logger for VHF/UHF/SHF bands. Stores sessions in `localStorage` — no server required.
 Open the file in any modern browser (for baseline support, serve over HTTP).
 
-**[➜ Open vhf-logger.html](vhf-logger.html)**
+**[➜ Open vhf-logger/vhf-logger.html](vhf-logger/vhf-logger.html)**
 
 ### Features
 
@@ -163,12 +163,12 @@ Open the file in any modern browser (for baseline support, serve over HTTP).
 
 ### How to Use
 
-1. Download `vhf-logger.html` (~60 KB). For baseline crosscheck support, also download [`crosscheck-baseline.json`](crosscheck-baseline.json).
+1. Download `vhf-logger/vhf-logger.html` (~60 KB). The baseline `vhf-logger/crosscheck-baseline.json` is included in the same subfolder and is loaded automatically.
 2. **For baseline support**, serve over a local HTTP server:
    ```bash
    cd /path/to/HamLogTools
    python3 -m http.server 8080
-   # then open: http://localhost:8080/vhf-logger.html
+   # then open: http://localhost:8080/vhf-logger/vhf-logger.html
    ```
    Without the baseline the logger still works fully for dupe detection, EDI export, and QRB calculation.
 3. Click **New session**, fill in the setup form (call, locator, contest, operator, club, section, reporter contact, bands with equipment), then click **Start**. To change any field later, click **⚙ Edit** in the logger toolbar.
@@ -247,7 +247,8 @@ The baseline ages because operators may move QTH or new operators emerge. Recomm
 # 1. Download fresh CSVs into iaru_oevsv_csv/ (add new contests, optionally remove old ones)
 # 2. Rebuild:
 node build-baseline.js
-# 3. The HTML tool picks up the new file automatically on next page load.
+# 3. The script writes crosscheck-baseline.json and mirrors it to vhf-logger/crosscheck-baseline.json.
+#    Both HTML tools pick up the new file automatically on next page load.
 ```
 
 ### Output format
@@ -342,7 +343,7 @@ node --test --test-reporter=spec edi-crosscheck.test.js
 node --test --test-reporter=spec adif-qrz-filter.test.js
 
 # VHF/UHF Contest Logger
-node --test --test-reporter=spec vhf-logger.test.js
+node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 ```
 
 | Test file | Tests | Groups |
@@ -350,7 +351,7 @@ node --test --test-reporter=spec vhf-logger.test.js
 | `edi2adif.test.js` | 120 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit) |
 | `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` locator mismatch ×6, `runCrosscheck` callsign ×8, missing locator ×4, thresholds ×3, callsign by locator ×4) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
-| `vhf-logger.test.js` | 121 | 15 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`) |
+| `vhf-logger/vhf-logger.test.js` | 123 | 15 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`) |
 
 See [TESTING.md](TESTING.md) for full test documentation.
 
@@ -381,9 +382,9 @@ Orodja za obdelavo in pretvorbo formatov radioamaterskih dnevnikov.
 |---|---|---|
 | [`edi2adif.html`](edi2adif.html) | Brskalniška app | Pretvorba REG1TEST EDI v1 tekmovalnih dnevnikov v ADIF in CSV formate |
 | [`edi-crosscheck.html`](edi-crosscheck.html) | Brskalniška app | Crosscheck novega EDI dnevnika glede na zgodovinske dnevnike + opcijski OEVSV IARU R1 baseline — zaznava napake lokatorjev in klicnih znakov |
-| [`vhf-logger.html`](vhf-logger.html) | Brskalniška app | Beležnik tekmovalnih dnevnikov VHF/UHF/SHF v realnem času z live crosscheckom, prikazom QRB/azimuta in izvozom REG1TEST EDI |
+| [`vhf-logger/vhf-logger.html`](vhf-logger/vhf-logger.html) | Brskalniška app | Beležnik tekmovalnih dnevnikov VHF/UHF/SHF v realnem času z live crosscheckom, prikazom QRB/azimuta in izvozom REG1TEST EDI |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filtriranje ADIF dnevnika — ohrani samo zveze s postajami, ki sprejemajo biro |
-| [`build-baseline.js`](build-baseline.js) | Node.js CLI | Zgradi `crosscheck-baseline.json` iz OEVSV IARU R1 contest CSV exportov za uporabo z `edi-crosscheck.html` in `vhf-logger.html` |
+| [`build-baseline.js`](build-baseline.js) | Node.js CLI | Zgradi `crosscheck-baseline.json` iz OEVSV IARU R1 contest CSV exportov za uporabo z `edi-crosscheck.html` in `vhf-logger/vhf-logger.html` |
 
 ---
 
@@ -501,12 +502,12 @@ Internetna povezava ni potrebna. Vsa obdelava poteka lokalno v brskalniku.
 
 ---
 
-## Beležnik VHF/UHF tekmovanj (`vhf-logger.html`)
+## Beležnik VHF/UHF tekmovanj (`vhf-logger/vhf-logger.html`)
 
 Beležnik tekmovalnih dnevnikov v realnem času za VHF/UHF/SHF pasove. Seje shranjuje v `localStorage` — strežnik ni potreben.
 Datoteko odpri v katerem koli sodobnem brskalniku (za baseline podporo postrežaj preko HTTP).
 
-**[➜ Odpri vhf-logger.html](vhf-logger.html)**
+**[➜ Odpri vhf-logger/vhf-logger.html](vhf-logger/vhf-logger.html)**
 
 ### Funkcionalnosti
 
@@ -532,12 +533,12 @@ Datoteko odpri v katerem koli sodobnem brskalniku (za baseline podporo postreža
 
 ### Navodila za uporabo
 
-1. Prenesi `vhf-logger.html` (~60 KB). Za baseline crosscheck podporo prenesi tudi [`crosscheck-baseline.json`](crosscheck-baseline.json).
+1. Prenesi `vhf-logger/vhf-logger.html` (~60 KB). Baseline `vhf-logger/crosscheck-baseline.json` je vključen v isti podmapi in se naloži samodejno.
 2. **Za baseline podporo** postrežaj preko lokalnega HTTP strežnika:
    ```bash
    cd /pot/do/HamLogTools
    python3 -m http.server 8080
-   # nato odpri: http://localhost:8080/vhf-logger.html
+   # nato odpri: http://localhost:8080/vhf-logger/vhf-logger.html
    ```
    Brez baseline-a beležnik deluje normalno za zaznavanje duplikatov, EDI izvoz in izračun QRB.
 3. Klikni **Nova seja**, izpolni nastavitveni obrazec (klicni znak, lokator, tekmovanje, operater, klub, sekcija, kontakt odgovornega, pasovi z opremo), nato klikni **Začni**. Za poznejše spremembe klikni **⚙ Uredi** v orodni vrstici beležnika.
@@ -616,7 +617,8 @@ Baseline se s časom stara, ker se operatorji selijo ali pojavijo novi. Priporo�
 # 1. Prenesi sveže CSV-je v iaru_oevsv_csv/ (dodaj nova tekmovanja, opcijsko odstrani stara)
 # 2. Rebuild:
 node build-baseline.js
-# 3. HTML orodje samodejno pobere novo datoteko ob naslednjem nalaganju strani.
+# 3. Skripta zapiše crosscheck-baseline.json in ga preslika v vhf-logger/crosscheck-baseline.json.
+#    Obe HTML orodji samodejno pobereta novo datoteko ob naslednjem nalaganju strani.
 ```
 
 ### Format izhoda
@@ -711,7 +713,7 @@ node --test --test-reporter=spec edi-crosscheck.test.js
 node --test --test-reporter=spec adif-qrz-filter.test.js
 
 # Beležnik VHF/UHF tekmovanj
-node --test --test-reporter=spec vhf-logger.test.js
+node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 ```
 
 | Testna datoteka | Testov | Skupin |
@@ -719,7 +721,7 @@ node --test --test-reporter=spec vhf-logger.test.js
 | `edi2adif.test.js` | 120 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplikati, CSV izvoz, urejanje v živo) |
 | `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` lokator ×6, `runCrosscheck` klicni znak ×8, manjkajoč lokator ×4, pragovi ×3, klicni znak po lokatorju ×4) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
-| `vhf-logger.test.js` | 121 | 15 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`) |
+| `vhf-logger/vhf-logger.test.js` | 123 | 15 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`) |
 
 Celotna dokumentacija je v [TESTING.md](TESTING.md).
 
