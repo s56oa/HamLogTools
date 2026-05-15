@@ -1,8 +1,8 @@
-# HamLogTools
+# S56OA HamLogTools
 
 Tools for amateur radio log processing and format conversion.
 
-**[Slovenska različica / Slovenian version ↓](#hamlogtools-sl)**
+**[Slovenska različica / Slovenian version ↓](#s56oa-hamlogtools-sl)**
 
 ---
 
@@ -18,7 +18,7 @@ Tools for amateur radio log processing and format conversion.
 
 ---
 
-## EDI → ADIF Converter (`edi2adif.html`)
+## S56OA EDI → ADIF Converter (`edi2adif.html`)
 
 Converts [REG1TEST EDI v1](http://www.edi.kkn.net/) contest logs to ADIF and other formats.
 Open the file in any modern browser — no installation required.
@@ -71,7 +71,7 @@ All processing happens in your browser — no files or QSO data are uploaded any
 
 ---
 
-## EDI Crosscheck (`edi-crosscheck.html`)
+## S56OA EDI Crosscheck (`edi-crosscheck.html`)
 
 Browser tool that compares a new EDI contest log against a statistical database built from
 historical EDI logs. Helps catch locator mismatches and callsign typos before submitting the log.
@@ -132,7 +132,7 @@ No internet connection required. All processing is local in your browser.
 
 ---
 
-## VHF/UHF Contest Logger (`vhf-logger/vhf-logger.html`)
+## S56OA VHF/UHF Contest Logger (`vhf-logger/vhf-logger.html`)
 
 Real-time contest logger for VHF/UHF/SHF bands. Stores sessions in `localStorage` — no server required.
 Open the file in any modern browser (for baseline support, serve over HTTP).
@@ -370,7 +370,7 @@ MIT
 ---
 ---
 
-# HamLogTools [SL]
+# S56OA HamLogTools [SL]
 
 Orodja za obdelavo in pretvorbo formatov radioamaterskih dnevnikov.
 
@@ -388,7 +388,7 @@ Orodja za obdelavo in pretvorbo formatov radioamaterskih dnevnikov.
 
 ---
 
-## EDI → ADIF Converter (`edi2adif.html`)
+## S56OA EDI → ADIF Converter (`edi2adif.html`)
 
 Pretvori [REG1TEST EDI v1](http://www.edi.kkn.net/) tekmovalne dnevnike v format ADIF in druge formate.
 Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
@@ -441,7 +441,7 @@ Vsa obdelava poteka v brskalniku — nobene datoteke ali podatki o zvezah niso n
 
 ---
 
-## EDI Crosscheck (`edi-crosscheck.html`)
+## S56OA EDI Crosscheck (`edi-crosscheck.html`)
 
 Brskalniško orodje, ki primerja nov EDI tekmovalni dnevnik z bazo, zgrajeno iz zgodovinskih EDI dnevnikov.
 Pomaga odkriti verjetne napake v lokatorjih in klicnih znakih pred oddajo dnevnika.
@@ -502,7 +502,7 @@ Internetna povezava ni potrebna. Vsa obdelava poteka lokalno v brskalniku.
 
 ---
 
-## Beležnik VHF/UHF tekmovanj (`vhf-logger/vhf-logger.html`)
+## S56OA VHF/UHF Contest Logger (`vhf-logger/vhf-logger.html`)
 
 Beležnik tekmovalnih dnevnikov v realnem času za VHF/UHF/SHF pasove. Seje shranjuje v `localStorage` — strežnik ni potreben.
 Datoteko odpri v katerem koli sodobnem brskalniku (za baseline podporo postrežaj preko HTTP).

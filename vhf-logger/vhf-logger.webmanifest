@@ -1,6 +1,6 @@
 {
-  "name": "VHF Logger",
-  "short_name": "VHF Logger",
+  "name": "S56OA VHF/UHF Contest Logger",
+  "short_name": "S56OA Logger",
   "description": "IARU R1 VHF/UHF/SHF tekmovalni beležnik / contest logger",
   "start_url": "./vhf-logger.html",
   "scope": "./",
