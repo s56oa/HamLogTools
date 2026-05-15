@@ -13,7 +13,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 123 | 15 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 146 | 16 |
 
 The sections below document each test file in detail.
 
@@ -192,7 +192,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `edi2adif.test.js` | `edi2adif.html` | 120 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 123 | 15 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 146 | 16 |
 
 Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 
@@ -472,9 +472,9 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 ---
 
-## `vhf-logger/vhf-logger.test.js` — 123 tests · 15 groups
+## `vhf-logger/vhf-logger.test.js` — 146 tests · 16 groups
 
-Covers the pure logic of `vhf-logger/vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, crosscheck lookup, EDI import parsing, ZIP generation, band colors, and manual time state.
+Covers the pure logic of `vhf-logger/vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, crosscheck lookup, EDI import parsing, ZIP generation, band colors, manual time state, and backup/restore validation.
 
 ### How the tests work
 
@@ -623,6 +623,18 @@ Verifies manual UTC time override state and i18n keys for new features.
 - `sl.btnExportAll` and `en.btnExportAll` are non-empty strings.
 - `sl.btnImport` and `en.btnImport` are non-empty strings.
 
+#### 16 · `backup` (23 tests)
+Verifies `validateBackup()` structure checks and i18n strings for the backup/restore feature.
+
+- Valid backup object (correct `app`, `sessions` array, valid sessions and QSOs) returns the sessions array.
+- Empty sessions array accepted.
+- Returns `null` for wrong `app` field, missing `app`, `sessions` not an array, `null` or raw array input.
+- Session-level validation: returns `null` if `id` is missing or empty, `myCall` missing, `bands` or `qsos` not arrays.
+- QSO-level validation: returns `null` if `_id`, `band`, or `call` missing from any QSO.
+- `sl.btnRestore` ≠ `en.btnRestore` (distinct translations).
+- `sl.confirmRestore` and `en.confirmRestore` contain `${n}` placeholder.
+- `sl.toastRestoreDone` and `en.toastRestoreDone` contain `${n}` placeholder.
+
 ---
 
 ## `edi-crosscheck.test.js` — 56 testov · 8 skupin
@@ -750,9 +762,9 @@ CLI orodje se izvede znotraj konteksta `node:vm`, ki nadomesti `fs`, `https`, `p
 
 ---
 
-## `vhf-logger/vhf-logger.test.js` — 123 testov · 15 skupin
+## `vhf-logger/vhf-logger.test.js` — 146 testov · 16 skupin
 
-Pokriva čisto logiko `vhf-logger/vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI, crosscheck poizvedbe, razčlenjevanje uvoza EDI, generiranje ZIP, barve pasov in stanje ročnega časa.
+Pokriva čisto logiko `vhf-logger/vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI, crosscheck poizvedbe, razčlenjevanje uvoza EDI, generiranje ZIP, barve pasov, stanje ročnega časa in validacijo backup/obnovi.
 
 ### Kako testi delujejo
 
@@ -863,6 +875,18 @@ Preverja stanje in i18n pokritost za funkcijo urejanja seje.
 - Štirje novi SL i18n ključi (`btnEditSetup`, `setupEdit`, `btnSaveSetup`, `errBandHasQsos`) so neprazni nizi.
 - Štirje novi EN i18n ključi (ista množica) so neprazni nizi.
 - `sl.setupEdit` in `en.setupEdit` sta različna niza (prevod obstaja).
+
+#### 16 · `backup` (23 testov)
+Preverja strukturno validacijo `validateBackup()` in i18n nize za funkcijo backup/obnovi.
+
+- Veljaven backup objekt (pravilen `app`, polje `sessions`, veljavne seje in QSO-ji) vrne polje sej.
+- Prazno polje `sessions` je sprejemljivo.
+- Vrne `null` za napačno polje `app`, manjkajoč `app`, `sessions` ki ni polje, `null` ali neovit niz.
+- Validacija na ravni seje: vrne `null`, če `id` manjka ali je prazen, `myCall` manjka, `bands` ali `qsos` nista polji.
+- Validacija na ravni QSO: vrne `null`, če v kateremkoli QSO manjka `_id`, `band` ali `call`.
+- `sl.btnRestore` ≠ `en.btnRestore` (obstajata različna prevoda).
+- `sl.confirmRestore` in `en.confirmRestore` vsebujeta `${n}` placeholder.
+- `sl.toastRestoreDone` in `en.toastRestoreDone` vsebujeta `${n}` placeholder.
 
 ---
 

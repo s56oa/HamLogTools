@@ -179,6 +179,9 @@ header{
 .xb-dim{background:rgba(99,126,150,.15);color:var(--muted)}
 .dupe-warn{font-family:'Space Mono',monospace;font-size:.76rem;color:var(--accent3);display:none}
 .dupe-warn.show{display:block}
+.missing-warn{font-family:'Space Mono',monospace;font-size:.76rem;color:var(--danger);display:none;align-items:center;gap:.5rem;flex-wrap:wrap}
+.missing-warn.show{display:flex}
+.field-warn{border-color:var(--danger)!important;box-shadow:0 0 0 1px var(--danger)!important}
 
 /* Main input row */
 .qf-main{display:flex;gap:.4rem;align-items:flex-end}
@@ -336,7 +339,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
 
 <header>
   <div class="logo">S56OA VHF<span class="icon">◉</span>Logger</div>
-  <span class="version">v1.6</span>
+  <span class="version">v1.7</span>
   <div class="hdr-info" id="hdrInfo"></div>
   <div class="lang-wrap">
     <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" aria-label="Preklopi temo / Toggle theme">☀</button>
@@ -350,6 +353,9 @@ tr:hover td{background:rgba(77,157,224,.04)}
   <div class="home-hdr">
     <div class="home-title" data-i18n="homeTitle">VHF Logger</div>
     <span class="base-tag" id="homeBaseTag" style="display:none"></span>
+    <button class="btn btn-secondary btn-sm" onclick="exportBackup()" data-i18n="btnBackup">⬇ Backup</button>
+    <button class="btn btn-secondary btn-sm" onclick="triggerRestore()" data-i18n="btnRestore">⬆ Obnovi</button>
+    <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="handleRestoreFile(this)">
     <button class="btn btn-primary" onclick="showSetup()" data-i18n="btnNewLog">+ Nov dnevnik</button>
   </div>
   <div class="log-list" id="logList"></div>
@@ -484,6 +490,10 @@ tr:hover td{background:rgba(77,157,224,.04)}
     <div class="qf-hints">
       <div class="xhint" id="xhint"><div class="xh-row" id="xhRow"></div></div>
       <div class="dupe-warn" id="dupeWarn" data-i18n="dupeWarn">⚠ DUPLIKAT na tem pasu!</div>
+      <div class="missing-warn" id="missingWarn">
+        <span id="missingWarnText"></span>
+        <button class="btn" style="padding:1px 8px;font-size:.72rem;border-color:var(--danger);color:var(--danger);background:transparent;min-height:auto;line-height:1.6;cursor:pointer" onclick="logQso(true)" data-i18n="btnSaveAnyway">Shrani vseeno</button>
+      </div>
     </div>
 
     <!-- Main input row -->
@@ -492,6 +502,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
         <div class="qf-lbl" data-i18n="lblCall">Klicni znak</div>
         <div class="call-wrap">
           <input class="qinp" id="inCall" autocomplete="off" autocorrect="off" spellcheck="false"
+            inputmode="text" autocapitalize="characters"
             placeholder="CALL" oninput="onCallInput()" onkeydown="onCallKey(event)">
           <div class="acdrop" id="acDrop"></div>
         </div>
@@ -506,6 +517,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
           </div>
         </div>
         <input class="qinp wwl" id="inWwl" autocomplete="off" autocorrect="off" spellcheck="false"
+          inputmode="text" autocapitalize="characters"
           placeholder="JN65ar" maxlength="6"
           oninput="onWwlInput()" onkeydown="onWwlKey(event)">
       </div>
@@ -521,15 +533,15 @@ tr:hover td{background:rgba(77,157,224,.04)}
       </div>
       <div class="qf-rst">
         <div class="qf-lbl" data-i18n="lblRstS">RST↑</div>
-        <input class="qinp-sm" id="inRstS" value="59" maxlength="3" onkeydown="onRstKey(event,'inRstR')">
+        <input class="qinp-sm" id="inRstS" value="59" maxlength="3" inputmode="numeric" onkeydown="onRstKey(event,'inRstR')">
       </div>
       <div class="qf-rst">
         <div class="qf-lbl" data-i18n="lblRstR">RST↓</div>
-        <input class="qinp-sm" id="inRstR" value="59" maxlength="3" onkeydown="onRstKey(event,'inNrR')">
+        <input class="qinp-sm" id="inRstR" value="59" maxlength="3" inputmode="numeric" onkeydown="onRstKey(event,'inNrR')">
       </div>
       <div class="qf-nrr">
         <div class="qf-lbl" data-i18n="lblNrR">Nr↓</div>
-        <input class="qinp-sm" id="inNrR" maxlength="4" onkeydown="onNrRKey(event)">
+        <input class="qinp-sm" id="inNrR" maxlength="4" inputmode="numeric" onkeydown="onNrRKey(event)" oninput="onNrRInput()">
       </div>
       <button class="btn btn-success" onclick="logQso()" style="align-self:flex-end;min-height:44px;padding:.4rem 1.1rem;white-space:nowrap;flex-shrink:0" data-i18n="btnLog">✓ Zapiši QSO</button>
     </div>
@@ -669,6 +681,16 @@ sl:{
   confirmImport:'Uvozi ${n} QSO iz pasu ${band}?',
   btnExportAll:'⬇ Vsi pasovi (ZIP)',
   ovrLabel:'→',
+  warnMissingWwl:'⚠ Lokator manjka',
+  warnMissingNrR:'⚠ Sprejet serial manjka',
+  warnMissingBoth:'⚠ Lokator in serial manjkata',
+  btnSaveAnyway:'Shrani vseeno',
+  btnBackup:'⬇ Backup',
+  btnRestore:'⬆ Obnovi',
+  confirmRestore:'Zamenjaj vse dnevnike z ${n} dnevniki iz datoteke?',
+  toastBackupDone:'Backup shranjen',
+  toastRestoreDone:'Obnovljeno ${n} dnevnikov',
+  errRestoreInvalid:'Neveljavna backup datoteka',
 },
 en:{
   homeTitle:'S56OA VHF/UHF Contest Logger',
@@ -753,6 +775,16 @@ en:{
   confirmImport:'Import ${n} QSOs from band ${band}?',
   btnExportAll:'⬇ All bands (ZIP)',
   ovrLabel:'→',
+  warnMissingWwl:'⚠ Locator missing',
+  warnMissingNrR:'⚠ Serial received missing',
+  warnMissingBoth:'⚠ Locator and serial missing',
+  btnSaveAnyway:'Save anyway',
+  btnBackup:'⬇ Backup',
+  btnRestore:'⬆ Restore',
+  confirmRestore:'Replace all logs with ${n} logs from file?',
+  toastBackupDone:'Backup saved',
+  toastRestoreDone:'Restored ${n} logs',
+  errRestoreInvalid:'Invalid backup file',
 }};
 let _lang = localStorage.getItem('vhf-lang')||'sl';
 function t(k, vars){
@@ -964,6 +996,54 @@ function syncCurrent(){
   const i=_sessions.findIndex(s=>s.id===_current.id);
   if(i>=0) _sessions[i]=_current; else _sessions.push(_current);
   saveSessions();
+}
+
+function exportBackup(){
+  const payload=JSON.stringify({app:'vhf-logger',v:1,date:new Date().toISOString(),sessions:_sessions},null,2);
+  const d=new Date().toISOString().slice(0,10);
+  dl(payload,`vhf-logger-backup-${d}.json`,'application/json');
+  showToast(t('toastBackupDone'));
+}
+
+function validateBackup(obj){
+  if(!obj||typeof obj!=='object'||Array.isArray(obj)) return null;
+  if(obj.app!=='vhf-logger') return null;
+  if(!Array.isArray(obj.sessions)) return null;
+  for(const s of obj.sessions){
+    if(!s||typeof s!=='object') return null;
+    if(typeof s.id!=='string'||!s.id) return null;
+    if(typeof s.myCall!=='string') return null;
+    if(!Array.isArray(s.bands)||!Array.isArray(s.qsos)) return null;
+    for(const q of s.qsos){
+      if(!q||typeof q!=='object') return null;
+      if(typeof q._id!=='string'||typeof q.band!=='string'||typeof q.call!=='string') return null;
+    }
+  }
+  return obj.sessions;
+}
+
+function triggerRestore(){
+  document.getElementById('restoreInput').value='';
+  document.getElementById('restoreInput').click();
+}
+
+function handleRestoreFile(input){
+  const file=input.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    let obj;
+    try{ obj=JSON.parse(e.target.result); }
+    catch{ showToast(t('errRestoreInvalid'),true); return; }
+    const sessions=validateBackup(obj);
+    if(!sessions){ showToast(t('errRestoreInvalid'),true); return; }
+    if(!confirm(t('confirmRestore',{n:sessions.length}))) return;
+    _sessions=sessions;
+    saveSessions();
+    showHome();
+    showToast(t('toastRestoreDone',{n:sessions.length}));
+  };
+  reader.readAsText(file);
 }
 
 // ════════════════════════════════════════
@@ -1372,6 +1452,9 @@ function editQso(qsoId){
   if(!_current) return;
   const q=_current.qsos.find(x=>x._id===qsoId);
   if(!q) return;
+  document.getElementById('missingWarn').className='missing-warn';
+  document.getElementById('inWwl').className='qinp wwl';
+  document.getElementById('inNrR').className='qinp-sm';
   _editingQso=q;
   document.getElementById('inCall').value=q.call;
   document.getElementById('inWwl').value=q.wwl||'';
@@ -1515,6 +1598,12 @@ function selectAc(i){
   document.getElementById('acDrop').className='acdrop';
   _acItems=[]; _acIdx=-1;
   _acCallLookup={found:true,modeLoc:it.modeLoc,modeCount:it.total,total:it.total};
+  if(it.modeLoc){
+    const raw=it.modeLoc;
+    const loc=raw.length===6 ? raw.slice(0,4).toUpperCase()+raw.slice(4).toLowerCase() : raw.toUpperCase();
+    document.getElementById('inWwl').value=loc;
+    onWwlInput();
+  }
   updateLocHint(); updateXhint(it.call); checkDupeField();
   document.getElementById('inWwl').focus();
 }
@@ -1611,6 +1700,7 @@ function onWwlInput(){
   document.getElementById('inWwl').value=v;
   updateWwlColor();
   checkDupeField();
+  document.getElementById('missingWarn').className='missing-warn';
   const call=document.getElementById('inCall').value.trim().toUpperCase();
   if(call) debouncedXhint(call);
 }
@@ -1648,11 +1738,24 @@ function checkDupeField(){
   document.getElementById('dupeWarn').className='dupe-warn'+(dupe?' show':'');
 }
 
-function logQso(){
+function logQso(force=false){
   if(!_current) return;
   if(_editingQso){ saveEditedQso(); return; }
   const call=document.getElementById('inCall').value.trim().toUpperCase();
   if(!call){ showToast(t('errNoCall'),true); return; }
+  const wwlRaw=document.getElementById('inWwl').value.trim().toUpperCase();
+  const wwl=wwlRaw.length===6 ? wwlRaw.slice(0,4)+wwlRaw.slice(4).toLowerCase() : wwlRaw;
+  const nrR=parseInt(document.getElementById('inNrR').value)||0;
+  if(!force && (wwl.length!==6 || nrR===0)){
+    const mWwl=wwl.length!==6, mNrR=nrR===0;
+    const key=mWwl&&mNrR?'warnMissingBoth':mWwl?'warnMissingWwl':'warnMissingNrR';
+    document.getElementById('missingWarnText').textContent=t(key);
+    document.getElementById('missingWarn').className='missing-warn show';
+    if(mWwl) document.getElementById('inWwl').classList.add('field-warn');
+    if(mNrR) document.getElementById('inNrR').classList.add('field-warn');
+    playWarnBeep();
+    return;
+  }
   const band=_current.activeBand;
   let utcDate, utcTime;
   if(_manualTime){
@@ -1662,8 +1765,6 @@ function logQso(){
     utcDate=`${now.getUTCFullYear()}${String(now.getUTCMonth()+1).padStart(2,'0')}${String(now.getUTCDate()).padStart(2,'0')}`;
     utcTime=`${String(now.getUTCHours()).padStart(2,'0')}${String(now.getUTCMinutes()).padStart(2,'0')}`;
   }
-  const wwlRaw=document.getElementById('inWwl').value.trim().toUpperCase();
-  const wwl=wwlRaw.length===6 ? wwlRaw.slice(0,4)+wwlRaw.slice(4).toLowerCase() : wwlRaw;
   const myPos=locToLatLon(_current.myLoc);
   const thPos=locToLatLon(wwl);
   const qrb=(myPos&&thPos)?haversine(myPos.lat,myPos.lon,thPos.lat,thPos.lon):0;
@@ -1672,7 +1773,6 @@ function logQso(){
   const rstS=document.getElementById('inRstS').value||(mode==='CW'?'599':'59');
   const rstR=document.getElementById('inRstR').value||(mode==='CW'?'599':'59');
   const nrS=nextSerial(band);
-  const nrR=parseInt(document.getElementById('inNrR').value)||0;
   const dupe=isDupe(call,band);
 
   // Crosscheck flags
@@ -1705,10 +1805,12 @@ function resetForm(){
   document.getElementById('inWwl').value='';
   document.getElementById('inNrR').value='';
   document.getElementById('inWwl').className='qinp wwl';
+  document.getElementById('inNrR').className='qinp-sm';
   document.getElementById('acDrop').className='acdrop';
   document.getElementById('locHint').className='loc-hint';
   document.getElementById('xhint').className='xhint';
   document.getElementById('dupeWarn').className='dupe-warn';
+  document.getElementById('missingWarn').className='missing-warn';
   _acItems=[]; _acIdx=-1; _acCallLookup=null; _editingQso=null;
   updateNrS();
 }
@@ -1878,6 +1980,24 @@ function playQsoBeep(){
   }catch(e){}
 }
 
+function playWarnBeep(){
+  if(!_soundEnabled) return;
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    [0, 0.15].forEach(delay=>{
+      const osc=ctx.createOscillator();
+      const g=ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.frequency.value=440;
+      g.gain.setValueAtTime(0.2,ctx.currentTime+delay);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+delay+0.07);
+      osc.start(ctx.currentTime+delay);
+      osc.stop(ctx.currentTime+delay+0.07);
+    });
+    setTimeout(()=>{try{ctx.close();}catch(_){}},500);
+  }catch(e){}
+}
+
 // ════════════════════════════════════════
 //  MANUAL TIME OVERRIDE
 // ════════════════════════════════════════
@@ -1918,6 +2038,10 @@ function onRstKey(e, nextId){
 }
 function onNrRKey(e){
   if(e.key==='Enter'){ e.preventDefault(); logQso(); }
+}
+function onNrRInput(){
+  document.getElementById('inNrR').classList.remove('field-warn');
+  document.getElementById('missingWarn').className='missing-warn';
 }
 
 // ════════════════════════════════════════

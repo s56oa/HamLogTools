@@ -74,7 +74,7 @@ const {
   locToLatLon, haversine, calcBearing,
   buildEdi, applyBaseline, lookupCall,
   isDupe, recalcDupes,
-  parseEdiForImport, makeZip,
+  parseEdiForImport, makeZip, validateBackup,
   _setCurrentForTest, _getCurrentForTest,
   _getEditingExistingForTest, _getI18nValueForTest,
   _getManualTimeForTest, _setManualTimeForTest,
@@ -777,5 +777,125 @@ describe('manualTime', () => {
   it('en.warnImportBand contains ${band} placeholder', () => {
     const s = _getI18nValueForTest('en','warnImportBand');
     assert.ok(s.includes('${band}'), `missing \${band} in: ${s}`);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  backup — validateBackup + i18n
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('backup', () => {
+  const minSession = {
+    id: 'test-001', myCall: 'S56OA', myLoc: 'JN65WP',
+    contest: 'TEST', bands: [], qsos: [],
+  };
+  const minBackup = {
+    app: 'vhf-logger', v: 1,
+    date: '2026-05-15T12:00:00.000Z',
+    sessions: [minSession],
+  };
+
+  // ── validateBackup structure ──
+  it('returns sessions array for valid backup', () => {
+    const s = validateBackup({ ...minBackup });
+    assert.ok(Array.isArray(s) && s.length === 1);
+  });
+
+  it('accepts empty sessions array', () => {
+    const s = validateBackup({ ...minBackup, sessions: [] });
+    assert.ok(Array.isArray(s) && s.length === 0);
+  });
+
+  it('returns null for wrong app name', () =>
+    assert.equal(validateBackup({ ...minBackup, app: 'other' }), null));
+
+  it('returns null when app field is missing', () => {
+    const { app: _, ...obj } = minBackup;
+    assert.equal(validateBackup(obj), null);
+  });
+
+  it('returns null when sessions is not an array', () =>
+    assert.equal(validateBackup({ ...minBackup, sessions: {} }), null));
+
+  it('returns null for null input', () =>
+    assert.equal(validateBackup(null), null));
+
+  it('returns null for array input (not wrapped)', () =>
+    assert.equal(validateBackup([minSession]), null));
+
+  it('returns null when session missing id', () => {
+    const { id: _, ...s } = minSession;
+    assert.equal(validateBackup({ ...minBackup, sessions: [s] }), null);
+  });
+
+  it('returns null when session has empty id', () =>
+    assert.equal(validateBackup({ ...minBackup, sessions: [{ ...minSession, id: '' }] }), null));
+
+  it('returns null when session missing myCall', () => {
+    const { myCall: _, ...s } = minSession;
+    assert.equal(validateBackup({ ...minBackup, sessions: [s] }), null);
+  });
+
+  it('returns null when session missing bands', () => {
+    const { bands: _, ...s } = minSession;
+    assert.equal(validateBackup({ ...minBackup, sessions: [s] }), null);
+  });
+
+  it('returns null when session missing qsos', () => {
+    const { qsos: _, ...s } = minSession;
+    assert.equal(validateBackup({ ...minBackup, sessions: [s] }), null);
+  });
+
+  it('returns null when QSO missing _id', () => {
+    const q = { band: '2m', call: 'S59DGO' };
+    assert.equal(validateBackup({ ...minBackup, sessions: [{ ...minSession, qsos: [q] }] }), null);
+  });
+
+  it('returns null when QSO missing band', () => {
+    const q = { _id: 'q1', call: 'S59DGO' };
+    assert.equal(validateBackup({ ...minBackup, sessions: [{ ...minSession, qsos: [q] }] }), null);
+  });
+
+  it('returns null when QSO missing call', () => {
+    const q = { _id: 'q1', band: '2m' };
+    assert.equal(validateBackup({ ...minBackup, sessions: [{ ...minSession, qsos: [q] }] }), null);
+  });
+
+  it('accepts session with valid QSOs', () => {
+    const q = { _id: 'q1', band: '2m', call: 'S59DGO', mode: 'SSB', wwl: 'JN65vp',
+                rstS: '59', rstR: '59', nrS: 1, nrR: 1,
+                utcDate: '20260510', utcTime: '1030', qrb: 100, brg: 45, dupe: false, xFlags: [] };
+    const sessions = validateBackup({ ...minBackup, sessions: [{ ...minSession, qsos: [q] }] });
+    assert.ok(Array.isArray(sessions) && sessions[0].qsos.length === 1);
+  });
+
+  // ── i18n ──
+  it('sl.btnBackup is non-empty', () =>
+    assert.ok(typeof _getI18nValueForTest('sl','btnBackup')==='string' && _getI18nValueForTest('sl','btnBackup').length>0));
+
+  it('en.btnBackup is non-empty', () =>
+    assert.ok(typeof _getI18nValueForTest('en','btnBackup')==='string' && _getI18nValueForTest('en','btnBackup').length>0));
+
+  it('sl.btnRestore ≠ en.btnRestore (distinct translations)', () =>
+    assert.notEqual(_getI18nValueForTest('sl','btnRestore'), _getI18nValueForTest('en','btnRestore')));
+
+  it('sl.confirmRestore contains ${n} placeholder', () => {
+    const s = _getI18nValueForTest('sl','confirmRestore');
+    assert.ok(s.includes('${n}'), `missing \${n} in: ${s}`);
+  });
+
+  it('en.confirmRestore contains ${n} placeholder', () => {
+    const s = _getI18nValueForTest('en','confirmRestore');
+    assert.ok(s.includes('${n}'), `missing \${n} in: ${s}`);
+  });
+
+  it('sl.toastRestoreDone contains ${n} placeholder', () => {
+    const s = _getI18nValueForTest('sl','toastRestoreDone');
+    assert.ok(s.includes('${n}'), `missing \${n} in: ${s}`);
+  });
+
+  it('en.toastRestoreDone contains ${n} placeholder', () => {
+    const s = _getI18nValueForTest('en','toastRestoreDone');
+    assert.ok(s.includes('${n}'), `missing \${n} in: ${s}`);
   });
 });

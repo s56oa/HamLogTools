@@ -204,6 +204,7 @@ Single HTML file with three co-located layers (CSS → HTML → JavaScript). No 
 | ZIP export | `_crc32` (IIFE CRC-32 table), `makeZip(files)`, `exportAllZip()`. Builds a STORE-method ZIP from all bands with QSOs using `_exportingSession`; no external dependencies. |
 | EDI import | `parseEdiForImport(text)`, `triggerImport()`, `handleImportFile(input)`, `importEdi(text)`. Reads REG1TEST EDI; converts YYMMDD → YYYYMMDD, mode number → string, normalizes locator; appends QSOs to the matching band row if band exists in session. |
 | EDI export | `buildEdi()`, `showExportModal()`, `showExportFor()`, `_showExportFor()`, `_exportBand()`, `closeModal()`. |
+| Backup / Restore | `exportBackup()` — serialises `_sessions` to `{app:'vhf-logger', v:1, date, sessions}` JSON and downloads it. `validateBackup(obj)` — structural validation (app name, sessions array, per-session `id`/`myCall`/`bands`/`qsos`, per-QSO `_id`/`band`/`call`); returns sessions array or `null`. `triggerRestore()` + `handleRestoreFile(input)` — file picker → JSON parse → `validateBackup` → confirm → replace `_sessions` → `saveSessions()` → `showHome()`. |
 | Theme + init | `toggleTheme()`, `init()`. |
 
 **Key data structures:**
@@ -253,7 +254,7 @@ Col 8 = exchange (empty), col 11–12 = reserved (empty), col 13 = `D` if dupe, 
 8. ⚙ Edit button → `editSessionSetup()` pre-fills form → `startSession()` updates `_current` → `showLogger(_current)`
 9. ⬆ EDI button → `triggerImport()` → file picker → `handleImportFile()` → `parseEdiForImport()` → `importEdi()` → `recalcDupes()` → `renderTable()`
 
-**Tests:** `vhf-logger/vhf-logger.test.js` — 123 tests across 15 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`).
+**Tests:** `vhf-logger/vhf-logger.test.js` — 146 tests across 16 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`).
 
 ---
 
@@ -437,6 +438,7 @@ Enojna HTML datoteka s tremi solociranimi plastmi (CSS → HTML → JavaScript).
 | ZIP izvoz | `_crc32` (IIFE tabela CRC-32), `makeZip(files)`, `exportAllZip()`. Zgradi STORE-method ZIP iz vseh pasov s QSO-ji prek `_exportingSession`; brez zunanjih odvisnosti. |
 | EDI uvoz | `parseEdiForImport(text)`, `triggerImport()`, `handleImportFile(input)`, `importEdi(text)`. Prebere REG1TEST EDI; pretvori YYMMDD → YYYYMMDD, številko načina → niz, normalizira lokator; doda QSO-je v ustrezno vrstico pasu, če pas obstaja v seji. |
 | EDI izvoz | `buildEdi()`, `showExportModal()`, `showExportFor()`, `_showExportFor()`, `_exportBand()`, `closeModal()`. |
+| Backup / Obnovi | `exportBackup()` — serializira `_sessions` v `{app:'vhf-logger', v:1, date, sessions}` JSON in ga prenese. `validateBackup(obj)` — strukturna validacija (ime app, polje sessions, per-seja `id`/`myCall`/`bands`/`qsos`, per-QSO `_id`/`band`/`call`); vrne polje sej ali `null`. `triggerRestore()` + `handleRestoreFile(input)` — izbira datoteke → razčlenitev JSON → `validateBackup` → potrditev → zamenja `_sessions` → `saveSessions()` → `showHome()`. |
 | Tema + inicializacija | `toggleTheme()`, `init()`. |
 
 **Ključne podatkovne strukture:**
@@ -486,7 +488,7 @@ Stolpec 8 = izmenjava (prazno), stolpci 11–12 = rezervirano (prazno), stolpec 
 8. Gumb ⚙ Uredi → `editSessionSetup()` predizpolni obrazec → `startSession()` posodobi `_current` → `showLogger(_current)`
 9. Gumb ⬆ EDI → `triggerImport()` → izbirnik datotek → `handleImportFile()` → `parseEdiForImport()` → `importEdi()` → `recalcDupes()` → `renderTable()`
 
-**Testi:** `vhf-logger/vhf-logger.test.js` — 123 testov v 15 skupinah (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`).
+**Testi:** `vhf-logger/vhf-logger.test.js` — 146 testov v 16 skupinah (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`).
 
 ---
 
