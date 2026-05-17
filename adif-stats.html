@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>S56OA ADIF Stats</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+:root {
+  --bg:     #0a0e14;
+  --bg2:    #0f1520;
+  --bg3:    #162030;
+  --bg4:    #1c2a3a;
+  --border: #1e3048;
+  --border2:#254060;
+  --text:   #cdd9e5;
+  --muted:  #637e96;
+  --dim:    #3d5a70;
+  --accent: #4d9de0;
+  --accent2:#2ecc8a;
+  --accent3:#f0a500;
+  --danger: #e05c4d;
+  --hdr:    linear-gradient(135deg,#0a0e14 0%,#0d1a28 100%);
+  --r:      6px;
+}
+html[data-theme="light"] {
+  --bg:     #f0f4f8;
+  --bg2:    #ffffff;
+  --bg3:    #e4ecf3;
+  --bg4:    #d4e0eb;
+  --border: #bfcfdd;
+  --border2:#96b0c6;
+  --text:   #18273a;
+  --muted:  #4a6275;
+  --dim:    #7a9ab0;
+  --accent: #1a6fad;
+  --accent2:#178a58;
+  --accent3:#a06800;
+  --danger: #c03030;
+  --hdr:    linear-gradient(135deg,#dde8f2 0%,#eaf2f8 100%);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;min-height:100vh;transition:background-color .2s,color .2s}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* HEADER */
+header{
+  background:var(--hdr);border-bottom:1px solid var(--border);
+  padding:.9rem 1.5rem;display:flex;align-items:center;gap:1rem;
+  position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);
+}
+.logo{font-family:'Space Mono',monospace;font-size:1rem;letter-spacing:-.02em}
+.logo .arr{color:var(--accent);margin:0 .3rem}
+.logo .fmt{color:var(--muted)}
+.version{
+  font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);
+  padding:1px 6px;border:1px solid var(--border);border-radius:3px;
+  margin-left:-.2rem;white-space:nowrap;
+}
+.hdr-right{margin-left:auto;display:flex;gap:4px;align-items:center}
+.lang-btn{background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;
+  transition:all .15s;font-family:'Space Mono',monospace}
+.lang-btn.active{background:var(--bg4);border-color:var(--accent);color:var(--accent)}
+.theme-btn{background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:4px;padding:2px 7px;font-size:13px;cursor:pointer;line-height:1;
+  transition:all .15s;margin-right:4px}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* DROPZONE */
+#dropzone{
+  min-height:calc(100vh - 56px);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:1.25rem;padding:2rem;
+}
+.drop-area{
+  border:1.5px dashed var(--border2);border-radius:12px;
+  padding:3rem 5rem;text-align:center;cursor:pointer;
+  transition:all .2s;background:var(--bg2);max-width:500px;width:100%;
+}
+.drop-area:hover,.drop-area.drag{border-color:var(--accent);background:rgba(77,157,224,.05)}
+.drop-ico{font-size:2.5rem;margin-bottom:.75rem;opacity:.7}
+.drop-title{font-family:'Space Mono',monospace;font-size:.95rem;margin-bottom:.4rem}
+.drop-sub{font-size:.8rem;color:var(--muted);margin-bottom:1rem}
+.drop-note{font-size:.75rem;color:var(--dim);max-width:480px;text-align:center;line-height:1.6}
+
+/* BUTTONS */
+.btn{border:none;border-radius:var(--r);padding:.4rem 1rem;font-size:.8rem;
+  font-weight:600;cursor:pointer;transition:all .15s;font-family:'IBM Plex Sans',sans-serif}
+.btn-primary{background:var(--accent);color:#0a0e14}
+.btn-primary:hover{opacity:.85}
+.btn-secondary{background:var(--bg4);color:var(--text);border:1px solid var(--border2)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:.3rem .8rem;font-size:.75rem}
+
+/* TOOLBAR */
+#filterbar{
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:.7rem 1.5rem;display:none;align-items:center;gap:.6rem;flex-wrap:wrap;
+}
+#filterbar label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.sel{
+  background:var(--bg3);border:1px solid var(--border2);border-radius:4px;
+  color:var(--text);padding:.3rem .6rem;font-size:.8rem;cursor:pointer;
+  font-family:'IBM Plex Sans',sans-serif;
+}
+.date-inp{
+  background:var(--bg3);border:1px solid var(--border2);border-radius:4px;
+  color:var(--text);padding:.3rem .6rem;font-size:.8rem;
+  font-family:'IBM Plex Sans',sans-serif;
+}
+.toolbar-sep{width:1px;height:20px;background:var(--border);margin:0 .2rem}
+
+/* MAIN */
+#dashboard{padding:1.25rem 1.5rem 3rem;max-width:1140px;margin:0 auto;display:none}
+
+/* SECTIONS */
+.section{margin-bottom:2rem}
+.section h2{
+  font-family:'Space Mono',monospace;font-size:.8rem;font-weight:700;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.1em;
+  margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);
+}
+
+/* STAT CARDS */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:4px}
+.stat-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+  padding:1rem 1.1rem;
+}
+.stat-card .val{
+  font-family:'Space Mono',monospace;font-size:1.3rem;font-weight:700;
+  color:var(--accent);word-break:break-word;line-height:1.2;
+}
+.stat-card .lbl{font-size:.7rem;color:var(--muted);margin-top:.35rem;text-transform:uppercase;letter-spacing:.05em}
+
+/* TWO COL */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:720px){.two-col{grid-template-columns:1fr}}
+
+/* TABLES */
+.tbl-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{
+  background:var(--bg3);border-bottom:1px solid var(--border2);
+  padding:.5rem .75rem;text-align:left;white-space:nowrap;
+  font-size:10px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.06em;
+}
+td{padding:.45rem .75rem;border-bottom:.5px solid var(--border);color:var(--text);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(77,157,224,.04)}
+.num{text-align:right;font-family:'Space Mono',monospace;color:var(--dim);font-size:11px}
+.dim{color:var(--muted);font-size:11px}
+
+/* CHART WRAP */
+.chart-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:1rem;overflow-x:auto}
+
+/* HEATMAP */
+.hmap-wrap{overflow-x:auto;padding:.5rem 0}
+.hmap-grid{display:grid;gap:2px;width:fit-content}
+.hmap-cell{width:12px;height:12px;border-radius:2px;background:var(--bg4);cursor:default}
+.hmap-cell:hover{outline:1px solid var(--accent);outline-offset:1px}
+.hmap-legend{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);margin-top:6px}
+.hmap-legend .hmap-cell{width:10px;height:10px;cursor:default}
+.prog-bar{height:6px;border-radius:3px;background:var(--bg4);overflow:hidden;width:80px;display:inline-block;vertical-align:middle;margin-right:4px}
+.prog-bar-fill{height:100%;background:var(--accent2);border-radius:3px}
+.bh-grid{display:grid;gap:2px}
+.bh-cell{width:20px;height:18px;border-radius:2px;font-size:8px;display:flex;align-items:center;justify-content:center;color:transparent;cursor:default;background:var(--bg4)}
+.bh-cell:hover{color:var(--text);outline:1px solid var(--accent3)}
+.bh-label-band{font-size:10px;color:var(--muted);text-align:right;padding-right:4px;font-family:'Space Mono',monospace;white-space:nowrap;line-height:18px}
+.bh-label-hour{font-size:9px;color:var(--muted);text-align:center;width:20px;line-height:1}
+
+/* TOAST */
+#toast{
+  position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;
+  background:var(--bg3);border:1px solid var(--accent2);border-radius:var(--r);
+  padding:.6rem 1rem;font-size:.8rem;color:var(--accent2);
+  transform:translateY(100px);opacity:0;transition:all .3s;pointer-events:none;
+  font-family:'Space Mono',monospace;
+}
+#toast.show{transform:translateY(0);opacity:1}
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">S56OA ADIF<span class="arr">◎</span>Stats<span class="fmt"> tool</span></div>
+  <span class="version">v1.0</span>
+  <div class="hdr-right">
+    <button class="theme-btn" id="btnTheme" onclick="toggleTheme()">☀</button>
+    <button class="lang-btn active" id="btnSL" onclick="setLang('sl')">SL</button>
+    <button class="lang-btn" id="btnEN" onclick="setLang('en')">EN</button>
+  </div>
+</header>
+
+<div id="filterbar">
+  <label id="lbBand">Pas:</label>
+  <select class="sel" id="fBand" onchange="applyFilters()"></select>
+  <div class="toolbar-sep"></div>
+  <label id="lbMode">Način:</label>
+  <select class="sel" id="fMode" onchange="applyFilters()"></select>
+  <div class="toolbar-sep"></div>
+  <label id="lbFrom">Od:</label>
+  <input type="date" class="date-inp" id="fFrom" onchange="applyFilters()">
+  <label id="lbTo">Do:</label>
+  <input type="date" class="date-inp" id="fTo" onchange="applyFilters()">
+  <div style="flex:1"></div>
+  <button class="btn btn-secondary btn-sm" id="btnReset" onclick="resetFilters()">Ponastavi</button>
+  <button class="btn btn-secondary btn-sm" id="btnAdd" onclick="document.getElementById('fileIn').click()">+ Dodaj</button>
+  <button class="btn btn-primary btn-sm" id="btnExport" onclick="exportHTML()">Izvozi HTML</button>
+  <input type="file" id="fileIn" accept=".adi,.adif" multiple style="display:none" onchange="handleFileInput(this)">
+</div>
+
+<div id="dropzone">
+  <div class="drop-area" id="dropArea">
+    <div class="drop-ico">📊</div>
+    <div class="drop-title" id="dropTxt">Naloži ADIF dnevnik</div>
+    <div class="drop-sub" id="dropSub">povleci eno ali več .adi / .adif datotek</div>
+    <button class="btn btn-primary" onclick="document.getElementById('fileIn').click()" id="dropBtn">Izberi datoteke</button>
+  </div>
+  <div class="drop-note" id="dropNote">Analiza poteka lokalno v brskalniku. Podpira format ADIF. Statistike po pasovih, načinih, kontinentih, državah in po času. Izvoz v self-contained HTML poročilo.</div>
+</div>
+
+<div id="dashboard"></div>
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// I18N
+// ══════════════════════════════════════════════════════════════════
+const S = {
+  hTitle:     {sl:'Analiza ADIF dnevnika',               en:'ADIF Log Analysis'},
+  dropTxt:    {sl:'Naloži ADIF dnevnik',                             en:'Load ADIF log'},
+  dropSub:    {sl:'povleci eno ali več .adi / .adif datotek',        en:'drop one or more .adi / .adif files'},
+  dropBtn:    {sl:'Izberi datoteke',                                 en:'Choose files'},
+  dropNote:   {sl:'Analiza poteka lokalno v brskalniku. Podpira format ADIF. Statistike po pasovih, načinih, kontinentih, državah in po času. Izvoz v self-contained HTML poročilo.',
+               en:'Analysis runs locally in the browser. Supports ADIF format. Statistics by band, mode, continent, country and time. Export to a self-contained HTML report.'},
+  lbBand:     {sl:'Pas:',    en:'Band:'},
+  lbMode:     {sl:'Način:',  en:'Mode:'},
+  lbFrom:     {sl:'Od:',     en:'From:'},
+  lbTo:       {sl:'Do:',     en:'To:'},
+  btnReset:   {sl:'Ponastavi', en:'Reset'},
+  btnExport:  {sl:'Izvozi HTML', en:'Export HTML'},
+  btnAdd:     {sl:'+ Dodaj', en:'+ Add'},
+  secOver:    {sl:'Pregled',                  en:'Overview'},
+  secBand:    {sl:'Po pasovih',               en:'By Band'},
+  secMode:    {sl:'Po načinih',               en:'By Mode'},
+  secCont:    {sl:'Po kontinentih',           en:'By Continent'},
+  secCountry: {sl:'Države (top 30)',          en:'Countries (top 30)'},
+  secTime:    {sl:'Časovna porazdelitev',     en:'Time Distribution'},
+  secTop:     {sl:'Top 20 klicnih znakov',   en:'Top 20 Callsigns'},
+  cTotal:     {sl:'Skupaj QSO',              en:'Total QSOs'},
+  cUniq:      {sl:'Unikatni klicni znaki',   en:'Unique Calls'},
+  cCountries: {sl:'Države',                  en:'Countries'},
+  cDays:      {sl:'Aktivni dnevi',           en:'Active Days'},
+  cBestDX:    {sl:'Best DX',                 en:'Best DX'},
+  cDateRange: {sl:'Obdobje',                 en:'Date Range'},
+  tBand:      {sl:'Pas',     en:'Band'},
+  tMode:      {sl:'Način',   en:'Mode'},
+  tQso:       {sl:'QSO',     en:'QSOs'},
+  tPct:       {sl:'%',       en:'%'},
+  tCalls:     {sl:'Klicnih znakov', en:'Calls'},
+  tBestDXkm:  {sl:'Best DX (km)',  en:'Best DX (km)'},
+  tCont:      {sl:'Kontinent',     en:'Continent'},
+  tCountries: {sl:'Države',        en:'Countries'},
+  tCountry:   {sl:'Država',        en:'Country'},
+  tCall:      {sl:'Klicni znak',   en:'Callsign'},
+  tCount:     {sl:'Zvez',          en:'QSOs'},
+  tMonths:    {sl:'Po mesecih',    en:'By Month'},
+  tHours:     {sl:'Po urah UTC',   en:'By Hour UTC'},
+  optAll:     {sl:'Vsi',           en:'All'},
+  noData:     {sl:'Ni podatkov',   en:'No data'},
+  toastLoaded: {sl:'Naloženo',      en:'Loaded'},
+  toastExport: {sl:'Izvoženo',      en:'Exported'},
+  secDxcc:     {sl:'DXCC entitete po pasovih',      en:'DXCC Entities by Band'},
+  secHeatmap:  {sl:'Aktivnostni heatmap',           en:'Activity Heatmap'},
+  secBandHour: {sl:'Pas × Ura UTC',                 en:'Band × Hour UTC'},
+  secQrb:      {sl:'Porazdelitev razdalj (QRB)',     en:'Distance Distribution (QRB)'},
+  dxccTotal:   {sl:'skupaj unikatnih DXCC entitet', en:'unique DXCC entities total'},
+  dxccCount:   {sl:'DXCC',                          en:'DXCC'},
+  dxccProg:    {sl:'Napredek k 100',                en:'Progress to 100'},
+  qrbRange:    {sl:'Razdalja',                      en:'Range'},
+  qrbNoData:   {sl:'Ni QRB podatkov (potreben GRIDSQUARE ali DISTANCE)',
+                en:'No QRB data (GRIDSQUARE or DISTANCE required)'},
+  hmapDow:     {sl:'Po|To|Sr|Če|Pe|So|Ne', en:'Mo|Tu|We|Th|Fr|Sa|Su'},
+  hmapMon:     {sl:'Jan|Feb|Mar|Apr|Maj|Jun|Jul|Avg|Sep|Okt|Nov|Dec',
+                en:'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec'},
+  hmapMore:    {sl:'več QSO', en:'more QSOs'},
+};
+let _lang = localStorage.getItem('adif-stats-lang') || 'sl';
+function t(k) { return (S[k]||{})[_lang] || (S[k]||{}).en || k; }
+function applyI18n() {
+  Object.keys(S).forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = t(id);
+  });
+  document.documentElement.lang = _lang === 'sl' ? 'sl' : 'en';
+  document.getElementById('btnSL').classList.toggle('active', _lang === 'sl');
+  document.getElementById('btnEN').classList.toggle('active', _lang === 'en');
+}
+function setLang(lang) {
+  _lang = lang;
+  localStorage.setItem('adif-stats-lang', lang);
+  applyI18n();
+  if(_qsos.length) { buildFilterOptions(); renderDashboard(); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PREFIX_DB + lookupCall
+// ══════════════════════════════════════════════════════════════════
+const PREFIX_DB = {
+  // USA
+  K:['United States','NA'],W:['United States','NA'],N:['United States','NA'],
+  AA:['United States','NA'],AB:['United States','NA'],AC:['United States','NA'],
+  AD:['United States','NA'],AE:['United States','NA'],AF:['United States','NA'],
+  AG:['United States','NA'],AI:['United States','NA'],AJ:['United States','NA'],
+  AK:['United States','NA'],WB:['United States','NA'],WC:['United States','NA'],
+  WD:['United States','NA'],WE:['United States','NA'],WF:['United States','NA'],
+  WG:['United States','NA'],WI:['United States','NA'],WJ:['United States','NA'],
+  WK:['United States','NA'],WN:['United States','NA'],WO:['United States','NA'],
+  WR:['United States','NA'],WS:['United States','NA'],WT:['United States','NA'],
+  WU:['United States','NA'],WV:['United States','NA'],WX:['United States','NA'],
+  WY:['United States','NA'],WZ:['United States','NA'],
+  // Canada
+  VE:['Canada','NA'],VA:['Canada','NA'],VO:['Canada','NA'],VY:['Canada','NA'],
+  VB:['Canada','NA'],VC:['Canada','NA'],VD:['Canada','NA'],VF:['Canada','NA'],
+  // Mexico / C.America / Caribbean
+  XE:['Mexico','NA'],XF:['Mexico','NA'],
+  YN:['Nicaragua','NA'],HR:['Honduras','NA'],TG:['Guatemala','NA'],
+  YS:['El Salvador','NA'],TI:['Costa Rica','NA'],HP:['Panama','NA'],
+  HH:['Haiti','NA'],HI:['Dominican Republic','NA'],CO:['Cuba','NA'],CM:['Cuba','NA'],
+  KP4:['Puerto Rico','NA'],KP2:['US Virgin Islands','NA'],VP9:['Bermuda','NA'],
+  '6Y':['Jamaica','NA'],OX:['Greenland','NA'],
+  // S.America
+  PY:['Brazil','SA'],PP:['Brazil','SA'],PQ:['Brazil','SA'],PR:['Brazil','SA'],
+  PS:['Brazil','SA'],PT:['Brazil','SA'],PU:['Brazil','SA'],PW:['Brazil','SA'],PX:['Brazil','SA'],
+  LU:['Argentina','SA'],LO:['Argentina','SA'],LP:['Argentina','SA'],LQ:['Argentina','SA'],
+  LR:['Argentina','SA'],LS:['Argentina','SA'],LT:['Argentina','SA'],LV:['Argentina','SA'],LW:['Argentina','SA'],
+  CE:['Chile','SA'],OA:['Peru','SA'],HC:['Ecuador','SA'],HK:['Colombia','SA'],
+  YV:['Venezuela','SA'],YW:['Venezuela','SA'],ZP:['Paraguay','SA'],CX:['Uruguay','SA'],
+  CP:['Bolivia','SA'],'8R':['Guyana','SA'],PZ:['Suriname','SA'],FY:['French Guiana','SA'],
+  VP8:['Falkland Islands','SA'],
+  // Europe
+  DL:['Germany','EU'],DA:['Germany','EU'],DB:['Germany','EU'],DC:['Germany','EU'],
+  DD:['Germany','EU'],DE:['Germany','EU'],DF:['Germany','EU'],DG:['Germany','EU'],
+  DH:['Germany','EU'],DI:['Germany','EU'],DJ:['Germany','EU'],DK:['Germany','EU'],
+  DM:['Germany','EU'],DN:['Germany','EU'],DO:['Germany','EU'],DP:['Germany','EU'],
+  DQ:['Germany','EU'],DR:['Germany','EU'],
+  F:['France','EU'],TM:['France','EU'],
+  G:['England','EU'],M:['England','EU'],
+  GW:['Wales','EU'],MW:['Wales','EU'],GM:['Scotland','EU'],MM:['Scotland','EU'],
+  GI:['Northern Ireland','EU'],MI:['Northern Ireland','EU'],
+  GD:['Isle of Man','EU'],GJ:['Jersey','EU'],MJ:['Jersey','EU'],GU:['Guernsey','EU'],
+  EI:['Ireland','EU'],
+  I:['Italy','EU'],IS:['Sardinia','EU'],IT:['Italy','EU'],
+  OE:['Austria','EU'],
+  OK:['Czech Republic','EU'],OL:['Czech Republic','EU'],
+  OM:['Slovakia','EU'],
+  SP:['Poland','EU'],SN:['Poland','EU'],SO:['Poland','EU'],SQ:['Poland','EU'],SR:['Poland','EU'],
+  S5:['Slovenia','EU'],
+  HB:['Switzerland','EU'],HB0:['Liechtenstein','EU'],
+  ON:['Belgium','EU'],
+  PA:['Netherlands','EU'],PB:['Netherlands','EU'],PC:['Netherlands','EU'],
+  PD:['Netherlands','EU'],PE:['Netherlands','EU'],PF:['Netherlands','EU'],
+  PG:['Netherlands','EU'],PH:['Netherlands','EU'],PI:['Netherlands','EU'],
+  OZ:['Denmark','EU'],
+  OH:['Finland','EU'],OG:['Finland','EU'],OI:['Finland','EU'],
+  SM:['Sweden','EU'],SA:['Sweden','EU'],SB:['Sweden','EU'],SC:['Sweden','EU'],
+  SD:['Sweden','EU'],SE:['Sweden','EU'],SF:['Sweden','EU'],SG:['Sweden','EU'],
+  SI:['Sweden','EU'],SJ:['Sweden','EU'],SK:['Sweden','EU'],SL:['Sweden','EU'],
+  LA:['Norway','EU'],LB:['Norway','EU'],LC:['Norway','EU'],LD:['Norway','EU'],
+  LE:['Norway','EU'],LF:['Norway','EU'],LG:['Norway','EU'],LH:['Norway','EU'],
+  TF:['Iceland','EU'],OY:['Faroe Islands','EU'],JW:['Svalbard','EU'],JX:['Jan Mayen','EU'],
+  YL:['Latvia','EU'],ES:['Estonia','EU'],LY:['Lithuania','EU'],
+  EU:['Belarus','EU'],EV:['Belarus','EU'],EW:['Belarus','EU'],
+  UT:['Ukraine','EU'],UR:['Ukraine','EU'],US:['Ukraine','EU'],UU:['Ukraine','EU'],
+  UV:['Ukraine','EU'],UW:['Ukraine','EU'],UX:['Ukraine','EU'],UY:['Ukraine','EU'],UZ:['Ukraine','EU'],
+  EM:['Ukraine','EU'],EN:['Ukraine','EU'],EO:['Ukraine','EU'],
+  '9A':['Croatia','EU'],
+  YU:['Serbia','EU'],YT:['Serbia','EU'],YZ:['Serbia','EU'],
+  E7:['Bosnia','EU'],T9:['Bosnia','EU'],
+  Z6:['Kosovo','EU'],Z3:['North Macedonia','EU'],ZA:['Albania','EU'],
+  LZ:['Bulgaria','EU'],
+  YO:['Romania','EU'],YP:['Romania','EU'],YQ:['Romania','EU'],YR:['Romania','EU'],
+  SV:['Greece','EU'],SW:['Greece','EU'],
+  HA:['Hungary','EU'],HG:['Hungary','EU'],
+  EA:['Spain','EU'],EB:['Spain','EU'],EC:['Spain','EU'],ED:['Spain','EU'],
+  EE:['Spain','EU'],EF:['Spain','EU'],EG:['Spain','EU'],EH:['Spain','EU'],
+  EA8:['Canary Islands','AF'],EA9:['Ceuta & Melilla','AF'],
+  CT:['Portugal','EU'],CS:['Portugal','EU'],
+  TA:['Turkey','EU'],
+  C3:['Andorra','EU'],
+  '5B':['Cyprus','AS'],P3:['Cyprus','AS'],
+  '4X':['Israel','AS'],'4Z':['Israel','AS'],
+  // Russia — continent resolved dynamically in lookupCall
+  R:['Russia','EU'],
+  RA:['Russia','EU'],RB:['Russia','EU'],RC:['Russia','EU'],RD:['Russia','EU'],
+  RE:['Russia','EU'],RF:['Russia','EU'],RG:['Russia','EU'],RH:['Russia','EU'],
+  RI:['Russia','EU'],RJ:['Russia','EU'],RK:['Russia','EU'],RL:['Russia','EU'],
+  RM:['Russia','EU'],RN:['Russia','EU'],RO:['Russia','EU'],RP:['Russia','EU'],
+  RQ:['Russia','EU'],RR:['Russia','EU'],RS:['Russia','EU'],RT:['Russia','EU'],
+  RU:['Russia','EU'],RV:['Russia','EU'],RW:['Russia','EU'],RX:['Russia','EU'],
+  RY:['Russia','EU'],RZ:['Russia','EU'],
+  UA:['Russia','EU'],UB:['Russia','EU'],UC:['Russia','EU'],
+  UD:['Russia','EU'],UF:['Russia','EU'],UG:['Russia','EU'],
+  // Asia
+  JA:['Japan','AS'],JE:['Japan','AS'],JF:['Japan','AS'],JG:['Japan','AS'],
+  JH:['Japan','AS'],JI:['Japan','AS'],JJ:['Japan','AS'],JK:['Japan','AS'],
+  JL:['Japan','AS'],JM:['Japan','AS'],JN:['Japan','AS'],JO:['Japan','AS'],
+  JP:['Japan','AS'],JQ:['Japan','AS'],JR:['Japan','AS'],JS:['Japan','AS'],
+  BY:['China','AS'],BA:['China','AS'],BG:['China','AS'],BH:['China','AS'],
+  BI:['China','AS'],BJ:['China','AS'],BK:['China','AS'],BL:['China','AS'],
+  BM:['China','AS'],BN:['China','AS'],BO:['China','AS'],BT:['China','AS'],BU:['China','AS'],
+  BV:['Taiwan','AS'],
+  HL:['South Korea','AS'],DS:['South Korea','AS'],DT:['South Korea','AS'],
+  P5:['North Korea','AS'],
+  HS:['Thailand','AS'],E2:['Thailand','AS'],
+  VU:['India','AS'],VT:['India','AS'],AT:['India','AS'],
+  AP:['Pakistan','AS'],
+  DU:['Philippines','AS'],'9V':['Singapore','AS'],
+  YB:['Indonesia','OC'],YC:['Indonesia','OC'],YD:['Indonesia','OC'],YE:['Indonesia','OC'],YF:['Indonesia','OC'],
+  VS:['Hong Kong','AS'],'9W':['Malaysia','AS'],'9M':['Malaysia','AS'],
+  S2:['Bangladesh','AS'],'4S':['Sri Lanka','AS'],
+  A4:['Oman','AS'],A6:['UAE','AS'],A7:['Qatar','AS'],A9:['Bahrain','AS'],
+  '7Z':['Saudi Arabia','AS'],HZ:['Saudi Arabia','AS'],
+  OD:['Lebanon','AS'],YK:['Syria','AS'],
+  '4A':['Iraq','AS'],YI:['Iraq','AS'],
+  EP:['Iran','AS'],EQ:['Iran','AS'],
+  UN:['Kazakhstan','AS'],UO:['Kazakhstan','AS'],UP:['Kazakhstan','AS'],UQ:['Kazakhstan','AS'],
+  EX:['Kyrgyzstan','AS'],EY:['Tajikistan','AS'],EZ:['Turkmenistan','AS'],UK:['Uzbekistan','AS'],
+  '4J':['Azerbaijan','AS'],'4K':['Azerbaijan','AS'],EK:['Armenia','AS'],
+  '9K':['Kuwait','AS'],
+  VK:['Australia','OC'],ZL:['New Zealand','OC'],
+  YJ:['Vanuatu','OC'],H4:['Solomon Islands','OC'],T8:['Palau','OC'],V6:['Micronesia','OC'],
+  KH6:['Hawaii','OC'],KH0:['Mariana Islands','OC'],KH2:['Guam','OC'],
+  // Africa
+  ZS:['South Africa','AF'],ZT:['South Africa','AF'],ZU:['South Africa','AF'],
+  '5N':['Nigeria','AF'],'5O':['Nigeria','AF'],
+  '7X':['Algeria','AF'],CN:['Morocco','AF'],
+  D4:['Cape Verde','AF'],'9G':['Ghana','AF'],'9J':['Zambia','AF'],
+  '9Q':['DR Congo','AF'],TZ:['Mali','AF'],'6W':['Senegal','AF'],
+  XT:['Burkina Faso','AF'],TU:['Ivory Coast','AF'],
+  '5V':['Togo','AF'],TY:['Benin','AF'],
+  '5Z':['Kenya','AF'],'5H':['Tanzania','AF'],
+  ET:['Ethiopia','AF'],'6O':['Somalia','AF'],
+  ST:['Sudan','AF'],SU:['Egypt','AF'],
+  A2:['Botswana','AF'],Z2:['Zimbabwe','AF'],
+  '9X':['Rwanda','AF'],'9U':['Burundi','AF'],
+  D2:['Angola','AF'],D3:['Angola','AF'],C5:['Gambia','AF'],EL:['Liberia','AF'],
+  // Antarctica
+  DP0:['Antarctica','AN'],KC4:['Antarctica','AN'],
+  // USA special DXCC entities (separate from K/W/N)
+  KL:['Alaska','NA'],
+  KH8:['American Samoa','OC'],KH9:['Wake Island','OC'],
+  KH1:['Baker & Howland','OC'],KH3:['Johnston Island','OC'],
+  KH4:['Midway Island','OC'],KH5:['Palmyra & Jarvis','OC'],
+  KH7:['Kure Island','OC'],
+  KP1:['Navassa Island','NA'],KP5:['Desecheo Island','NA'],
+  // France overseas (separate DXCC from F)
+  FG:['Guadeloupe','NA'],FM:['Martinique','NA'],
+  FP:['St. Pierre & Miquelon','NA'],FJ:['Saint Barthelemy','NA'],
+  FR:['Reunion','AF'],FH:['Mayotte','AF'],
+  FO:['French Polynesia','OC'],FW:['Wallis & Futuna','OC'],
+  TK:['Corsica','EU'],
+  // Portugal overseas
+  CU:['Azores','EU'],CT3:['Madeira','AF'],
+  // Netherlands overseas
+  P4:['Aruba','SA'],
+  PJ2:['Curacao','SA'],PJ4:['Bonaire','SA'],
+  PJ5:['Sint Eustatius & Saba','NA'],PJ7:['Sint Maarten','NA'],
+  // British overseas
+  VP2E:['Anguilla','NA'],VP2M:['Montserrat','NA'],VP2V:['British Virgin Islands','NA'],
+  VP5:['Turks & Caicos','NA'],VP6:['Pitcairn Island','OC'],
+  ZD7:['St. Helena','AF'],ZD8:['Ascension Island','AF'],ZD9:['Tristan da Cunha','AF'],
+  ZF:['Cayman Islands','NA'],
+  VQ9:['Chagos','AF'],
+  // Russia special
+  UA2:['Kaliningrad','EU'],
+  // Europe missing entities
+  '9H':['Malta','EU'],
+  // Africa additions
+  '3B8':['Mauritius','AF'],'3B9':['Rodriguez Island','AF'],
+  '7P':['Lesotho','AF'],'7Q':['Malawi','AF'],
+  '9L':['Sierra Leone','AF'],'9N':['Nepal','AS'],
+  // Asia additions
+  XV:['Vietnam','AS'],'3W':['Vietnam','AS'],
+  XW:['Laos','AS'],XZ:['Myanmar','AS'],
+  A5:['Bhutan','AS'],
+  // Oceania additions
+  '3D2':['Fiji','OC'],T2:['Tuvalu','OC'],
+  T3:['Kiribati','OC'],V7:['Marshall Islands','OC'],
+};
+
+const _rusPfx = new Set([
+  'R','RA','RB','RC','RD','RE','RF','RG','RH','RI','RJ','RK','RL',
+  'RM','RN','RO','RP','RQ','RR','RS','RT','RU','RV','RW','RX','RY','RZ',
+  'UA','UB','UC','UD','UF','UG',
+]);
+
+function lookupCall(rawCall) {
+  if(!rawCall) return {country:'Unknown', cont:'?'};
+  let call = rawCall.toUpperCase().trim();
+  // handle prefix/call notation (OE/S59DGO → OE; S59DGO/P → S59DGO)
+  if(call.includes('/')) {
+    const parts = call.split('/');
+    if(/^[A-Z]{1,4}$/.test(parts[0])) call = parts[0]; // pure letter prefix
+    else call = parts[0];                                // strip /suffix
+  }
+  for(let len = Math.min(4, call.length); len >= 1; len--) {
+    const pfx = call.slice(0, len);
+    if(PREFIX_DB[pfx]) {
+      let [country, cont] = PREFIX_DB[pfx];
+      if(country === 'Russia' && _rusPfx.has(pfx)) {
+        const m = rawCall.toUpperCase().match(/[0-9]/);
+        if(m && (m[0] === '9' || m[0] === '0'))
+          return {country:'Russia (Asiatic)', cont:'AS'};
+      }
+      return {country, cont};
+    }
+  }
+  return {country:'Unknown', cont:'?'};
+}
+
+// ══════════════════════════════════════════════════════════════════
+// GEO UTILS
+// ══════════════════════════════════════════════════════════════════
+function locToLatLon(loc) {
+  if(!loc || loc.length < 4) return null;
+  const s = loc.toUpperCase();
+  const lon = (s.charCodeAt(0)-65)*20 + (parseInt(s[2])||0)*2 - 180 + 1;
+  const lat = (s.charCodeAt(1)-65)*10 + (parseInt(s[3])||0) - 90 + 0.5;
+  return [lat, lon];
+}
+function haversine(loc1, loc2) {
+  const p1 = locToLatLon(loc1), p2 = locToLatLon(loc2);
+  if(!p1 || !p2) return 0;
+  const R=6371, r=Math.PI/180;
+  const dLat=(p2[0]-p1[0])*r, dLon=(p2[1]-p1[1])*r;
+  const a=Math.sin(dLat/2)**2+Math.cos(p1[0]*r)*Math.cos(p2[0]*r)*Math.sin(dLon/2)**2;
+  return Math.round(R*2*Math.asin(Math.sqrt(a)));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ADIF PARSER
+// ══════════════════════════════════════════════════════════════════
+function normBand(b) { return b ? b.toLowerCase().trim() : ''; }
+function normMode(mode, submode) {
+  const s = (submode||'').toUpperCase().trim();
+  return s || (mode||'').toUpperCase().trim();
+}
+
+function parseADIF(text, filename) {
+  const qsos = [];
+  const eoh = text.toUpperCase().indexOf('<EOH>');
+  const body = eoh >= 0 ? text.slice(eoh + 5) : text;
+  let i = 0, fields = {};
+  while(i < body.length) {
+    const lt = body.indexOf('<', i);
+    if(lt < 0) break;
+    const gt = body.indexOf('>', lt);
+    if(gt < 0) break;
+    const tag = body.slice(lt+1, gt);
+    i = gt + 1;
+    if(tag.toUpperCase() === 'EOR') {
+      if(fields.CALL) qsos.push(buildQso(fields, filename));
+      fields = {};
+      continue;
+    }
+    const parts = tag.split(':');
+    const name = parts[0].toUpperCase();
+    const len = parseInt(parts[1]) || 0;
+    if(len > 0) { fields[name] = body.slice(i, i+len); i += len; }
+  }
+  return qsos;
+}
+
+function buildQso(f, src) {
+  const call = (f.CALL||'').toUpperCase().trim();
+  const band = normBand(f.BAND||'');
+  const mode = normMode(f.MODE||'', f.SUBMODE||'');
+  const dateRaw = (f.QSO_DATE||'').replace(/-/g,'');
+  const date = dateRaw.length === 8 ? dateRaw : '';
+  const timeRaw = (f.TIME_ON||'').replace(/:/g,'');
+  const time = timeRaw.slice(0,4);
+  const grid = (f.GRIDSQUARE||'').toUpperCase().slice(0,6);
+  const myGrid = (f.MY_GRIDSQUARE||'').toUpperCase().slice(0,6);
+  let qrb = parseInt(f.DISTANCE)||0;
+  if(!qrb && grid && myGrid) qrb = haversine(grid, myGrid);
+  const {country, cont} = lookupCall(call);
+  return {call, band, mode, date, time, grid, myGrid, qrb, country, cont, src};
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STATE + FILE LOADING
+// ══════════════════════════════════════════════════════════════════
+let _qsos = [];
+let _filtered = [];
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop').classList.remove('over');
+  loadFiles([...(e.dataTransfer.files||[])].filter(f =>
+    /\.(adi|adif)$/i.test(f.name)));
+}
+function handleFileInput(inp) { loadFiles([...inp.files]); inp.value = ''; }
+
+function loadFiles(files) {
+  if(!files.length) return;
+  let done = 0;
+  files.forEach(f => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      _qsos.push(...parseADIF(e.target.result, f.name));
+      if(++done === files.length) finishLoad();
+    };
+    reader.readAsText(f, 'utf-8');
+  });
+}
+
+function finishLoad() {
+  document.getElementById('dropzone').style.display = 'none';
+  document.getElementById('filterbar').style.display = 'flex';
+  document.getElementById('dashboard').style.display = 'block';
+  buildFilterOptions();
+  applyFilters();
+  showToast(t('toastLoaded') + ': ' + _qsos.length + ' QSO');
+}
+
+const BAND_ORDER = ['160m','80m','60m','40m','30m','20m','17m','15m','12m','10m',
+  '6m','4m','2m','1.25m','70cm','33cm','23cm','13cm','9cm','6cm','3cm','1.25cm','6mm','4mm'];
+
+function buildFilterOptions() {
+  const bands = [...new Set(_qsos.map(q=>q.band).filter(Boolean))].sort((a,b)=>{
+    const ia=BAND_ORDER.indexOf(a), ib=BAND_ORDER.indexOf(b);
+    if(ia>=0&&ib>=0) return ia-ib; if(ia>=0) return -1; if(ib>=0) return 1;
+    return a.localeCompare(b);
+  });
+  const modes = [...new Set(_qsos.map(q=>q.mode).filter(Boolean))].sort();
+  const all = `<option value="">${t('optAll')}</option>`;
+  document.getElementById('fBand').innerHTML = all + bands.map(b=>`<option>${b}</option>`).join('');
+  document.getElementById('fMode').innerHTML = all + modes.map(m=>`<option>${m}</option>`).join('');
+}
+
+function applyFilters() {
+  const band = document.getElementById('fBand').value;
+  const mode = document.getElementById('fMode').value;
+  const from = document.getElementById('fFrom').value.replace(/-/g,'');
+  const to   = document.getElementById('fTo').value.replace(/-/g,'');
+  _filtered = _qsos.filter(q => {
+    if(band && q.band !== band) return false;
+    if(mode && q.mode !== mode) return false;
+    if(from && (!q.date || q.date < from)) return false;
+    if(to   && (!q.date || q.date > to))   return false;
+    return true;
+  });
+  renderDashboard();
+}
+
+function resetFilters() {
+  document.getElementById('fBand').value = '';
+  document.getElementById('fMode').value = '';
+  document.getElementById('fFrom').value = '';
+  document.getElementById('fTo').value   = '';
+  applyFilters();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STATS
+// ══════════════════════════════════════════════════════════════════
+function computeStats(qsos) {
+  const s = {
+    total:0, calls:new Set(), countries:new Set(), dates:new Set(),
+    byBand:new Map(), byMode:new Map(), byCont:new Map(), byCountry:new Map(),
+    byMonth:new Map(), byHour:new Array(24).fill(0),
+    topCalls:new Map(), bestDX:{call:'',qrb:0,band:''}, firstDate:'', lastDate:'',
+    byDay:new Map(),
+    byBandHour:new Map(),
+    byDxcc:new Map(),
+    byBandDxcc:new Map(),
+    qrbBuckets:[0,0,0,0,0,0], // <500, 500-1k, 1k-2k, 2k-5k, 5k-10k, 10k+
+  };
+  for(const q of qsos) {
+    s.total++;
+    s.calls.add(q.call);
+    if(q.country && q.country !== 'Unknown') s.countries.add(q.country);
+    if(q.date) s.dates.add(q.date);
+    if(q.qrb > s.bestDX.qrb) s.bestDX = {call:q.call, qrb:q.qrb, band:q.band};
+    // byBand
+    if(q.band) {
+      if(!s.byBand.has(q.band)) s.byBand.set(q.band, {qso:0, calls:new Set(), bestDX:0});
+      const b = s.byBand.get(q.band);
+      b.qso++; b.calls.add(q.call); if(q.qrb > b.bestDX) b.bestDX = q.qrb;
+    }
+    // byMode
+    if(q.mode) {
+      if(!s.byMode.has(q.mode)) s.byMode.set(q.mode, {qso:0, calls:new Set()});
+      const m = s.byMode.get(q.mode); m.qso++; m.calls.add(q.call);
+    }
+    // byCont
+    if(q.cont && q.cont !== '?') {
+      if(!s.byCont.has(q.cont)) s.byCont.set(q.cont, {qso:0, calls:new Set(), countries:new Set()});
+      const c = s.byCont.get(q.cont);
+      c.qso++; c.calls.add(q.call);
+      if(q.country && q.country !== 'Unknown') c.countries.add(q.country);
+    }
+    // byCountry + byDxcc + byBandDxcc
+    if(q.country && q.country !== 'Unknown') {
+      if(!s.byCountry.has(q.country)) s.byCountry.set(q.country, {qso:0, cont:q.cont});
+      s.byCountry.get(q.country).qso++;
+      // DXCC aggregate
+      if(!s.byDxcc.has(q.country)) s.byDxcc.set(q.country, {qso:0, cont:q.cont, bands:new Set()});
+      const dx = s.byDxcc.get(q.country); dx.qso++;
+      if(q.band) dx.bands.add(q.band);
+      // DXCC per band
+      if(q.band) {
+        if(!s.byBandDxcc.has(q.band)) s.byBandDxcc.set(q.band, new Set());
+        s.byBandDxcc.get(q.band).add(q.country);
+      }
+    }
+    // byMonth + byDay
+    if(q.date && q.date.length === 8) {
+      const mo = q.date.slice(0,6);
+      s.byMonth.set(mo, (s.byMonth.get(mo)||0)+1);
+      s.byDay.set(q.date, (s.byDay.get(q.date)||0)+1);
+    }
+    // byHour + byBandHour
+    if(q.time && q.time.length >= 2) {
+      const h = parseInt(q.time.slice(0,2));
+      if(h >= 0 && h < 24) {
+        s.byHour[h]++;
+        if(q.band) {
+          if(!s.byBandHour.has(q.band)) s.byBandHour.set(q.band, new Array(24).fill(0));
+          s.byBandHour.get(q.band)[h]++;
+        }
+      }
+    }
+    // topCalls
+    s.topCalls.set(q.call, (s.topCalls.get(q.call)||0)+1);
+    // date range
+    if(q.date) {
+      if(!s.firstDate || q.date < s.firstDate) s.firstDate = q.date;
+      if(!s.lastDate  || q.date > s.lastDate)  s.lastDate  = q.date;
+    }
+    // QRB buckets
+    if(q.qrb > 0) {
+      if     (q.qrb <   500) s.qrbBuckets[0]++;
+      else if(q.qrb <  1000) s.qrbBuckets[1]++;
+      else if(q.qrb <  2000) s.qrbBuckets[2]++;
+      else if(q.qrb <  5000) s.qrbBuckets[3]++;
+      else if(q.qrb < 10000) s.qrbBuckets[4]++;
+      else                   s.qrbBuckets[5]++;
+    }
+  }
+  return s;
+}
+
+function fmtDate(d) {
+  if(!d || d.length < 8) return d||'';
+  return `${d.slice(6,8)}.${d.slice(4,6)}.${d.slice(0,4)}`;
+}
+function fmtMonth(m) {
+  if(!m || m.length < 6) return m||'';
+  return `${m.slice(4,6)}/${m.slice(0,4)}`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SVG GENERATORS
+// ══════════════════════════════════════════════════════════════════
+const CONT_COLORS = {
+  EU:'#4d9de0', NA:'#e05c4d', AS:'#f0a500', AF:'#2ecc8a',
+  SA:'#9b59b6', OC:'#e67e22', AN:'#95a5a6',
+};
+
+function htmlEsc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// horizontal bar chart: items = [{label, val, cont?}]
+function svgHBar(items, colorFn, w=420) {
+  if(!items.length) return `<p class="dim">${t('noData')}</p>`;
+  const barAreaW = w - 110;
+  const max = Math.max(...items.map(it=>it.val), 1);
+  const rowH = 22, padY = 4;
+  const svgH = items.length * rowH + padY*2;
+  let s = `<svg width="${w}" height="${svgH}" style="max-width:100%;display:block">`;
+  items.forEach((it, i) => {
+    const y = padY + i*rowH;
+    const bw = Math.round((it.val/max)*barAreaW);
+    const col = colorFn ? colorFn(it) : 'var(--accent)';
+    s += `<text x="0" y="${y+15}" fill="var(--text)" font-size="12" font-family="Inter,sans-serif">${htmlEsc(it.label)}</text>`;
+    if(bw > 0)
+      s += `<rect x="100" y="${y+3}" width="${bw}" height="14" rx="2" fill="${col}" opacity=".85"/>`;
+    s += `<text x="${100+bw+4}" y="${y+15}" fill="var(--muted)" font-size="11" font-family="Inter,sans-serif">${it.val}</text>`;
+  });
+  s += '</svg>';
+  return s;
+}
+
+// vertical bar chart: items = [{label, val}]
+function svgVBar(items, color='var(--accent)', w=580) {
+  if(!items.length) return `<p class="dim">${t('noData')}</p>`;
+  const n = items.length;
+  const colW = Math.max(12, Math.floor((w-30)/n));
+  const chartW = colW*n + 30;
+  const barMaxH = 80, chartH = barMaxH + 4;
+  const max = Math.max(...items.map(it=>it.val), 1);
+  let s = `<svg width="${chartW}" height="${chartH+26}" style="max-width:100%;display:block">`;
+  items.forEach((it, i) => {
+    const x = 15 + i*colW;
+    const bh = Math.round((it.val/max)*barMaxH);
+    const y = chartH - bh;
+    if(bh > 0)
+      s += `<rect x="${x+1}" y="${y}" width="${colW-2}" height="${bh}" rx="2" fill="${color}" opacity=".82"/>`;
+    if(colW >= 18)
+      s += `<text x="${x+colW/2}" y="${chartH+16}" fill="var(--muted)" font-size="9" text-anchor="middle" font-family="Inter,sans-serif">${htmlEsc(it.label)}</text>`;
+    if(colW >= 18 && it.val > 0) {
+      if(bh >= 14)
+        s += `<text x="${x+colW/2}" y="${y+11}" fill="#fff" font-size="8" text-anchor="middle" font-family="Inter,sans-serif">${it.val}</text>`;
+      else
+        s += `<text x="${x+colW/2}" y="${Math.max(y-2,8)}" fill="var(--muted)" font-size="8" text-anchor="middle" font-family="Inter,sans-serif">${it.val}</text>`;
+    }
+  });
+  s += '</svg>';
+  return s;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// RENDER DASHBOARD
+// ══════════════════════════════════════════════════════════════════
+function renderDashboard() {
+  const st = computeStats(_filtered);
+  document.getElementById('dashboard').innerHTML = [
+    renderOverview(st),
+    renderByBand(st),
+    renderByMode(st),
+    renderByCont(st),
+    renderByCountry(st),
+    renderByTime(st),
+    renderTopCalls(st),
+    renderDxccByBand(st),
+    renderActivityHeatmap(st),
+    renderBandHourHeatmap(st),
+    renderQrbHistogram(st),
+  ].join('');
+}
+
+function statCard(val, lbl) {
+  return `<div class="stat-card"><div class="val">${htmlEsc(String(val))}</div><div class="lbl">${htmlEsc(lbl)}</div></div>`;
+}
+
+function renderOverview(st) {
+  const range = st.firstDate
+    ? `${fmtDate(st.firstDate)}–${fmtDate(st.lastDate)}`
+    : '–';
+  const bestDX = st.bestDX.qrb
+    ? `${st.bestDX.call} ${st.bestDX.qrb} km`
+    : '–';
+  return `<div class="section"><h2>${t('secOver')}</h2><div class="cards">
+    ${statCard(st.total, t('cTotal'))}
+    ${statCard(st.calls.size, t('cUniq'))}
+    ${statCard(st.countries.size, t('cCountries'))}
+    ${statCard(st.dates.size, t('cDays'))}
+    ${statCard(bestDX, t('cBestDX'))}
+    ${statCard(range, t('cDateRange'))}
+  </div></div>`;
+}
+
+function renderByBand(st) {
+  const items = [...st.byBand.entries()].sort((a,b)=>b[1].qso-a[1].qso);
+  const chart = svgHBar(items.map(([k,v])=>({label:k, val:v.qso})), null, 420);
+  const rows = items.map(([band,v]) => {
+    const pct = st.total ? ((v.qso/st.total)*100).toFixed(1) : '0';
+    return `<tr><td>${htmlEsc(band)}</td><td class="num">${v.qso}</td>
+      <td class="num dim">${pct}%</td><td class="num">${v.calls.size}</td>
+      <td class="num">${v.bestDX||'–'}</td></tr>`;
+  }).join('') || `<tr><td colspan="5" class="dim">${t('noData')}</td></tr>`;
+  return `<div class="section"><h2>${t('secBand')}</h2><div class="two-col">
+    <div class="chart-wrap">${chart}</div>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th>${t('tBand')}</th><th class="num">${t('tQso')}</th>
+      <th class="num">${t('tPct')}</th><th class="num">${t('tCalls')}</th>
+      <th class="num">${t('tBestDXkm')}</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+  </div></div>`;
+}
+
+function renderByMode(st) {
+  const items = [...st.byMode.entries()].sort((a,b)=>b[1].qso-a[1].qso);
+  const chart = svgHBar(items.map(([k,v])=>({label:k, val:v.qso})), null, 420);
+  const rows = items.map(([mode,v]) => {
+    const pct = st.total ? ((v.qso/st.total)*100).toFixed(1) : '0';
+    return `<tr><td>${htmlEsc(mode)}</td><td class="num">${v.qso}</td>
+      <td class="num dim">${pct}%</td><td class="num">${v.calls.size}</td></tr>`;
+  }).join('') || `<tr><td colspan="4" class="dim">${t('noData')}</td></tr>`;
+  return `<div class="section"><h2>${t('secMode')}</h2><div class="two-col">
+    <div class="chart-wrap">${chart}</div>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th>${t('tMode')}</th><th class="num">${t('tQso')}</th>
+      <th class="num">${t('tPct')}</th><th class="num">${t('tCalls')}</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+  </div></div>`;
+}
+
+function renderByCont(st) {
+  const ORDER = ['EU','NA','AS','AF','SA','OC','AN'];
+  const items = [...st.byCont.entries()].sort((a,b)=>b[1].qso-a[1].qso);
+  const chart = svgHBar(
+    items.map(([k,v])=>({label:k, val:v.qso, cont:k})),
+    it => CONT_COLORS[it.cont] || '#888', 420
+  );
+  const rows = items.map(([cont,v]) => {
+    const pct = st.total ? ((v.qso/st.total)*100).toFixed(1) : '0';
+    const col = CONT_COLORS[cont] || '#888';
+    return `<tr>
+      <td><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${col};margin-right:6px;vertical-align:middle"></span>${htmlEsc(cont)}</td>
+      <td class="num">${v.qso}</td><td class="num dim">${pct}%</td>
+      <td class="num">${v.calls.size}</td><td class="num">${v.countries.size}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" class="dim">${t('noData')}</td></tr>`;
+  return `<div class="section"><h2>${t('secCont')}</h2><div class="two-col">
+    <div class="chart-wrap">${chart}</div>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th>${t('tCont')}</th><th class="num">${t('tQso')}</th>
+      <th class="num">${t('tPct')}</th><th class="num">${t('tCalls')}</th>
+      <th class="num">${t('tCountries')}</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+  </div></div>`;
+}
+
+function renderByCountry(st) {
+  const items = [...st.byCountry.entries()].sort((a,b)=>b[1].qso-a[1].qso).slice(0,30);
+  const rows = items.map(([country,v],i) =>
+    `<tr><td class="dim">${i+1}.</td><td>${htmlEsc(country)}</td>
+     <td class="dim" style="font-size:11px">${v.cont}</td>
+     <td class="num">${v.qso}</td></tr>`
+  ).join('') || `<tr><td colspan="4" class="dim">${t('noData')}</td></tr>`;
+  return `<div class="section"><h2>${t('secCountry')}</h2>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th>#</th><th>${t('tCountry')}</th><th>${t('tCont')}</th>
+      <th class="num">${t('tQso')}</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
+}
+
+function renderByTime(st) {
+  const months = [...st.byMonth.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+  const mW = Math.min(Math.max(months.length * 60 + 30, 150), 580);
+  const mChart = svgVBar(months.map(([k,v])=>({label:fmtMonth(k), val:v})), 'var(--accent)', mW);
+  const hChart = svgVBar(
+    st.byHour.map((v,i)=>({label:String(i).padStart(2,'0'), val:v})),
+    'var(--accent3)', 580
+  );
+  return `<div class="section"><h2>${t('secTime')}</h2>
+    <div style="margin-bottom:14px">
+      <div class="dim" style="margin-bottom:6px">${t('tMonths')}</div>
+      <div class="chart-wrap">${mChart}</div>
+    </div>
+    <div>
+      <div class="dim" style="margin-bottom:6px">${t('tHours')}</div>
+      <div class="chart-wrap">${hChart}</div>
+    </div>
+  </div>`;
+}
+
+function renderTopCalls(st) {
+  const items = [...st.topCalls.entries()].sort((a,b)=>b[1]-a[1]).slice(0,20);
+  const rows = items.map(([call,cnt],i) => {
+    const {country, cont} = lookupCall(call);
+    return `<tr><td class="dim">${i+1}.</td>
+      <td style="font-family:monospace">${htmlEsc(call)}</td>
+      <td class="dim" style="font-size:11px">${htmlEsc(country)}</td>
+      <td class="dim" style="font-size:11px">${cont}</td>
+      <td class="num">${cnt}</td></tr>`;
+  }).join('') || `<tr><td colspan="5" class="dim">${t('noData')}</td></tr>`;
+  return `<div class="section"><h2>${t('secTop')}</h2>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th>#</th><th>${t('tCall')}</th><th>${t('tCountry')}</th>
+      <th>${t('tCont')}</th><th class="num">${t('tCount')}</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
+}
+
+function renderDxccByBand(st) {
+  if(!st.byDxcc.size) return '';
+  const HF_BANDS = ['160m','80m','60m','40m','30m','20m','17m','15m','12m','10m'];
+  const allBands = [...new Set([...st.byBand.keys()])].sort((a,b)=>{
+    const ai = HF_BANDS.indexOf(a), bi = HF_BANDS.indexOf(b);
+    if(ai>=0 && bi>=0) return ai-bi;
+    if(ai>=0) return -1; if(bi>=0) return 1;
+    return a.localeCompare(b);
+  });
+  const totalDxcc = st.byDxcc.size;
+  const rows = allBands.map(band => {
+    const bSet = st.byBandDxcc.get(band);
+    if(!bSet || !bSet.size) return '';
+    const cnt = bSet.size;
+    const pct = Math.min(100, (cnt/100)*100);
+    return `<tr>
+      <td style="font-family:'Space Mono',monospace">${htmlEsc(band)}</td>
+      <td class="num">${cnt}</td>
+      <td style="padding:.45rem .75rem">
+        <span class="prog-bar"><span class="prog-bar-fill" style="width:${pct.toFixed(1)}%"></span></span>
+        <span class="num" style="font-size:10px">${pct.toFixed(0)}%</span>
+      </td>
+    </tr>`;
+  }).join('');
+  return `<div class="section"><h2>${t('secDxcc')}</h2>
+    <div class="stat-card" style="display:inline-flex;margin-bottom:12px">
+      <div class="val">${totalDxcc}</div>
+      <div class="lbl">${t('dxccTotal')}</div>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th>${t('tBand')}</th>
+      <th class="num">${t('dxccCount')}</th>
+      <th>${t('dxccProg')}</th>
+    </tr></thead><tbody>${rows||`<tr><td colspan="3" class="dim">${t('noData')}</td></tr>`}</tbody></table></div>
+  </div>`;
+}
+
+function renderActivityHeatmap(st) {
+  if(!st.byDay.size) return '';
+  const days = [...st.byDay.keys()].sort();
+  const maxQ = Math.max(...st.byDay.values());
+
+  function heatColor(q) {
+    if(!q) return 'var(--bg4)';
+    const ratio = q / maxQ;
+    if(ratio < 0.2) return 'rgba(46,204,138,.25)';
+    if(ratio < 0.4) return 'rgba(46,204,138,.45)';
+    if(ratio < 0.6) return 'rgba(46,204,138,.65)';
+    if(ratio < 0.8) return 'rgba(46,204,138,.82)';
+    return 'rgba(46,204,138,1)';
+  }
+
+  const DOW_LABELS = t('hmapDow').split('|');
+  const MONTHS = t('hmapMon').split('|');
+
+  // group by year
+  const years = [...new Set(days.map(d=>d.slice(0,4)))].sort();
+  let html = '';
+  for(const yr of years) {
+    const jan1 = new Date(`${yr}-01-01`);
+    const startDow = (jan1.getDay() + 6) % 7; // Mon=0
+    const isLeap = (yr%4===0 && yr%100!==0) || yr%400===0;
+    const daysInYear = isLeap ? 366 : 365;
+    const cols = Math.ceil((startDow + daysInYear) / 7);
+
+    // month label per column (14px = 12px cell + 2px gap)
+    let lastMo = -1;
+    const monthRow = Array.from({length:cols}, (_,col) => {
+      const idx = col*7;
+      if(idx < startDow || idx >= startDow + daysInYear) return '<div style="width:14px"></div>';
+      const d = new Date(jan1); d.setDate(d.getDate() + idx - startDow);
+      const mo = d.getMonth();
+      if(mo !== lastMo) { lastMo = mo; return `<div style="width:14px;font-size:8px;color:var(--muted);white-space:nowrap;overflow:visible">${htmlEsc(MONTHS[mo])}</div>`; }
+      return '<div style="width:14px"></div>';
+    }).join('');
+
+    let cells = '';
+    for(let col=0; col<cols; col++) {
+      for(let row=0; row<7; row++) {
+        const idx = col*7 + row;
+        if(idx < startDow || idx >= startDow + daysInYear) {
+          cells += `<div class="hmap-cell" style="background:transparent"></div>`;
+          continue;
+        }
+        const d = new Date(jan1); d.setDate(d.getDate() + idx - startDow);
+        const key = d.toISOString().slice(0,10).replace(/-/g,'');
+        const q = st.byDay.get(key) || 0;
+        const lbl = `${key.slice(0,4)}-${key.slice(4,6)}-${key.slice(6,8)}: ${q} QSO`;
+        cells += `<div class="hmap-cell" style="background:${heatColor(q)}" title="${lbl}"></div>`;
+      }
+    }
+
+    const dowLabels = DOW_LABELS.map(l=>`<div style="height:12px;font-size:8px;color:var(--muted);line-height:12px;text-align:right;padding-right:3px">${htmlEsc(l)}</div>`).join('');
+    html += `<div style="margin-bottom:16px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-family:'Space Mono',monospace">${yr}</div>
+      <div style="display:flex;gap:2px;align-items:flex-start">
+        <div style="display:grid;grid-template-rows:repeat(7,12px);gap:2px;margin-top:11px">${dowLabels}</div>
+        <div>
+          <div style="display:flex;margin-bottom:1px">${monthRow}</div>
+          <div class="hmap-grid" style="grid-template-rows:repeat(7,12px);grid-auto-flow:column;grid-auto-columns:12px">${cells}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+  const legend = [0,.2,.4,.6,.8,1].map(r=>{
+    const q = Math.ceil(maxQ * r);
+    return `<div class="hmap-cell" style="background:${heatColor(q)}"></div>`;
+  }).join('');
+  return `<div class="section"><h2>${t('secHeatmap')}</h2>
+    <div class="hmap-wrap">${html}</div>
+    <div class="hmap-legend">${legend}
+      <span style="margin-left:auto;font-size:10px;color:var(--muted)">${t('hmapMore')}: ${maxQ}</span>
+    </div>
+  </div>`;
+}
+
+function renderBandHourHeatmap(st) {
+  if(!st.byBandHour.size) return '';
+  const HF_BANDS = ['160m','80m','60m','40m','30m','20m','17m','15m','12m','10m'];
+  const allBands = [...st.byBandHour.keys()].sort((a,b)=>{
+    const ai=HF_BANDS.indexOf(a), bi=HF_BANDS.indexOf(b);
+    if(ai>=0&&bi>=0) return ai-bi; if(ai>=0) return -1; if(bi>=0) return 1;
+    return a.localeCompare(b);
+  });
+  let maxV = 0;
+  for(const arr of st.byBandHour.values()) maxV = Math.max(maxV, ...arr);
+  if(!maxV) return '';
+
+  function cellBg(v) {
+    if(!v) return 'var(--bg4)';
+    const ratio = v/maxV;
+    if(ratio<0.15) return 'rgba(240,165,0,.2)';
+    if(ratio<0.35) return 'rgba(240,165,0,.4)';
+    if(ratio<0.55) return 'rgba(240,165,0,.6)';
+    if(ratio<0.75) return 'rgba(240,165,0,.8)';
+    return 'rgba(240,165,0,1)';
+  }
+
+  const hourHeader = '<div class="bh-label-band"></div>' +
+    Array.from({length:24},(_,h)=>`<div class="bh-label-hour">${String(h).padStart(2,'0')}</div>`).join('');
+  const bandRows = allBands.map(band => {
+    const arr = st.byBandHour.get(band);
+    const cells = arr.map((v,h)=>`<div class="bh-cell" style="background:${cellBg(v)}" title="${band} ${String(h).padStart(2,'0')}:00 UTC — ${v} QSO">${v||''}</div>`).join('');
+    return `<div class="bh-label-band">${htmlEsc(band)}</div>${cells}`;
+  }).join('');
+
+  const gridStyle = `grid-template-columns:44px repeat(24,20px)`;
+  return `<div class="section"><h2>${t('secBandHour')}</h2>
+    <div class="chart-wrap" style="padding:.75rem">
+      <div class="bh-grid" style="${gridStyle}">
+        ${hourHeader}
+        ${bandRows}
+      </div>
+      <div class="hmap-legend" style="margin-top:8px">
+        ${['0%','15%','35%','55%','75%','100%'].map((_,i)=>`<div class="bh-cell" style="background:${cellBg(i/5*maxV)};width:10px;height:10px"></div>`).join('')}
+        <span>0</span><span style="margin-left:auto">${maxV} QSO</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderQrbHistogram(st) {
+  const labels = ['<500','500-1k','1k-2k','2k-5k','5k-10k','10k+'];
+  const total = st.qrbBuckets.reduce((a,b)=>a+b,0);
+  if(!total) return `<div class="section"><h2>${t('secQrb')}</h2><p class="dim" style="padding:.5rem">${t('qrbNoData')}</p></div>`;
+  const items = labels.map((lbl,i)=>({label:lbl, val:st.qrbBuckets[i]}));
+  const chart = svgVBar(items, 'var(--accent2)', 280);
+  const rows = items.map(({label,val}) => {
+    const pct = total ? ((val/total)*100).toFixed(1) : '0';
+    return `<tr><td>${htmlEsc(label)} km</td><td class="num">${val}</td><td class="num dim">${pct}%</td></tr>`;
+  }).join('');
+  return `<div class="section"><h2>${t('secQrb')}</h2><div class="two-col">
+    <div class="chart-wrap">${chart}</div>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th>${t('qrbRange')}</th><th class="num">${t('tQso')}</th><th class="num">${t('tPct')}</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+  </div></div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EXPORT + TOAST + THEME + INIT
+// ══════════════════════════════════════════════════════════════════
+function exportHTML() {
+  const dash = document.getElementById('dashboard').innerHTML;
+  const theme = document.documentElement.dataset.theme || 'dark';
+  // collect inline CSS (skip external sheets to avoid CORS errors)
+  let css = '';
+  for(const ss of document.styleSheets) {
+    try { css += [...ss.cssRules].map(r=>r.cssText).join('\n'); } catch(e) { /* cross-origin */ }
+  }
+  const date = new Date().toISOString().slice(0,10);
+  const html = `<!DOCTYPE html>
+<html data-theme="${theme}">
+<head><meta charset="UTF-8">
+<title>ADIF Stats — ${date}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>${css}</style>
+</head>
+<body>
+<header style="background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:12px">
+  <h1 style="font-size:1.1rem;font-weight:600;flex:1">ADIF Stats — ${date}</h1>
+</header>
+<div style="padding:16px;max-width:1100px;margin:0 auto">${dash}</div>
+</body></html>`;
+  dl(`adif-stats-${date}.html`, html, 'text/html');
+  showToast(t('toastExport'));
+}
+
+function dl(name, content, mime='text/plain') {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], {type: mime + ';charset=utf-8'}));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+let _toastTimer = null;
+function showToast(msg, dur=2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), dur);
+}
+
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('adif-stats-theme', next);
+  document.getElementById('btnTheme').textContent = next === 'light' ? '🌙' : '☀';
+}
+
+function init() {
+  const theme = localStorage.getItem('adif-stats-theme') || 'dark';
+  document.documentElement.dataset.theme = theme;
+  document.getElementById('btnTheme').textContent = theme === 'light' ? '🌙' : '☀';
+  _lang = localStorage.getItem('adif-stats-lang') || 'sl';
+  applyI18n();
+
+  const dropArea = document.getElementById('dropArea');
+  const dropzone = document.getElementById('dropzone');
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', () => dropArea.classList.remove('drag'));
+  dropzone.addEventListener('drop', e => { dropArea.classList.remove('drag'); handleDrop(e); });
+  dropArea.addEventListener('click', e => {
+    if(e.target.tagName !== 'BUTTON') document.getElementById('fileIn').click();
+  });
+}
+
+init();
+</script>
+</body>
+</html>

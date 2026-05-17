@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `edi-crosscheck.html` — Cross-checks a new EDI log against historical logs (+ optional prebuilt OEVSV IARU R1 baseline) to flag callsign typos and locator mismatches
 - `vhf-logger/vhf-logger.html` — Browser-based contest logger for IARU R1 VHF/UHF contests; touch-first, multi-band, exports per-band EDI, live crosscheck hints from baseline
 - `adif-merge.html` — Merges multiple ADIF log files into one; deduplication, filtering, inline editing, exports ADIF and CSV
+- `adif-stats.html` — Browser-based ADIF log analysis tool; statistics by band/mode/continent/country/time, DXCC per band, activity heatmap, band×hour propagation matrix, QRB distribution, self-contained HTML export
 - `adif-qrz-filter.js` — Node.js CLI tool that filters an ADIF log to keep only BURO-accepting stations by querying the QRZ.com XML API
 - `build-baseline.js` — Node.js CLI tool that builds `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports, consumed by `edi-crosscheck.html` and `vhf-logger/vhf-logger.html`; mirrors output to `vhf-logger/crosscheck-baseline.json`
 
@@ -98,6 +99,46 @@ _idx, _key (call|band|mode|date|time), dupe
 - Dedup key uses `|` as separator since CALL/BAND/MODE/DATE/TIME cannot contain `|`.
 
 **Tests:** `adif-merge.test.js` — 112 tests, 21 groups (`parseADIF`, `updateKey`, `recomputeDupes`, `adifField`, `htmlEsc`, `csvEsc`, `modeBadge`, `buildFilename`, ADIF export, I18N, re-merge safety, and more).
+
+## Architecture of adif-stats.html
+
+Single HTML file, no external JS dependencies. Same CSS palette (`IBM Plex Sans` + `Space Mono`, deep dark palette) and `showToast()` / `dl()` pattern as `adif-merge.html`.
+
+**JavaScript sections:**
+
+| Section | Responsibility |
+|---|---|
+| I18N (`S`, `t()`, `setLang()`) | Bilingual UI strings (SL/EN). Includes `hmapDow`, `hmapMon`, `hmapMore` for heatmap labels. |
+| PREFIX_DB + `lookupCall()` | ~200-entry DXCC prefix table; longest-prefix-first match (4→3→2→1 chars). Russia EU/AS split: first digit 9 or 0 → Asiatic Russia. Returns `{country, cont}`. |
+| ADIF parser (`parseADIF()`) | Sequential `<TAG:len[:type]>` scanner; `<EOH>` boundary; QRB from `DISTANCE` field or haversine from `GRIDSQUARE` + `MY_GRIDSQUARE`. |
+| Geo utils (`locToLatLon`, `haversine`) | Maidenhead → lat/lon, great-circle QRB in km. |
+| Stats engine (`computeStats()`) | Single-pass over `_filtered`; builds `byBand`, `byMode`, `byCont`, `byCountry`, `byMonth`, `byHour`, `byDay`, `byBandHour`, `byDxcc`, `byBandDxcc`, `qrbBuckets[6]`. |
+| Filter state (`_qsos`, `_filtered`, `_sources`) | `applyFilters()` applies band/mode/date-range from toolbar; result feeds `computeStats()`. |
+| SVG helpers (`svgHBar`, `svgVBar`) | Inline SVG charts. `svgHBar`: horizontal bars (band/mode/continent). `svgVBar`: vertical bars (months/hours/QRB); `colW` dynamic, value label above bar when bar too short to label inside. |
+| Render functions | `renderDashboard()` calls 11 section renderers: overview cards, band/mode/continent/country/time, top callsigns, DXCC per band, activity heatmap, band×hour matrix, QRB histogram. |
+| `renderActivityHeatmap()` | GitHub-style 12×12 px cell grid; year→week→day layout; month abbreviations above first week of each month (I18N); day-of-week labels (I18N). |
+| `renderBandHourHeatmap()` | 2D bands×24h UTC matrix; orange intensity scale; hover shows count. |
+| Export (`exportHTML()`) | Serializes `#dashboard` innerHTML + inlined CSS to self-contained HTML report. Font link: `IBM Plex Sans + Space Mono`. |
+
+**Key data flow:**
+1. Files → `handleFiles()` → `parseADIF()` → `_qsos[]`
+2. `finishLoad()` → `buildFilterOptions()` + `applyFilters()` → `_filtered[]`
+3. `applyFilters()` → `computeStats(_filtered)` → render 11 sections
+4. Filter/lang change → `applyFilters()` or `renderDashboard()` re-run
+
+**QSO object shape:**
+```
+call, date (YYYYMMDD), time (HHMM), dateDisp, timeDisp, band, mode, rstS, rstR,
+grid, myGrid, qrb (km), country, cont, src (filename), fields (all original ADIF tags, uppercase keys)
+```
+
+**Key notes:**
+- `lookupCall()` is pure function — prefix table only, no state. Unknown call returns `{country:'Unknown', cont:'?'}`.
+- `svgVBar(items, null, w)` is a bug: explicit `null` overrides the default `color='var(--accent)'`. Always pass an explicit color string (e.g. `'var(--accent2)'`).
+- QRB buckets index: `[0]`<500 km, `[1]`500–1k, `[2]`1k–2k, `[3]`2k–5k, `[4]`5k–10k, `[5]`≥10k. QSOs with `qrb=0` are not bucketed.
+- SVG text colors: use `var(--text)` and `var(--muted)`, not `var(--fg)` / `var(--fg2)` (undefined).
+
+**Tests:** `adif-stats.test.js` — 133 tests, 21 groups (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×5, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`).
 
 ## Architecture of edi-crosscheck.html
 

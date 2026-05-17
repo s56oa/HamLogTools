@@ -15,6 +15,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 163 | 16 |
+| `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
 
 The sections below document each test file in detail.
 
@@ -28,6 +29,7 @@ node --test --test-reporter=spec edi-crosscheck.test.js
 node --test --test-reporter=spec adif-merge.test.js
 node --test --test-reporter=spec adif-qrz-filter.test.js
 node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
+node --test --test-reporter=spec adif-stats.test.js
 ```
 
 Requires **Node.js v18 or later** (`node:test` was stabilised in v18;
@@ -196,6 +198,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 163 | 16 |
+| `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
 
 Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 
@@ -209,6 +212,7 @@ node --test --test-reporter=spec edi-crosscheck.test.js
 node --test --test-reporter=spec adif-merge.test.js
 node --test --test-reporter=spec adif-qrz-filter.test.js
 node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
+node --test --test-reporter=spec adif-stats.test.js
 ```
 
 Zahteva **Node.js v18 ali novejši** (`node:test` je bil stabiliziran v v18;
@@ -770,6 +774,189 @@ Verifies `validateBackup()` structure checks and i18n strings for the backup/res
 
 ---
 
+## `adif-stats.test.js` — 133 tests · 21 groups
+
+Covers the pure logic of `adif-stats.html`: DXCC prefix lookup, band/mode normalisation, locator conversion, QRB calculation, ADIF parsing, statistics aggregation, filter logic, date/month formatting, XSS escaping, SVG chart helpers, and i18n key completeness.
+
+### How the tests work
+
+`adif-stats.html` is evaluated inside a `node:vm` context using the same mock setup as the other HTML tools. Only the `<script>` block is extracted; the minimal mock provides `localStorage`, `document.getElementById`, `URL`, `Blob`, `setTimeout`, and `console`.
+
+Pure functions are accessed directly as context properties:
+`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF`, `computeStats`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `t`.
+
+An `adif()` helper builds minimal ADIF fixture strings with correct `<TAG:length>value` encoding.
+
+### Test groups
+
+#### 1 · `lookupCall` (17 tests)
+
+Verifies DXCC entity lookup by callsign prefix using the built-in `PREFIX_DB` table.
+
+- **S5** (Slovenia), **DL** (Germany), **K** (USA), **JA** (Japan) — basic EU/NA/AS lookups.
+- **Russia EU vs AS** — calls with digit 1–8 map to `EU`; digit 9 or 0 maps to `AS`.
+- **`/P` suffix stripped** — `S59DGO/P` resolved as `S59DGO`.
+- **`OE/` prefix notation** — `OE/S59DGO` resolved by the `OE` prefix (Austria), not `S5`.
+- **Unknown call** — returns `{ country: 'Unknown', cont: '?' }`.
+- **Empty string** — returns `Unknown`.
+- **Lowercase input** — normalised to uppercase before lookup.
+- **DXCC overrides** — `KL` (Alaska), `CU` (Azores), `TK` (Corsica), `9H` (Malta), `UA2` (Kaliningrad) resolve correctly despite sharing prefixes with larger entities.
+
+#### 2 · `normBand` (5 tests)
+
+- Converts band string to lowercase (`2M` → `2m`, `40M` → `40m`).
+- Trims surrounding whitespace.
+- Empty string and `null` both return `''`.
+
+#### 3 · `normMode` (5 tests)
+
+- Returns the mode string uppercased when no submode is given (`cw` → `CW`).
+- Submode wins over mode when both present (`DIGI` + `FT8` → `FT8`; `DIGI` + `FT4` → `FT4`).
+- Both empty → empty string.
+
+#### 4 · `locToLatLon` (5 tests)
+
+- Converts a 4-character Maidenhead locator to `[lat, lon]`.
+- `JN65` → lat 45.5, lon 13.
+- `null` and too-short input return `null`.
+- A 6-character locator (`JN65ar`) produces the same result as the 4-character prefix — only the first 4 characters are used.
+
+#### 5 · `haversine` (5 tests)
+
+- Same locator → distance `0`.
+- Different locators → distance `> 0`.
+- Transatlantic distance (`JN65` → `FN20`) > 6 000 km.
+- Invalid or `null` locator → `0`.
+
+#### 6 · `parseADIF — basic extraction` (9 tests)
+
+- `CALL` extracted; `BAND` lowercased; `MODE` uppercased regardless of input case.
+- `SUBMODE` overrides `MODE` (`DIGI` + `FT8` → mode `FT8`).
+- `src` set to the filename argument.
+- Records without `CALL` silently skipped.
+- Multiple records all parsed; headerless ADIF (no `<EOH>`) handled; tag names case-insensitive.
+
+#### 7 · `parseADIF — date/time/QRB` (8 tests)
+
+- `QSO_DATE` stored as `YYYYMMDD`; ISO format (`YYYY-MM-DD`) normalised.
+- Short date (< 8 chars after normalisation) stored as `''`.
+- `TIME_ON` `HHMMSS` truncated to `HHMM`; `HHMM` kept as-is.
+- `DISTANCE` field used as `qrb` when present.
+- `GRIDSQUARE` + `MY_GRIDSQUARE` → `qrb` via haversine when `DISTANCE` absent.
+- `DISTANCE` takes priority over grid-based calculation.
+
+#### 8 · `parseADIF — country/cont` (3 tests)
+
+- Slovenia `S56OA` → `{ country: 'Slovenia', cont: 'EU' }`.
+- `JA1ZLO` → `{ cont: 'AS' }`.
+- Unknown prefix → `{ country: 'Unknown', cont: '?' }`.
+
+#### 9 · `computeStats — overview` (7 tests)
+
+- Empty array → `total=0`, empty `calls` Set.
+- `total` counts all QSOs.
+- `calls` Set counts unique callsigns (same call twice = 1).
+- `dates` Set counts unique dates.
+- `bestDX` tracks the QSO with the highest `qrb`.
+- `firstDate` / `lastDate` track the chronological span.
+- `countries` Set excludes `'Unknown'`.
+
+#### 10 · `computeStats — aggregates` (9 tests)
+
+- `byBand` counts QSOs per band; tracks unique calls and best DX per band.
+- `byMode` counts QSOs per mode.
+- `byCont` tracks unique countries per continent.
+- `byHour` is a 24-element array; correct slot incremented by `time` field.
+- `byMonth` groups by `YYYYMM` key.
+- `topCalls` Map sorted descending by count.
+- Unknown continent (`'?'`) not added to `byCont`.
+
+#### 11 · `applyFilters — date filter` (6 tests)
+
+Replicates the date-range filtering logic in isolation:
+- QSO with empty date excluded when `from` or `to` is set.
+- QSO within range passes; before `from` or after `to` excluded.
+- No filter (both empty) passes all QSOs including those with empty dates.
+
+#### 12 · `fmtDate` (4 tests)
+
+- `'20240315'` → `'15.03.2024'`.
+- Empty string → empty string.
+- Input shorter than 8 chars returned as-is.
+
+#### 13 · `fmtMonth` (3 tests)
+
+- `'202403'` → `'03/2024'`; `'202412'` → `'12/2024'`.
+- Empty string → empty string.
+
+#### 14 · `htmlEsc` (7 tests)
+
+- `&`, `<`, `>`, `"` escaped to HTML entities; plain text unchanged.
+- XSS payload rendered safe.
+- Numbers coerced to string.
+
+#### 15 · `svgHBar` (6 tests)
+
+- Empty items → no `<svg>` tag.
+- Single item → `<svg>` present; multiple items produce `<rect>` bars.
+- Labels appear in output.
+- Zero-value item produces no `<rect>` (skipped by `bw>0` guard).
+- `colorFn` callback applied to bar fill.
+
+#### 16 · `svgVBar` (6 tests)
+
+- Empty items → no `<svg>` tag.
+- Non-empty items → `<svg>` and `<rect>` present.
+- All-zero values → no `<rect>` elements.
+- 24-item hour chart renders correctly with width 580.
+- Short bar (height < 14 px) places the value label *above* the bar in `var(--muted)` colour.
+- Zero-value bar has no value label; non-zero bar has its label.
+
+#### 17 · `I18N` (8 tests)
+
+- `t('secOver')` returns a non-empty translated string (not the key itself).
+- Unknown key returns the key string (safe fallback).
+- Section keys (`secBand`, `secMode`, `secCont`, `secCountry`, `secTime`, `secTop`) all non-empty.
+- Stat card keys (`cTotal`, `cUniq`, `cCountries`, `cDays`, `cBestDX`, `cDateRange`) all non-empty.
+- New section keys (`secDxcc`, `secHeatmap`, `secBandHour`, `secQrb`, `dxccTotal`, `dxccCount`, `dxccProg`, `qrbRange`, `qrbNoData`) all non-empty and differ from their key name.
+- `hmapDow` has 7 `|`-separated day abbreviations; SL first = `Po`, last = `Ne`.
+- `hmapMon` has 12 `|`-separated month abbreviations; first = `Jan`, last = `Dec`.
+- `hmapMore` non-empty and differs from its key name.
+
+#### 18 · `computeStats — byDay` (3 tests)
+
+- `byDay` Map counts QSOs per `YYYYMMDD` key.
+- QSOs with empty date are not added to `byDay`.
+- Three distinct dates → `byDay.size === 3`.
+
+#### 19 · `computeStats — byBandHour` (4 tests)
+
+- A band entry in `byBandHour` is a 24-element array.
+- Correct hour slot incremented per `time` field (`'1430'` → index 14).
+- Separate arrays per band (no cross-band contamination).
+- QSO with empty `time` → no band entry created in `byBandHour`.
+
+#### 20 · `computeStats — byDxcc / byBandDxcc` (5 tests)
+
+- `byDxcc` counts unique DXCC entity names; each entry has `.qso` count and `.bands` Set.
+- Two QSOs from Germany → `byDxcc.get('Germany').qso === 2`.
+- Same call on two bands → `bands` Set has both bands.
+- `byBandDxcc` Map: per-band Set of countries; correct size per band.
+- `'Unknown'` country excluded from both `byDxcc` and `byBandDxcc`.
+
+#### 21 · `computeStats — qrbBuckets` (8 tests)
+
+- `qrbBuckets` is a 6-element array (bucket indices 0–5).
+- Bucket 0 (`< 500 km`): qrb 200 and 499 both land here.
+- Bucket 1 (`500–1 000 km`): qrb 500 and 999.
+- Bucket 2 (`1 000–2 000 km`): qrb 1 000 and 1 999.
+- Bucket 3 (`2 000–5 000 km`): qrb 2 000 and 4 999.
+- Bucket 4 (`5 000–10 000 km`): qrb 5 000 and 9 999.
+- Bucket 5 (`≥ 10 000 km`): qrb 10 000 and 15 000.
+- `qrb === 0` not bucketed (represents unknown distance).
+
+---
+
 ## `edi-crosscheck.test.js` — 56 testov · 8 skupin
 
 Pokriva čisto logiko `edi-crosscheck.html`: odstranjevanje pripon, razdalja urejanja, razčlenjevanje EDI in vse algoritme crosschecka, vključno z nastavljivimi pragovi in predlogi za manjkajoče lokatorje.
@@ -1146,6 +1333,188 @@ Preverja strukturno validacijo `validateBackup()` in i18n nize za funkcijo backu
 - `sl.btnRestore` ≠ `en.btnRestore` (obstajata različna prevoda).
 - `sl.confirmRestore` in `en.confirmRestore` vsebujeta `${n}` placeholder.
 - `sl.toastRestoreDone` in `en.toastRestoreDone` vsebujeta `${n}` placeholder.
+
+---
+
+## `adif-stats.test.js` — 133 testov · 21 skupin
+
+Pokriva čisto logiko `adif-stats.html`: iskanje DXCC predpon, normalizacijo pasu/načina, pretvorbo lokatorjev, izračun QRB, razčlenjevanje ADIF, agregacijo statistik, logiko filtrov, formatiranje datumov/mesecev, XSS ubežanje, pomočnike SVG grafikonov in popolnost i18n ključev.
+
+### Kako testi delujejo
+
+`adif-stats.html` se izvede znotraj konteksta `node:vm` z enakim nadomestkom DOM kot ostala HTML orodja. Izvleče se samo blok `<script>`; minimalni nadomestek zagotavlja `localStorage`, `document.getElementById`, `URL`, `Blob`, `setTimeout` in `console`.
+
+Čiste funkcije so dostopne neposredno kot lastnosti konteksta:
+`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF`, `computeStats`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `t`.
+
+Pomočnik `adif()` gradi minimalne ADIF fiksture z izračunom dolžin `<TAG:dolžina>vrednost`.
+
+### Skupine testov
+
+#### 1 · `lookupCall` (17 testov)
+
+Preverja iskanje DXCC entitete po predponi klicnega znaka v vgrajeni bazi `PREFIX_DB`.
+
+- **S5** (Slovenija), **DL** (Nemčija), **K** (ZDA), **JA** (Japonska) — osnovna iskanja EU/NA/AS.
+- **Rusija EU in AS** — klicni znaki z mestom 1–8 → `EU`; z mestom 9 ali 0 → `AS`.
+- **Pripona `/P` odstranjena** — `S59DGO/P` razrešen kot `S59DGO`.
+- **Oblika `OE/` predpone** — `OE/S59DGO` razrešen po predponi `OE` (Avstrija), ne `S5`.
+- **Neznan klicni znak** — vrne `{ country: 'Unknown', cont: '?' }`.
+- **Prazen niz** — vrne `Unknown`.
+- **Mali vnos** — normaliziran v velike črke pred iskanjem.
+- **DXCC preglasitve** — `KL` (Aljaska), `CU` (Azori), `TK` (Korzika), `9H` (Malta), `UA2` (Kaliningrad) se razrešijo pravilno kljub deljenim predponam z večjimi entitetami.
+
+#### 2 · `normBand` (5 testov)
+
+- Pretvori niz pasu v male črke (`2M` → `2m`, `40M` → `40m`).
+- Obreže okoliški beli prostor.
+- Prazen niz in `null` vrneta `''`.
+
+#### 3 · `normMode` (5 testov)
+
+- Vrne niz načina z velikimi črkami, ko podnačin ni podan (`cw` → `CW`).
+- Podnačin ima prednost pred načinom, ko sta oba prisotna (`DIGI` + `FT8` → `FT8`).
+- Oba prazna → prazen niz.
+
+#### 4 · `locToLatLon` (5 testov)
+
+- Pretvori 4-znakovni Maidenhead lokator v `[lat, lon]`.
+- `JN65` → lat 45,5, lon 13.
+- `null` in prekratek vnos vrneta `null`.
+- 6-znakovni lokator da enak rezultat kot 4-znakovni (upoštevata se samo prvi 4 znaki).
+
+#### 5 · `haversine` (5 testov)
+
+- Enak lokator → razdalja `0`.
+- Različna lokatorja → razdalja `> 0`.
+- Atlantska razdalja (`JN65` → `FN20`) > 6 000 km.
+- Neveljaven ali `null` lokator → `0`.
+
+#### 6 · `parseADIF — basic extraction` (9 testov)
+
+- `CALL` izvlečen; `BAND` z malimi; `MODE` z velikimi — ne glede na vnos.
+- `SUBMODE` preglasi `MODE` (`DIGI` + `FT8` → način `FT8`).
+- `src` nastavljen na ime datoteke.
+- Zapisi brez `CALL` tiho preskočeni; več zapisov razčlenjenih; ADIF brez `<EOH>` pravilno obravnavan; oznake neobčutljive na velikost.
+
+#### 7 · `parseADIF — date/time/QRB` (8 testov)
+
+- `QSO_DATE` shranjen kot `YYYYMMDD`; ISO oblika (`YYYY-MM-DD`) normalizirana.
+- Kratek datum (< 8 znakov po normalizaciji) shranjen kot `''`.
+- `TIME_ON` `HHMMSS` okrnjen na `HHMM`; `HHMM` ohranjen.
+- Polje `DISTANCE` → `qrb` ko je prisotno.
+- `GRIDSQUARE` + `MY_GRIDSQUARE` → `qrb` prek haversina ko `DISTANCE` manjka.
+- `DISTANCE` ima prednost pred izračunom iz koordinat.
+
+#### 8 · `parseADIF — country/cont` (3 testi)
+
+- Slovenija `S56OA` → `{ country: 'Slovenia', cont: 'EU' }`.
+- `JA1ZLO` → `{ cont: 'AS' }`.
+- Neznana predpona → `{ country: 'Unknown', cont: '?' }`.
+
+#### 9 · `computeStats — overview` (7 testov)
+
+- Prazno polje → `total=0`, prazna množica `calls`.
+- `total` šteje vse QSO-je.
+- Množica `calls` šteje unikatne klicne znake (isti klicni znak dvakrat = 1).
+- Množica `dates` šteje unikatne datume.
+- `bestDX` sledi QSO z najvišjim `qrb`.
+- `firstDate` / `lastDate` sledita kronoloŠkemu razponu.
+- Množica `countries` izključuje `'Unknown'`.
+
+#### 10 · `computeStats — aggregates` (9 testov)
+
+- `byBand` šteje QSO-je per pas; sledi unikatnim klicnim znakom in best DX per pas.
+- `byMode` šteje QSO-je per način.
+- `byCont` sledi unikatnim državam per kontinent.
+- `byHour` je 24-elementno polje; pravilna reža naraščena po polju `time`.
+- `byMonth` grupi po ključu `YYYYMM`.
+- `topCalls` Map razvrščen padajoče po številu.
+- Neznan kontinent (`'?'`) ni dodan v `byCont`.
+
+#### 11 · `applyFilters — date filter` (6 testov)
+
+Replicira logiko filtriranja datumskega obsega v izolaciji:
+- QSO s praznim datumom je izključen, ko je nastavljen `from` ali `to`.
+- QSO v obsegu prestane filter; pred `from` ali po `to` izključen.
+- Brez filtra (oba prazna) prepusti vse QSO-je vključno s tistimi brez datuma.
+
+#### 12 · `fmtDate` (4 testi)
+
+- `'20240315'` → `'15.03.2024'`.
+- Prazen niz → prazen niz.
+- Vnos krajši od 8 znakov vrnjen nespremenjen.
+
+#### 13 · `fmtMonth` (3 testi)
+
+- `'202403'` → `'03/2024'`; `'202412'` → `'12/2024'`.
+- Prazen niz → prazen niz.
+
+#### 14 · `htmlEsc` (7 testov)
+
+- `&`, `<`, `>`, `"` ubežani v HTML entitete; navadno besedilo nespremenjeno.
+- XSS napad prikazan varno.
+- Števila pretvorjena v niz.
+
+#### 15 · `svgHBar` (6 testov)
+
+- Prazni elementi → ni oznake `<svg>`.
+- En element → `<svg>` prisoten; več elementov ustvari palice `<rect>`.
+- Oznake se pojavijo v izhodu.
+- Nič-vrednostni element ne ustvari `<rect>` (preskočen z varovalko `bw>0`).
+- Povratni klic `colorFn` apliciran na polnilo palice.
+
+#### 16 · `svgVBar` (6 testov)
+
+- Prazni elementi → ni oznake `<svg>`.
+- Neprazni elementi → prisotna `<svg>` in `<rect>`.
+- Vse nič-vrednosti → ni elementov `<rect>`.
+- 24-elementni urni grafikon se pravilno izriše s širino 580.
+- Kratka palica (višina < 14 px) postavi vrednostno oznako *nad* palico v barvi `var(--muted)`.
+- Nič-vrednostna palica nima oznake vrednosti; palica brez nič ima svojo oznako.
+
+#### 17 · `I18N` (8 testov)
+
+- `t('secOver')` vrne nepraznen prevedeni niz (ne sam ključ).
+- Neznan ključ vrne sam niz ključa (varna rezervna vrednost).
+- Razdelčni ključi (`secBand`, `secMode`, `secCont`, `secCountry`, `secTime`, `secTop`) vsi vrnejo neprazne nize.
+- Ključi stat kartice (`cTotal`, `cUniq`, `cCountries`, `cDays`, `cBestDX`, `cDateRange`) vsi neprazni.
+- Novi razdelčni ključi (`secDxcc`, `secHeatmap`, `secBandHour`, `secQrb`, `dxccTotal`, `dxccCount`, `dxccProg`, `qrbRange`, `qrbNoData`) neprazni in se razlikujejo od imen ključev.
+- `hmapDow` ima 7 `|`-ločenih krajšav dni; SL prvi = `Po`, zadnji = `Ne`.
+- `hmapMon` ima 12 `|`-ločenih krajšav mesecev; prvi = `Jan`, zadnji = `Dec`.
+- `hmapMore` je neprazen in se razlikuje od imen ključev.
+
+#### 18 · `computeStats — byDay` (3 testi)
+
+- `byDay` Map šteje QSO-je per ključ `YYYYMMDD`.
+- QSO-ji s praznim datumom se ne dodajo v `byDay`.
+- Trije različni datumi → `byDay.size === 3`.
+
+#### 19 · `computeStats — byBandHour` (4 testi)
+
+- Vnos pasu v `byBandHour` je 24-elementno polje.
+- Pravilna urna reža naraščena per polje `time` (`'1430'` → indeks 14).
+- Ločena polja per pas (ni medpasovnega onesnaževanja).
+- QSO s praznim `time` → ni vnosa pasu ustvarjenega v `byBandHour`.
+
+#### 20 · `computeStats — byDxcc / byBandDxcc` (5 testov)
+
+- `byDxcc` šteje unikatna DXCC imena entitet; vsak vnos ima `.qso` in množico `.bands`.
+- Dva QSO-ja iz Nemčije → `byDxcc.get('Germany').qso === 2`.
+- Isti klicni znak na dveh pasovih → množica `bands` ima oba pasova.
+- `byBandDxcc` Map: množica držav per pas; pravilna velikost per pas.
+- Država `'Unknown'` izključena iz obeh `byDxcc` in `byBandDxcc`.
+
+#### 21 · `computeStats — qrbBuckets` (8 testov)
+
+- `qrbBuckets` je 6-elementno polje (razredi 0–5).
+- Razred 0 (`< 500 km`): qrb 200 in 499 oba sem.
+- Razred 1 (`500–1 000 km`): qrb 500 in 999.
+- Razred 2 (`1 000–2 000 km`): qrb 1 000 in 1 999.
+- Razred 3 (`2 000–5 000 km`): qrb 2 000 in 4 999.
+- Razred 4 (`5 000–10 000 km`): qrb 5 000 in 9 999.
+- Razred 5 (`≥ 10 000 km`): qrb 10 000 in 15 000.
+- `qrb === 0` ne spade v noben razred (pomeni neznano razdaljo).
 
 ---
 

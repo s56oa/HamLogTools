@@ -14,6 +14,7 @@ Tools for amateur radio log processing and format conversion.
 | [`edi-crosscheck.html`](edi-crosscheck.html) | Browser app | Crosscheck a new EDI log against historical logs + optional OEVSV IARU R1 baseline — flags locator mismatches and callsign typos |
 | [`vhf-logger/vhf-logger.html`](vhf-logger/vhf-logger.html) | Browser app | Real-time VHF/UHF/SHF contest logger with live crosscheck hints, QRB/bearing display, and REG1TEST EDI export |
 | [`adif-merge.html`](adif-merge.html) | Browser app | Merge multiple ADIF log files — deduplication, filter by band/mode/source, inline editing, export to ADIF and CSV |
+| [`adif-stats.html`](adif-stats.html) | Browser app | Analyse an ADIF log — statistics by band/mode/continent/country/time, DXCC per band, activity heatmap, band×hour propagation matrix, QRB distribution, HTML export |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filter an ADIF log to keep only QSOs with BURO-accepting stations |
 | [`build-baseline.js`](build-baseline.js) | Node.js CLI | Build `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports for use with `edi-crosscheck.html` and `vhf-logger/vhf-logger.html` |
 
@@ -220,6 +221,45 @@ No internet connection required. All processing happens in your browser — no f
 
 ---
 
+## S56OA ADIF Statistics (`adif-stats.html`)
+
+Analyses a single ADIF log file and presents statistics in an interactive dashboard.
+Open the file in any modern browser — no installation required.
+
+**[➜ Open adif-stats.html](adif-stats.html)**
+
+### Features
+
+- **Drag & drop** a single `.adi` / `.adif` file onto the drop zone, or click to browse
+- **Overview card** — total QSOs, active days, distinct callsigns, DXCC entities worked, best DX with date range
+- **Statistics by band** — QSO count and percentage for each band, with visual progress bar
+- **Statistics by mode** — QSO count and percentage for each mode (SSB, CW, FT8, FM, …)
+- **Statistics by continent** — QSO count per continent (EU, NA, AS, AF, OC, SA, AN) with DXCC prefix lookup
+- **Statistics by country / DXCC entity** — top 20 entities by QSO count with continent
+- **Statistics by time** — QSOs per month and per UTC hour (SVG bar charts, auto-width)
+- **Top callsigns** — the 10 callsigns worked most often
+- **DXCC per band** — table of DXCC entities with a progress bar per worked band
+- **Activity heatmap** — GitHub-style year × week × day grid; month labels above columns; day-of-week labels on left; colour intensity by QSO count
+- **Band × hour propagation matrix** — 2D grid (band rows × 24 UTC hour columns); orange-scale cell intensity; hover shows count
+- **QRB distribution histogram** — 6 distance buckets (< 500 km through ≥ 10 000 km); uses ADIF `DISTANCE` field or calculates from `GRIDSQUARE` + `MY_GRIDSQUARE` via haversine
+- **HTML export** — download a self-contained HTML snapshot with all charts, heatmaps, and tables embedded
+- **Date range filter** — show statistics for a specific date range without reloading the file
+- **Bilingual UI** — Slovenian and English
+- **Dark/light theme** toggle with `localStorage` persistence
+
+### How to Use
+
+1. Download `adif-stats.html` (single file, ~60 KB)
+2. Open it in any modern browser (Chrome, Firefox, Edge, Safari)
+3. Drag an `.adi` or `.adif` file onto the drop zone, or click **Choose file**
+4. Explore the dashboard — all charts update automatically
+5. Optionally set **Date from / to** to filter the statistics to a time range
+6. Click **Export HTML** to download a standalone report
+
+No internet connection required. All processing happens in your browser — no files or QSO data are uploaded anywhere.
+
+---
+
 ## Baseline Builder (`build-baseline.js`)
 
 Node.js CLI script that builds `crosscheck-baseline.json` from a directory of OEVSV IARU R1 contest CSV exports. Used to occasionally refresh the prebuilt baseline that `edi-crosscheck.html` loads on startup.
@@ -385,6 +425,9 @@ node --test --test-reporter=spec adif-qrz-filter.test.js
 
 # VHF/UHF Contest Logger
 node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
+
+# ADIF Statistics
+node --test --test-reporter=spec adif-stats.test.js
 ```
 
 | Test file | Tests | Groups |
@@ -394,6 +437,7 @@ node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 | `adif-merge.test.js` | 112 | 21 (`parseADIF`, `updateKey`, `recomputeDupes`, `adifField`, `htmlEsc`, `csvEsc`, `modeBadge`, `buildFilename`, ADIF export, I18N, re-merge safety, and more) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 | `vhf-logger/vhf-logger.test.js` | 163 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
+| `adif-stats.test.js` | 133 | 21 (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`) |
 
 See [TESTING.md](TESTING.md) for full test documentation.
 
@@ -426,6 +470,7 @@ Orodja za obdelavo in pretvorbo formatov radioamaterskih dnevnikov.
 | [`edi-crosscheck.html`](edi-crosscheck.html) | Brskalniška app | Crosscheck novega EDI dnevnika glede na zgodovinske dnevnike + opcijski OEVSV IARU R1 baseline — zaznava napake lokatorjev in klicnih znakov |
 | [`vhf-logger/vhf-logger.html`](vhf-logger/vhf-logger.html) | Brskalniška app | Beležnik tekmovalnih dnevnikov VHF/UHF/SHF v realnem času z live crosscheckom, prikazom QRB/azimuta in izvozom REG1TEST EDI |
 | [`adif-merge.html`](adif-merge.html) | Brskalniška app | Združevanje več ADIF dnevniških datotek — deduplikacija, filtri po pasu/načinu/izvoru, urejanje v živo, izvoz ADIF in CSV |
+| [`adif-stats.html`](adif-stats.html) | Brskalniška app | Analiza ADIF dnevnika — statistika po pasu/načinu/kontinentu/državi/času, DXCC per pas, toplotna karta aktivnosti, matrika pas×ura, porazdelitev QRB, HTML izvoz |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filtriranje ADIF dnevnika — ohrani samo zveze s postajami, ki sprejemajo biro |
 | [`build-baseline.js`](build-baseline.js) | Node.js CLI | Zgradi `crosscheck-baseline.json` iz OEVSV IARU R1 contest CSV exportov za uporabo z `edi-crosscheck.html` in `vhf-logger/vhf-logger.html` |
 
@@ -632,6 +677,45 @@ Po nalaganju strani internetna povezava ni potrebna. Vsa obdelava poteka v brska
 
 ---
 
+## S56OA ADIF Statistics (`adif-stats.html`)
+
+Analizira eno ADIF dnevniško datoteko in prikaže statistiko v interaktivni nadzorni plošči.
+Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
+
+**[➜ Odpri adif-stats.html](adif-stats.html)**
+
+### Funkcionalnosti
+
+- **Povleci in spusti** eno `.adi` / `.adif` datoteko na območje za spuščanje ali klikni za iskanje
+- **Pregledna kartica** — skupno QSO, aktivni dnevi, unikatni klicni znaki, DXCC entitete, best DX z datumskim obsegom
+- **Statistika po pasovih** — število QSO in odstotek za vsak pas z vizualnim napredovalnim trakom
+- **Statistika po načinih** — število QSO in odstotek za vsak način (SSB, CW, FT8, FM, …)
+- **Statistika po kontinentih** — število QSO per kontinent (EU, NA, AS, AF, OC, SA, AN) s DXCC iskanjem predpon
+- **Statistika po državah / DXCC entitetah** — 20 najpogostejših entitet po številu QSO s kontinentom
+- **Statistika po času** — QSO per mesec in per UTC uro (SVG palični grafikoni, samodejna širina)
+- **Top klicni znaki** — 10 klicnih znakov, s katerimi si delal največ
+- **DXCC per pas** — tabela DXCC entitet z napredovalnim trakom per delovan pas
+- **Toplotna karta aktivnosti** — GitHub-style mreža leto × teden × dan; oznake mesecev nad stolpci; oznake dni levo; intenzivnost barve po številu QSO
+- **Matrika pas × ura razširjanja** — 2D mreža (pasovne vrstice × 24 UTC urnih stolpcev); oranžna lestvica; hover prikaže število
+- **Histogram porazdelitve QRB** — 6 razdaljevnih razredov (< 500 km do ≥ 10 000 km); uporablja ADIF polje `DISTANCE` ali izračuna iz `GRIDSQUARE` + `MY_GRIDSQUARE` prek haversina
+- **HTML izvoz** — prenesi samostojno HTML posnetek z vsemi grafikoni, toplotnimi kartami in tabelami
+- **Filter datumskega obsega** — prikaži statistiko za določen datumski obseg brez ponovnega nalaganja
+- **Dvojezični vmesnik** — slovenščina in angleščina
+- **Temna/svetla tema** s shranitvijo v `localStorage`
+
+### Navodila za uporabo
+
+1. Prenesi `adif-stats.html` (ena datoteka, ~60 KB)
+2. Odpri jo v katerem koli sodobnem brskalniku (Chrome, Firefox, Edge, Safari)
+3. Povleci `.adi` ali `.adif` datoteko na območje za spuščanje ali klikni **Izberi datoteko**
+4. Prebrskaj nadzorno ploščo — vsi grafikoni se samodejno posodobijo
+5. Po želji nastavi **Datum od / do** za filtriranje statistike na časovni obseg
+6. Klikni **Izvozi HTML** za prenos samostojnega poročila
+
+Po nalaganju strani internetna povezava ni potrebna. Vsa obdelava poteka v brskalniku — nobene datoteke ali podatki o zvezah niso nikamor naloženi.
+
+---
+
 ## Graditelj baseline-a (`build-baseline.js`)
 
 Node.js CLI skripta, ki gradi `crosscheck-baseline.json` iz mape OEVSV IARU R1 tekmovalnih CSV exportov. Uporablja se za občasno osveževanje pred-zgrajenega baseline-a, ki ga `edi-crosscheck.html` naloži ob zagonu.
@@ -797,6 +881,9 @@ node --test --test-reporter=spec adif-qrz-filter.test.js
 
 # Beležnik VHF/UHF tekmovanj
 node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
+
+# ADIF Statistics
+node --test --test-reporter=spec adif-stats.test.js
 ```
 
 | Testna datoteka | Testov | Skupin |
@@ -806,6 +893,7 @@ node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 | `adif-merge.test.js` | 112 | 21 (`parseADIF`, `updateKey`, `recomputeDupes`, `adifField`, `htmlEsc`, `csvEsc`, `modeBadge`, `buildFilename`, ADIF izvoz, I18N, varnost ponovnega mergea in več) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 | `vhf-logger/vhf-logger.test.js` | 163 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
+| `adif-stats.test.js` | 133 | 21 (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`) |
 
 Celotna dokumentacija je v [TESTING.md](TESTING.md).
 
