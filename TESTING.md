@@ -12,6 +12,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 |---|---|---|---|
 | `edi2adif.test.js` | `edi2adif.html` | 122 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
+| `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 163 | 16 |
 
@@ -24,6 +25,7 @@ The sections below document each test file in detail.
 ```bash
 node --test --test-reporter=spec edi2adif.test.js
 node --test --test-reporter=spec edi-crosscheck.test.js
+node --test --test-reporter=spec adif-merge.test.js
 node --test --test-reporter=spec adif-qrz-filter.test.js
 node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 ```
@@ -191,6 +193,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 |---|---|---|---|
 | `edi2adif.test.js` | `edi2adif.html` | 122 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
+| `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 163 | 16 |
 
@@ -203,6 +206,7 @@ Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 ```bash
 node --test --test-reporter=spec edi2adif.test.js
 node --test --test-reporter=spec edi-crosscheck.test.js
+node --test --test-reporter=spec adif-merge.test.js
 node --test --test-reporter=spec adif-qrz-filter.test.js
 node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 ```
@@ -439,6 +443,135 @@ Verifies QSO extraction from an EDI file fragment.
 | No match | No `CALL_BY_LOC` when no historical calls from that locator are within distance 2 |
 | Separate from CALL_SIMILAR | `CALL_BY_LOC` and `CALL_SIMILAR` appear as distinct issues in the result |
 | Redundant coexistence | `CALL_BY_LOC` is raised even when its candidates overlap with `CALL_SIMILAR` — both signals are shown as corroborating evidence |
+
+---
+
+## `adif-merge.test.js` — 112 tests · 21 groups
+
+Covers the pure logic of `adif-merge.html`: ADIF parsing, deduplication, field normalization, export helpers, XSS escaping, CSV escaping, i18n key completeness, and regression tests for code-review fixes.
+
+### How the tests work
+
+`adif-merge.html` is evaluated inside a `node:vm` context using the same Proxy-based DOM mock as the other HTML tools. Module-level `let` bindings are not ctx properties; these test helpers are injected via a second `vm.runInContext` call:
+- `_getAllForTest()` / `_setAllForTest(arr)` — read and write the `_all` QSO array
+- `_getFilteredForTest()` / `_setFilteredForTest(arr)` — access `_filtered`
+- `_getDeselForTest()` — read the `_desel` Set
+- `_getSourcesForTest()` / `_setSourcesForTest(arr)` — read and write `_sources`
+- `_getI18nForTest(lang, key)` — read a value from the `S` i18n object
+- `_getLangKeys(lang)` — list all keys for a given language
+
+A local `adif()` helper computes `:length` from the actual string value of each field, so test fixtures are not brittle against length miscalculations.
+
+### Test groups
+
+#### 1 · `parseADIF — basic extraction` (9 tests)
+- Minimal QSO (call, date, time, band, mode) parsed correctly.
+- `CALL` uppercased, `BAND` lowercased, `MODE` uppercased regardless of input case.
+- `RST_SENT`, `RST_RCVD`, and `GRIDSQUARE` extracted to convenience properties.
+- Arbitrary fields (e.g. `COMMENT`, `TX_PWR`) preserved in `q.fields` dict.
+- `src` set to the filename argument.
+- Records without `CALL` silently skipped.
+
+#### 2 · `parseADIF — date/time normalization` (7 tests)
+- `YYYYMMDD` stored as-is; ISO `YYYY-MM-DD` stripped of dashes.
+- Normalized date written back to `q.fields.QSO_DATE`.
+- `HHMMSS` and `HH:MM:SS` times stripped/truncated to `HHMM` for the dedup key.
+- Display strings `DD.MM.YYYY` and `HH:MM` generated for UI.
+
+#### 3 · `parseADIF — multi-record / edge cases` (9 tests)
+- Multiple records in one file all parsed; files without `<EOH>` (headerless ADIF) handled gracefully.
+- Empty records between `<EOR>` markers skipped.
+- Tag names are case-insensitive; all stored with uppercase keys in `q.fields`.
+- CRLF line endings handled; `APP_*` tags preserved; type specifier `<TAG:len:TYPE>` ignored cleanly.
+- Empty string input returns zero QSOs.
+
+#### 4 · `parseADIF — fields dict kept in sync` (4 tests)
+Normalization writes back to `q.fields` so ADIF export is lossless and uses the normalized value:
+- `CALL` in dict: uppercase + trimmed; `BAND`: lowercase; `MODE`: uppercase; `QSO_DATE`: dashes stripped.
+
+#### 5 · `updateKey` (3 tests)
+- Key format is `CALL|BAND|MODE|DATE|TIME`.
+- Different mode or different band each produce a different key.
+
+#### 6 · `recomputeDupes` (7 tests)
+- First occurrence → `dupe=false`; subsequent same key → `dupe=true`.
+- Same call with different mode, band, or time → both `dupe=false`.
+- Third occurrence of same key also `dupe=true`.
+- Stale `dupe=true` flags from previous state are cleared before recomputing.
+
+#### 7 · `parseADIF dedup key uniqueness` (4 tests)
+Integration — keys round-trip correctly through parse + `updateKey`:
+- Same QSO from two different files → identical `_key`.
+- Case differences in `CALL` or `BAND` normalize to the same key.
+- Different mode → different key (no false dedup).
+
+#### 8 · `adifField` (7 tests)
+- Produces `<TAG:length>value ` format (trailing space per ADIF convention).
+- Tag uppercased; length matches actual string length.
+- `null`, `undefined`, and `''` → empty string (field skipped in export).
+- Numeric value `100` serialised as `'100'`.
+
+#### 9 · `htmlEsc` (9 tests)
+- `&`, `<`, `>`, `"` escaped to HTML entities; plain strings unchanged.
+- `null` and `undefined` → `''`; numbers coerced to string.
+- XSS payload `<script>alert(1)</script>` rendered safe.
+
+#### 10 · `csvEsc` (7 tests)
+- Comma, double-quote, and newline trigger quoting; embedded double-quotes doubled.
+- `null` → `''`; numbers coerced to string.
+
+#### 11 · `modeBadge` (13 tests)
+- `SSB`, `AM`, `USB`, `LSB` → `badge-ssb`.
+- `CW` → `badge-cw`; `FM` → `badge-fm`.
+- `FT8`, `FT4`, `RTTY`, `JS8`, `WSPR`, unknown, and empty string → `badge-digi`.
+
+#### 12 · `buildFilename` (6 tests)
+- `STATION_CALLSIGN` used when present; `MY_CALLSIGN` as fallback; `"merged"` when neither.
+- Filename always contains `"merged"`; correct extension appended (`.adi`, `.csv`).
+- `/` in callsign replaced with `-` for filesystem safety.
+
+#### 13 · `ADIF export — field preservation` (2 tests)
+- Arbitrary fields (`TX_PWR`, `ANTENNA`, `NOTES`, `MY_GRIDSQUARE`) survive parse → export via `q.fields`.
+- Minimum required fields (`CALL`, `QSO_DATE`, `TIME_ON`, `BAND`, `MODE`) all present in `q.fields`.
+
+#### 14 · `I18N` (4 tests)
+- All SL keys present in EN and vice versa.
+- A fixed list of required UI keys (drop zone, stat bar, export buttons, table headers, error messages) present in both languages.
+- `dropTitle` differs between SL and EN.
+
+#### 15 · `parseADIF — real-world fixtures` (4 tests)
+- WSJT-X FT8 log: `HHMMSS` time truncated to `HHMM`, `FREQ` and `STATION_CALLSIGN` preserved.
+- Log4OM-style contest entry: `RST`, `TX_PWR`, `COMMENT` extracted correctly.
+- Two-file merge: combined QSO list, correct call + band per source.
+- Cross-file duplicate: same QSO in two files → second flagged after `recomputeDupes`.
+
+#### 16 · `parseADIF — missing optional fields` (5 tests)
+Regression — parser must not crash when optional fields are absent:
+- Missing `BAND` → `band = ''`; missing `TIME_ON` → `time = ''`, `timeDisp = ''`.
+- Missing `QSO_DATE` → `date = ''`, `dateDisp = ''`.
+- Missing `RST_SENT`/`RST_RCVD` → `''`; missing `GRIDSQUARE` → `grid = ''`.
+
+#### 17 · `parseADIF — no submode property on QSO object` (2 tests)
+Regression — `SUBMODE` was a dead property removed from the QSO object during code review:
+- `submode` is not a property of the parsed QSO object.
+- `SUBMODE` tag is still preserved in `q.fields` for lossless ADIF export.
+
+#### 18 · `adifField — export consistency` (3 tests)
+- `adifField` is idempotent w.r.t. tag case (lowercase input → same output as uppercase).
+- `APP_ADIFMERGE_SRC` annotation built with correct `:length` from the source filename.
+- Empty value → empty output (field skipped, not emitted as `<TAG:0>`).
+
+#### 19 · `updateKey — empty band handling` (2 tests)
+Documents behavior when `band` is absent — no crash, produces `CALL||MODE|DATE|TIME`; two such QSOs with identical other fields share the same key (will be deduped).
+
+#### 20 · `I18N — errBand key` (3 tests)
+Regression — `errBand` translation key added during code review:
+- Key present in SL and EN; values differ between languages.
+
+#### 21 · `parseADIF — re-merge safety (APP_ADIFMERGE_SRC)` (2 tests)
+Regression — re-merging a previously merged ADIF file must not duplicate the provenance tag:
+- `APP_ADIFMERGE_SRC` from a prior merge stored in `q.fields` (history preserved).
+- `q.src` always reflects the filename passed to `parseADIF`, not the old annotation, so `exportADIF` writes the correct new source tag.
 
 ---
 
@@ -729,6 +862,132 @@ Preverja ekstrakcijo QSO iz fragmenta EDI datoteke.
 | Brez ujemanja | Ni `CALL_BY_LOC`, ko noben zgodovinski klicni znak z istega lokatorja ni v razdalji 2 |
 | Ločeno od CALL_SIMILAR | `CALL_BY_LOC` in `CALL_SIMILAR` se pojavita kot ločeni težavi v rezultatu |
 | Redundantno soobstajanje | `CALL_BY_LOC` se sproži tudi, ko se kandidati prekrivajo s `CALL_SIMILAR` — oba signala se prikažeta kot potrjevalni dokaz |
+
+---
+
+## `adif-merge.test.js` — 112 testov · 21 skupin
+
+Pokriva čisto logiko `adif-merge.html`: razčlenjevanje ADIF, deduplikacijo, normalizacijo polj, pomožnike za izvoz, XSS ubežanje, ubežanje CSV, popolnost i18n ključev in regresijske teste za popravke iz code reviewa.
+
+### Kako testi delujejo
+
+`adif-merge.html` se izvede znotraj konteksta `node:vm` z enakim nadomestkom DOM na osnovi Proxy kot ostala HTML orodja. Modularni `let` vezani niso lastnosti ctx; ti testni pomočniki se vbrizgajo prek drugega klica `vm.runInContext`:
+- `_getAllForTest()` / `_setAllForTest(arr)` — branje in pisanje polja QSO `_all`
+- `_getFilteredForTest()` / `_setFilteredForTest(arr)` — dostop do `_filtered`
+- `_getDeselForTest()` — branje množice `_desel`
+- `_getSourcesForTest()` / `_setSourcesForTest(arr)` — branje in pisanje `_sources`
+- `_getI18nForTest(jezik, ključ)` — branje vrednosti iz i18n objekta `S`
+- `_getLangKeys(jezik)` — seznam vseh ključev za podan jezik
+
+Lokalni pomočnik `adif()` izračuna `:dolžino` iz dejanske vrednosti niza vsakega polja, da fiksture testov niso krhke pri napakah v dolžini.
+
+### Skupine testov
+
+#### 1 · `parseADIF — basic extraction` (9 testov)
+- Minimalen QSO (klicni znak, datum, čas, pas, način) razčlenjen pravilno.
+- `CALL` z velikimi črkami, `BAND` z malimi, `MODE` z velikimi — ne glede na vnos.
+- `RST_SENT`, `RST_RCVD` in `GRIDSQUARE` izvlečeni v priročne lastnosti.
+- Polja po meri (npr. `COMMENT`, `TX_PWR`) ohranjena v slovarju `q.fields`.
+- `src` nastavljen na ime datoteke; zapisi brez `CALL` tiho preskočeni.
+
+#### 2 · `parseADIF — date/time normalization` (7 testov)
+- `YYYYMMDD` shranjen kot je; ISO `YYYY-MM-DD` oblikovan brez pomišljajev.
+- Normaliziran datum zapisan nazaj v `q.fields.QSO_DATE`.
+- `HHMMSS` in `HH:MM:SS` časi okrnjeni na `HHMM` za dedup ključ.
+- Prikazni nizi `DD.MM.YYYY` in `HH:MM` generirani za UI.
+
+#### 3 · `parseADIF — multi-record / edge cases` (9 testov)
+- Več zapisov v eni datoteki razčlenjenih; datoteke brez `<EOH>` pravilno obravnavane.
+- Prazni zapisi med oznakami `<EOR>` preskočeni; oznake neobčutljive na velikost črk.
+- Zaključki vrstic CRLF obravnavani; oznake `APP_*` ohranjene; type specifier `<TAG:len:TYPE>` ignoriran.
+- Prazen vnos vrne nič QSO-jev.
+
+#### 4 · `parseADIF — fields dict kept in sync` (4 testi)
+Normalizacija piše nazaj v `q.fields`, tako da je ADIF izvoz brez izgub:
+- `CALL` v slovarju: velike + obrezano; `BAND`: male; `MODE`: velike; `QSO_DATE`: brez pomišljajev.
+
+#### 5 · `updateKey` (3 testi)
+- Format ključa je `CALL|BAND|MODE|DATE|TIME`.
+- Različen način ali različen pas vsak ustvarita različen ključ.
+
+#### 6 · `recomputeDupes` (7 testov)
+- Prva pojavitev → `dupe=false`; naslednja z enakim ključem → `dupe=true`.
+- Enak klicni znak z različnim načinom, pasom ali časom → oba `dupe=false`.
+- Tretja pojavitev enakega ključa prav tako `dupe=true`.
+- Zastarele zastavice `dupe=true` se počistijo pred ponovnim izračunom.
+
+#### 7 · `parseADIF dedup key uniqueness` (4 testi)
+Integracija — ključi se pravilno prenesejo skozi parse + `updateKey`:
+- Enak QSO iz dveh datotek → enak `_key`.
+- Razlika v velikosti črk v `CALL` ali `BAND` normalizira na enak ključ.
+- Različen način → različen ključ (brez lažne deduplikacije).
+
+#### 8 · `adifField` (7 testov)
+- Ustvari format `<OZNAKA:dolžina>vrednost ` (presledek na koncu po ADIF konvenciji).
+- Oznaka z velikimi črkami; dolžina ustreza dejanski dolžini niza.
+- `null`, `undefined` in `''` → prazen niz (polje izpuščeno v izvozu).
+- Numerična vrednost `100` serializirana kot `'100'`.
+
+#### 9 · `htmlEsc` (9 testov)
+- `&`, `<`, `>`, `"` ubežani v HTML entitete; navadni nizi nespremenjeni.
+- `null` in `undefined` → `''`; števila pretvorjena v niz.
+- XSS napad `<script>alert(1)</script>` prikazan varno.
+
+#### 10 · `csvEsc` (7 testov)
+- Vejica, dvojni narekovaj in nova vrstica sprožijo narekovaje; vdelani dvojni narekovaji podvojeni.
+- `null` → `''`; števila pretvorjena v niz.
+
+#### 11 · `modeBadge` (13 testov)
+- `SSB`, `AM`, `USB`, `LSB` → `badge-ssb`; `CW` → `badge-cw`; `FM` → `badge-fm`.
+- `FT8`, `FT4`, `RTTY`, `JS8`, `WSPR`, neznan in prazen niz → `badge-digi`.
+
+#### 12 · `buildFilename` (6 testov)
+- `STATION_CALLSIGN` uporabljen, če je prisoten; `MY_CALLSIGN` kot nadomestilo; `"merged"`, ko ni nobenega.
+- Ime vedno vsebuje `"merged"`; pravilna končnica dodana (`.adi`, `.csv`).
+- `/` v klicnem znaku nadomeščen z `-` za varnost datotečnega sistema.
+
+#### 13 · `ADIF export — field preservation` (2 testa)
+- Polja po meri (`TX_PWR`, `ANTENNA`, `NOTES`, `MY_GRIDSQUARE`) preživijo krog parse → izvoz prek `q.fields`.
+- Obvezna polja (`CALL`, `QSO_DATE`, `TIME_ON`, `BAND`, `MODE`) prisotna v `q.fields`.
+
+#### 14 · `I18N` (4 testi)
+- Vsi SL ključi prisotni v EN in obratno.
+- Zahtevani UI ključi (drop cona, stat vrstica, gumbi izvoza, glave tabele, sporočila napak) prisotni v obeh jezikih.
+- `dropTitle` se razlikuje med SL in EN.
+
+#### 15 · `parseADIF — real-world fixtures` (4 testi)
+- WSJT-X FT8 dnevnik: čas `HHMMSS` okrnjen na `HHMM`, `FREQ` in `STATION_CALLSIGN` ohranjeni.
+- Log4OM tekmovalni vnos: `RST`, `TX_PWR`, `COMMENT` pravilno izvlečeni.
+- Merge dveh datotek: združen seznam QSO, pravilen klicni znak + pas per vir.
+- MedDatotečni duplikat: enak QSO v dveh datotekah → drugi označen po `recomputeDupes`.
+
+#### 16 · `parseADIF — missing optional fields` (5 testov)
+Regresija — razčlenjevalnik se ne sme zrušiti, ko manjkajo neobvezna polja:
+- Manjkajoč `BAND` → `band = ''`; manjkajoč `TIME_ON` → `time = ''`, `timeDisp = ''`.
+- Manjkajoč `QSO_DATE` → `date = ''`, `dateDisp = ''`.
+- Manjkajoča `RST_SENT`/`RST_RCVD` → `''`; manjkajoč `GRIDSQUARE` → `grid = ''`.
+
+#### 17 · `parseADIF — no submode property on QSO object` (2 testa)
+Regresija — `SUBMODE` je bila mrtva lastnost, odstranjena iz objekta QSO med code reviewom:
+- `submode` ni lastnost razčlenjenega objekta QSO.
+- Oznaka `SUBMODE` je še vedno ohranjena v `q.fields` za ADIF izvoz brez izgub.
+
+#### 18 · `adifField — export consistency` (3 testi)
+- `adifField` je idempotentna glede na velikost črk oznake (majhne ali velike → isti izhod).
+- Anotacija `APP_ADIFMERGE_SRC` zgrajena s pravilno `:dolžino` iz izvorne datoteke.
+- Prazna vrednost → prazen izhod (polje izpuščeno, ne oddano kot `<TAG:0>`).
+
+#### 19 · `updateKey — empty band handling` (2 testa)
+Dokumentira vedenje pri odsotnem `band` — brez zrušitve, ustvari `CALL||MODE|DATE|TIME`; dva takšna QSO z enakimi ostalimi polji si delita ključ (bosta deduplicirani).
+
+#### 20 · `I18N — errBand key` (3 testi)
+Regresija — prevajalski ključ `errBand` dodan med code reviewom:
+- Ključ prisoten v SL in EN; vrednosti se razlikujeta med jezikoma.
+
+#### 21 · `parseADIF — re-merge safety (APP_ADIFMERGE_SRC)` (2 testa)
+Regresija — ponovni merge predhodno merganega ADIF ne sme podvojiti oznake provenienc:
+- `APP_ADIFMERGE_SRC` iz prejšnjega mergea shranjen v `q.fields` (zgodovina ohranjena).
+- `q.src` vedno odraža ime datoteke, podano `parseADIF`, ne staro anotacijo — `exportADIF` zapiše pravilno novo oznako izvora.
 
 ---
 
