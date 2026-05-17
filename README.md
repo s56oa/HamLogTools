@@ -13,6 +13,7 @@ Tools for amateur radio log processing and format conversion.
 | [`edi2adif.html`](edi2adif.html) | Browser app | Convert REG1TEST EDI v1 contest logs to ADIF and CSV formats |
 | [`edi-crosscheck.html`](edi-crosscheck.html) | Browser app | Crosscheck a new EDI log against historical logs + optional OEVSV IARU R1 baseline — flags locator mismatches and callsign typos |
 | [`vhf-logger/vhf-logger.html`](vhf-logger/vhf-logger.html) | Browser app | Real-time VHF/UHF/SHF contest logger with live crosscheck hints, QRB/bearing display, and REG1TEST EDI export |
+| [`adif-merge.html`](adif-merge.html) | Browser app | Merge multiple ADIF log files — deduplication, filter by band/mode/source, inline editing, export to ADIF and CSV |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filter an ADIF log to keep only QSOs with BURO-accepting stations |
 | [`build-baseline.js`](build-baseline.js) | Node.js CLI | Build `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports for use with `edi-crosscheck.html` and `vhf-logger/vhf-logger.html` |
 
@@ -185,6 +186,40 @@ No internet connection required after the page loads. All data stays in your bro
 
 ---
 
+## S56OA ADIF Merge (`adif-merge.html`)
+
+Merges multiple ADIF log files into a single deduplicated log.
+Open the file in any modern browser — no installation required.
+
+**[➜ Open adif-merge.html](adif-merge.html)**
+
+### Features
+
+- **Drag & drop** one or more `.adi` / `.adif` files simultaneously; load additional files at any time
+- **Preview table** with sorting by any column and live search by callsign
+- **Deduplication** — QSOs with the same CALL + BAND + MODE + DATE + TIME are flagged automatically; first occurrence wins; hide duplicates with one click
+- **Filters** by band, mode, and source file
+- **Row deselection** — cherry-pick QSOs to exclude from the export
+- **Inline editing** — correct callsign, date, time, band, mode, RST, locator before export
+- **Two export formats:**
+  - **ADIF** — lossless roundtrip: all original ADIF tags preserved; `APP_ADIFMERGE_SRC` tag annotates each record with the source filename (stripped on re-merge to prevent duplication)
+  - **CSV** — UTF-8 BOM prefix for direct Excel opening without the import wizard
+- **Bilingual UI** — Slovenian and English
+- **Dark/light theme** toggle with `localStorage` persistence
+
+### How to Use
+
+1. Download `adif-merge.html` (single file, ~35 KB)
+2. Open it in any modern browser (Chrome, Firefox, Edge, Safari)
+3. Drag one or more `.adi` or `.adif` files onto the drop zone, or click **Choose files**
+4. Review the QSO table — sort columns, filter, search, hide duplicates
+5. Optionally deselect rows to exclude from export
+6. Click **Export ADIF** or **Export CSV**
+
+No internet connection required. All processing happens in your browser — no files or QSO data are uploaded anywhere.
+
+---
+
 ## Baseline Builder (`build-baseline.js`)
 
 Node.js CLI script that builds `crosscheck-baseline.json` from a directory of OEVSV IARU R1 contest CSV exports. Used to occasionally refresh the prebuilt baseline that `edi-crosscheck.html` loads on startup.
@@ -342,6 +377,9 @@ node --test --test-reporter=spec edi2adif.test.js
 # EDI Crosscheck
 node --test --test-reporter=spec edi-crosscheck.test.js
 
+# ADIF Merge
+node --test --test-reporter=spec adif-merge.test.js
+
 # ADIF QRZ BURO filter
 node --test --test-reporter=spec adif-qrz-filter.test.js
 
@@ -353,6 +391,7 @@ node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 |---|---|---|
 | `edi2adif.test.js` | 122 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit) |
 | `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` locator mismatch ×6, `runCrosscheck` callsign ×8, missing locator ×4, thresholds ×3, callsign by locator ×4) |
+| `adif-merge.test.js` | 112 | 21 (`parseADIF`, `updateKey`, `recomputeDupes`, `adifField`, `htmlEsc`, `csvEsc`, `modeBadge`, `buildFilename`, ADIF export, I18N, re-merge safety, and more) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 | `vhf-logger/vhf-logger.test.js` | 163 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
 
@@ -386,6 +425,7 @@ Orodja za obdelavo in pretvorbo formatov radioamaterskih dnevnikov.
 | [`edi2adif.html`](edi2adif.html) | Brskalniška app | Pretvorba REG1TEST EDI v1 tekmovalnih dnevnikov v ADIF in CSV formate |
 | [`edi-crosscheck.html`](edi-crosscheck.html) | Brskalniška app | Crosscheck novega EDI dnevnika glede na zgodovinske dnevnike + opcijski OEVSV IARU R1 baseline — zaznava napake lokatorjev in klicnih znakov |
 | [`vhf-logger/vhf-logger.html`](vhf-logger/vhf-logger.html) | Brskalniška app | Beležnik tekmovalnih dnevnikov VHF/UHF/SHF v realnem času z live crosscheckom, prikazom QRB/azimuta in izvozom REG1TEST EDI |
+| [`adif-merge.html`](adif-merge.html) | Brskalniška app | Združevanje več ADIF dnevniških datotek — deduplikacija, filtri po pasu/načinu/izvoru, urejanje v živo, izvoz ADIF in CSV |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filtriranje ADIF dnevnika — ohrani samo zveze s postajami, ki sprejemajo biro |
 | [`build-baseline.js`](build-baseline.js) | Node.js CLI | Zgradi `crosscheck-baseline.json` iz OEVSV IARU R1 contest CSV exportov za uporabo z `edi-crosscheck.html` in `vhf-logger/vhf-logger.html` |
 
@@ -558,6 +598,40 @@ Po nalaganju strani internetna povezava ni potrebna. Vsi podatki ostanejo v `loc
 
 ---
 
+## S56OA ADIF Merge (`adif-merge.html`)
+
+Združuje več ADIF dnevniških datotek v en deduplikiran dnevnik.
+Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
+
+**[➜ Odpri adif-merge.html](adif-merge.html)**
+
+### Funkcionalnosti
+
+- **Povleci in spusti** eno ali več `.adi` / `.adif` datotek hkrati; dodatne datoteke dodaj kadarkoli
+- **Tabela za predogled** z razvrščanjem po katerem koli stolpcu in iskanjem v živo po klicnem znaku
+- **Deduplikacija** — zveze z enakim CALL + BAND + MODE + DATE + TIME so samodejno označene; zmaga prva pojavitev; duplikate skrij z enim klikom
+- **Filtri** po pasu, načinu in izvorni datoteki
+- **Odznačevanje vrstic** — ročno izključi posamezne QSO-je iz izvoza
+- **Urejanje v živo** — popravi klicni znak, datum, čas, pas, način, RST, lokator pred izvozom
+- **Dva izvozna formata:**
+  - **ADIF** — lossless roundtrip: vsa originalna ADIF polja ohranjena; oznaka `APP_ADIFMERGE_SRC` zabeleži izvorno datoteko (ob ponovnem mergeu se samodejno odstrani)
+  - **CSV** — UTF-8 BOM predpona za neposredno odpiranje v Excelu brez čarovnika za uvoz
+- **Dvojezični vmesnik** — slovenščina in angleščina
+- **Temna/svetla tema** s shranitvijo v `localStorage`
+
+### Navodila za uporabo
+
+1. Prenesi `adif-merge.html` (ena datoteka, ~35 KB)
+2. Odpri jo v katerem koli sodobnem brskalniku (Chrome, Firefox, Edge, Safari)
+3. Povleci eno ali več `.adi` ali `.adif` datotek na območje za spuščanje ali klikni **Izberi datoteke**
+4. Preglej tabelo QSO — razvrščaj stolpce, filtriraj, išči, skrij duplikate
+5. Po želji odznači vrstice, ki jih ne želiš izvoziti
+6. Klikni **Izvozi ADIF** ali **Izvozi CSV**
+
+Po nalaganju strani internetna povezava ni potrebna. Vsa obdelava poteka v brskalniku — nobene datoteke ali podatki o zvezah niso nikamor naloženi.
+
+---
+
 ## Graditelj baseline-a (`build-baseline.js`)
 
 Node.js CLI skripta, ki gradi `crosscheck-baseline.json` iz mape OEVSV IARU R1 tekmovalnih CSV exportov. Uporablja se za občasno osveževanje pred-zgrajenega baseline-a, ki ga `edi-crosscheck.html` naloži ob zagonu.
@@ -715,6 +789,9 @@ node --test --test-reporter=spec edi2adif.test.js
 # EDI Crosscheck
 node --test --test-reporter=spec edi-crosscheck.test.js
 
+# ADIF Merge
+node --test --test-reporter=spec adif-merge.test.js
+
 # ADIF QRZ BURO filter
 node --test --test-reporter=spec adif-qrz-filter.test.js
 
@@ -726,6 +803,7 @@ node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 |---|---|---|
 | `edi2adif.test.js` | 122 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplikati, CSV izvoz, urejanje v živo) |
 | `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` lokator ×6, `runCrosscheck` klicni znak ×8, manjkajoč lokator ×4, pragovi ×3, klicni znak po lokatorju ×4) |
+| `adif-merge.test.js` | 112 | 21 (`parseADIF`, `updateKey`, `recomputeDupes`, `adifField`, `htmlEsc`, `csvEsc`, `modeBadge`, `buildFilename`, ADIF izvoz, I18N, varnost ponovnega mergea in več) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 | `vhf-logger/vhf-logger.test.js` | 163 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
 

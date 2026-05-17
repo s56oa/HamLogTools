@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S56OA ADIF Merge</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #0a0e14;
+  --bg2:    #0f1520;
+  --bg3:    #162030;
+  --bg4:    #1c2a3a;
+  --border: #1e3048;
+  --border2:#254060;
+  --text:   #cdd9e5;
+  --muted:  #637e96;
+  --dim:    #3d5a70;
+  --accent: #4d9de0;
+  --accent2:#2ecc8a;
+  --accent3:#f0a500;
+  --danger: #e05c4d;
+  --dup:    rgba(240,165,0,0.12);
+  --hdr:    linear-gradient(135deg,#0a0e14 0%,#0d1a28 100%);
+  --call:   #79c0ff;
+  --r:      6px;
+}
+html[data-theme="light"] {
+  --bg:     #f0f4f8;
+  --bg2:    #ffffff;
+  --bg3:    #e4ecf3;
+  --bg4:    #d4e0eb;
+  --border: #bfcfdd;
+  --border2:#96b0c6;
+  --text:   #18273a;
+  --muted:  #4a6275;
+  --dim:    #7a9ab0;
+  --accent: #1a6fad;
+  --accent2:#178a58;
+  --accent3:#a06800;
+  --danger: #c03030;
+  --dup:    rgba(160,104,0,0.10);
+  --hdr:    linear-gradient(135deg,#dde8f2 0%,#eaf2f8 100%);
+  --call:   var(--accent);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;min-height:100vh;transition:background-color .2s,color .2s}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* HEADER */
+header{
+  background:var(--hdr);border-bottom:1px solid var(--border);
+  padding:.9rem 1.5rem;display:flex;align-items:center;gap:1rem;
+  position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);
+}
+.logo{font-family:'Space Mono',monospace;font-size:1rem;letter-spacing:-.02em}
+.logo .arr{color:var(--accent);margin:0 .3rem}
+.logo .fmt{color:var(--muted)}
+.version{
+  font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);
+  padding:1px 6px;border:1px solid var(--border);border-radius:3px;
+  margin-left:-.2rem;white-space:nowrap;
+}
+.stats-bar{display:flex;gap:1.5rem;margin-left:1rem;font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;}
+.stat{display:flex;flex-direction:column;gap:1px}
+.stat-val{color:var(--accent);font-weight:700;font-size:13px}
+.stat-val.warn{color:var(--accent3)}
+.lang-wrap{margin-left:auto;display:flex;gap:4px}
+.lang-btn{background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;
+  transition:all .15s;font-family:'Space Mono',monospace}
+.lang-btn.active{background:var(--bg4);border-color:var(--accent);color:var(--accent)}
+.theme-btn{background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:4px;padding:2px 7px;font-size:13px;cursor:pointer;line-height:1;transition:all .15s}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* MAIN */
+main{max-width:1500px;margin:0 auto;padding:1.25rem 1.5rem 3rem}
+
+/* DROP */
+#dropzone{
+  min-height:calc(100vh - 60px);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:1.25rem;padding:2rem;
+}
+.drop-area{
+  border:1.5px dashed var(--border2);border-radius:12px;
+  padding:3rem 5rem;text-align:center;cursor:pointer;
+  transition:all .2s;background:var(--bg2);max-width:500px;width:100%;
+}
+.drop-area:hover,.drop-area.drag{border-color:var(--accent);background:rgba(77,157,224,.05)}
+.drop-ico{font-size:2.5rem;margin-bottom:.75rem;opacity:.7}
+.drop-title{font-family:'Space Mono',monospace;font-size:.95rem;margin-bottom:.4rem}
+.drop-sub{font-size:.8rem;color:var(--muted);margin-bottom:1rem}
+.btn{border:none;border-radius:var(--r);padding:.45rem 1.1rem;font-size:.8rem;
+  font-weight:600;cursor:pointer;transition:all .15s;font-family:'IBM Plex Sans',sans-serif}
+.btn-primary{background:var(--accent);color:#0a0e14}
+.btn-primary:hover{opacity:.85}
+.btn-secondary{background:var(--bg4);color:var(--text);border:1px solid var(--border2)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:.3rem .8rem;font-size:.75rem}
+.drop-note{font-size:.75rem;color:var(--dim);max-width:480px;text-align:center;line-height:1.6}
+#fileInput{display:none}
+
+/* APP */
+#app{display:none}
+
+/* TOOLBAR */
+.toolbar{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+  padding:.8rem 1rem;margin-bottom:1rem;
+  display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
+}
+.toolbar-sep{width:1px;height:20px;background:var(--border);margin:0 .2rem}
+.search-inp{
+  background:var(--bg3);border:1px solid var(--border2);border-radius:4px;
+  color:var(--text);padding:.35rem .7rem;font-size:.8rem;width:180px;
+  font-family:'IBM Plex Sans',sans-serif;
+}
+.search-inp:focus{outline:none;border-color:var(--accent)}
+.sel{
+  background:var(--bg3);border:1px solid var(--border2);border-radius:4px;
+  color:var(--text);padding:.35rem .6rem;font-size:.8rem;cursor:pointer;
+}
+.file-tags{display:flex;gap:.4rem;flex-wrap:wrap;margin-left:.4rem}
+.file-tag{
+  background:var(--bg4);border:1px solid var(--border2);border-radius:3px;
+  padding:2px 8px;font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;
+  display:flex;align-items:center;gap:4px;
+}
+.file-tag-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.row-count{font-size:11px;color:var(--dim);margin-left:auto;font-family:'Space Mono',monospace;white-space:nowrap}
+
+/* EXPORT BAR */
+.export-bar{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+  padding:.8rem 1rem;margin-bottom:1rem;
+  display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;
+}
+.export-label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-right:.25rem}
+
+/* TABLE */
+.tbl-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead{position:sticky;top:0;z-index:2}
+th{
+  background:var(--bg3);border-bottom:1px solid var(--border2);
+  padding:.5rem .7rem;text-align:left;white-space:nowrap;
+  font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+  cursor:pointer;user-select:none;transition:color .1s;
+}
+th:hover{color:var(--accent)}
+th.sorted{color:var(--accent)}
+th .sort-ico{margin-left:4px;opacity:.5;font-size:9px}
+th.sorted .sort-ico{opacity:1}
+td{
+  padding:.45rem .7rem;border-bottom:.5px solid var(--border);
+  color:var(--text);white-space:nowrap;vertical-align:middle;
+}
+td.call{font-family:'Space Mono',monospace;font-weight:700;color:var(--call)}
+td.num {font-family:'Space Mono',monospace;color:var(--dim);font-size:11px}
+td.loc {font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)}
+td.band{font-family:'Space Mono',monospace}
+td.src {font-size:10px;color:var(--dim);max-width:140px;overflow:hidden;text-overflow:ellipsis}
+tr:last-child td{border-bottom:none}
+tr.dup{background:var(--dup)}
+tr.dup td.call{color:var(--accent3)}
+tr:hover td{background:rgba(77,157,224,.04)}
+tr.desel td{opacity:.35}
+.badge{display:inline-block;font-size:9px;padding:1px 5px;border-radius:2px;
+  font-family:'Space Mono',monospace;vertical-align:middle}
+.badge-ssb {background:rgba(77,157,224,.2);color:var(--call)}
+.badge-cw  {background:rgba(46,204,138,.2);color:#3fb950}
+.badge-fm  {background:rgba(240,165,0,.2);color:var(--accent3)}
+.badge-band{background:rgba(99,126,150,.2);color:var(--muted)}
+.badge-dup {background:rgba(240,165,0,.25);color:var(--accent3);margin-left:4px}
+.badge-digi{background:rgba(163,113,247,.2);color:#a371f7}
+.chk{accent-color:var(--accent);width:13px;height:13px;cursor:pointer}
+
+/* EDITABLE CELLS */
+td.editable{cursor:text;transition:background .1s}
+td.editable:hover{background:rgba(77,157,224,.07)!important;outline:1px dashed var(--border2)}
+td.editing{background:rgba(77,157,224,.1)!important;outline:1px solid var(--accent)}
+.cell-inp{
+  background:transparent;border:none;outline:none;
+  color:inherit;padding:0;font-size:12px;font-family:'Space Mono',monospace;
+  width:100%;box-sizing:border-box;
+}
+.cell-sel{
+  background:var(--bg3);border:none;outline:none;cursor:pointer;
+  color:inherit;font-size:11px;font-family:'Space Mono',monospace;
+}
+
+/* TOAST */
+#toast{
+  position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;
+  background:var(--bg3);border:1px solid var(--accent2);border-radius:var(--r);
+  padding:.6rem 1rem;font-size:.8rem;color:var(--accent2);
+  transform:translateY(100px);opacity:0;transition:all .3s;pointer-events:none;
+  font-family:'Space Mono',monospace;
+}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.err{border-color:var(--danger);color:var(--danger)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">S56OA ADIF<span class="arr">⊕</span>Merge<span class="fmt"> tool</span></div>
+  <span class="version">v1.0</span>
+  <div class="stats-bar" id="statsBar" style="display:none">
+    <div class="stat"><span class="stat-val" id="sSrc">0</span><span data-i18n="statFiles">datotek</span></div>
+    <div class="stat"><span class="stat-val" id="sQso">0</span>QSO</div>
+    <div class="stat"><span class="stat-val warn" id="sDups">0</span><span data-i18n="statDups">duplikatov</span></div>
+    <div class="stat"><span class="stat-val" id="sBands">—</span><span data-i18n="statBands">pasovi</span></div>
+    <div class="stat"><span class="stat-val" id="sDates">—</span><span data-i18n="statDates">obdobje</span></div>
+  </div>
+  <div class="lang-wrap">
+    <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" title="Toggle theme">☀</button>
+    <button class="lang-btn active" id="btnSL" onclick="setLang('sl')">SL</button>
+    <button class="lang-btn" id="btnEN" onclick="setLang('en')">EN</button>
+  </div>
+</header>
+
+<div id="dropzone">
+  <div class="drop-area" id="dropArea">
+    <div class="drop-ico">🗂️</div>
+    <div class="drop-title" data-i18n="dropTitle">Naloži ADIF dnevnike</div>
+    <div class="drop-sub" data-i18n="dropSub">povleci eno ali več .adi / .adif datotek</div>
+    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()" data-i18n="dropBtn">Izberi datoteke</button>
+  </div>
+  <div class="drop-note" data-i18n="dropNote">Podpira format ADIF. Več datotek se združi v en ADIF. Duplikati (enak CALL+BAND+MODE+DATE+TIME) so označeni in izključeni iz izvoza. Vsa originalna ADIF polja se ohranijo. Obdelava poteka lokalno v brskalniku.</div>
+  <input type="file" id="fileInput" multiple accept=".adi,.adif,.ADI,.ADIF">
+</div>
+
+<main id="app">
+  <div class="toolbar">
+    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('fileInput').click()" data-i18n="btnAdd">+ Dodaj datoteke</button>
+    <button class="btn btn-secondary btn-sm" onclick="resetApp()" data-i18n="btnReset">↩ Ponastavi</button>
+    <div class="toolbar-sep"></div>
+    <input class="search-inp" id="searchInp" placeholder="Išči klicni znak…" oninput="applyFilters()">
+    <select class="sel" id="filterBand"  onchange="applyFilters()"><option value="">— pas —</option></select>
+    <select class="sel" id="filterMode"  onchange="applyFilters()"><option value="">— način —</option></select>
+    <select class="sel" id="filterSrc"   onchange="applyFilters()"><option value="">— datoteka —</option></select>
+    <div class="toolbar-sep"></div>
+    <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="checkbox" id="hideDups" class="chk" onchange="applyFilters()">
+      <span data-i18n="hideDups">Skrij duplikate</span>
+    </label>
+    <div class="file-tags" id="fileTags"></div>
+    <div class="row-count" id="rowCount"></div>
+  </div>
+
+  <div class="export-bar">
+    <span class="export-label" data-i18n="exportLabel">Izvoz</span>
+    <button class="btn btn-primary btn-sm" onclick="exportADIF()" data-i18n="btnAdif">⬇ ADIF (.adi)</button>
+    <button class="btn btn-secondary btn-sm" onclick="exportCSV()" data-i18n="btnCsv">⬇ CSV</button>
+    <div class="toolbar-sep"></div>
+    <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="checkbox" id="onlySelected" class="chk" onchange="updateExportCount()">
+      <span data-i18n="onlySel">Samo označene</span>
+    </label>
+    <span id="exportCount" style="font-size:11px;color:var(--dim);font-family:'Space Mono',monospace"></span>
+  </div>
+
+  <div class="tbl-wrap">
+    <table id="mainTable">
+      <thead id="tHead"></thead>
+      <tbody id="tBody"></tbody>
+    </table>
+  </div>
+</main>
+
+<div id="toast" aria-live="polite"></div>
+
+<script>
+// ════════════════════════════════════════
+//  I18N
+// ════════════════════════════════════════
+const S = {
+sl:{
+  dropTitle:'Naloži ADIF dnevnike',
+  dropSub:'povleci eno ali več .adi / .adif datotek',
+  dropBtn:'Izberi datoteke',
+  dropNote:'Podpira format ADIF. Več datotek se združi v en ADIF. Duplikati (enak CALL+BAND+MODE+DATE+TIME) so označeni in izključeni iz izvoza. Vsa originalna ADIF polja se ohranijo. Obdelava poteka lokalno v brskalniku.',
+  statFiles:'datotek', statDups:'duplikatov', statBands:'pasovi', statDates:'obdobje',
+  btnAdd:'+ Dodaj datoteke', btnReset:'↩ Ponastavi',
+  hideDups:'Skrij duplikate', exportLabel:'Izvoz',
+  btnAdif:'⬇ ADIF (.adi)', btnCsv:'⬇ CSV',
+  onlySel:'Samo označene',
+  thNum:'#', thDate:'Datum', thTime:'Čas', thCall:'Klicni znak',
+  thBand:'Pas', thMode:'Način', thRstS:'RST odd.', thRstR:'RST spr.',
+  thGrid:'Lokator', thSrc:'Datoteka',
+  toastAdif:'ADIF izvožen', toastCsv:'CSV izvožen',
+  toastNoQso:'Ni zvez za izvoz',
+  errAdif:'Napaka pri branju ADIF',
+  dupLabel:'DUP',
+  editHint:'Klikni za urejanje',
+  errDate:'Napačen datum (PP.MM.LLLL)',
+  errTime:'Napačen čas (HH:MM)',
+  errCall:'Napačen klicni znak',
+  errBand:'Pas ne sme biti prazen',
+  errGrid:'Napačen lokator — počiščen',
+},
+en:{
+  dropTitle:'Load ADIF Logs',
+  dropSub:'drag one or more .adi / .adif files',
+  dropBtn:'Choose files',
+  dropNote:'Supports ADIF format. Multiple files are merged into one ADIF. Duplicates (same CALL+BAND+MODE+DATE+TIME) are flagged and excluded from export. All original ADIF fields are preserved. Processing is local in your browser.',
+  statFiles:'files', statDups:'duplicates', statBands:'bands', statDates:'period',
+  btnAdd:'+ Add files', btnReset:'↩ Reset',
+  hideDups:'Hide duplicates', exportLabel:'Export',
+  btnAdif:'⬇ ADIF (.adi)', btnCsv:'⬇ CSV',
+  onlySel:'Selected only',
+  thNum:'#', thDate:'Date', thTime:'Time', thCall:'Callsign',
+  thBand:'Band', thMode:'Mode', thRstS:'RST Sent', thRstR:'RST Rcvd',
+  thGrid:'Locator', thSrc:'File',
+  toastAdif:'ADIF exported', toastCsv:'CSV exported',
+  toastNoQso:'No QSOs to export',
+  errAdif:'ADIF read error',
+  dupLabel:'DUP',
+  editHint:'Click to edit',
+  errDate:'Invalid date (DD.MM.YYYY)',
+  errTime:'Invalid time (HH:MM)',
+  errCall:'Invalid callsign',
+  errBand:'Band must not be empty',
+  errGrid:'Invalid locator — cleared',
+}};
+let _lang = 'sl';
+function t(k){ return (S[_lang]||S.sl)[k] || (S.sl[k]||k); }
+function setLang(l){
+  _lang = l;
+  document.getElementById('btnSL').classList.toggle('active', l==='sl');
+  document.getElementById('btnEN').classList.toggle('active', l==='en');
+  document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.dataset.i18n));
+  if(document.getElementById('app').style.display !== 'none') renderTable();
+}
+
+// ════════════════════════════════════════
+//  ADIF PARSER
+// ════════════════════════════════════════
+function parseADIF(text, filename){
+  text = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+
+  // Skip header: everything up to and including <EOH>
+  const eohMatch = text.match(/<EOH>/i);
+  const body = eohMatch ? text.slice(eohMatch.index + eohMatch[0].length) : text;
+
+  const qsos = [];
+  let searchFrom = 0;
+
+  while(searchFrom < body.length){
+    const eorMatch = body.slice(searchFrom).match(/<EOR>/i);
+    if(!eorMatch) break;
+    const chunkEnd = searchFrom + eorMatch.index;
+    const chunk = body.slice(searchFrom, chunkEnd);
+    searchFrom = chunkEnd + eorMatch[0].length;
+    if(!chunk.trim()) continue;
+
+    // Sequential tag parser: <TAG:len[:type]>value
+    const fields = {};
+    let fpos = 0;
+    while(fpos < chunk.length){
+      const open = chunk.indexOf('<', fpos);
+      if(open === -1) break;
+      const close = chunk.indexOf('>', open + 1);
+      if(close === -1) break;
+      const spec = chunk.slice(open + 1, close);
+      const parts = spec.split(':');
+      const tag = parts[0].toUpperCase();
+      const len = parts.length >= 2 ? parseInt(parts[1]) : NaN;
+      fpos = close + 1;
+      if(!isNaN(len) && len >= 0){
+        fields[tag] = chunk.slice(fpos, fpos + len);
+        fpos += len;
+      }
+    }
+
+    if(!fields.CALL) continue;
+
+    // Normalize key fields
+    const call = fields.CALL.trim().toUpperCase();
+    // Date: accept YYYYMMDD or YYYY-MM-DD
+    const dateRaw = (fields.QSO_DATE || '').trim().replace(/[-/]/g,'');
+    // Time: accept HHMM or HHMMSS or HH:MM:SS
+    const timeRaw = (fields.TIME_ON || '').trim().replace(/:/g,'');
+    const time = timeRaw.slice(0,4); // HHMM for dedup/display
+
+    const band = (fields.BAND || '').trim().toLowerCase();
+    const mode = (fields.MODE || '').trim().toUpperCase();
+    const rstS = (fields.RST_SENT || '').trim();
+    const rstR = (fields.RST_RCVD || '').trim();
+    const grid = (fields.GRIDSQUARE || '').trim();
+
+    // Write normalized values back so export uses them
+    fields.CALL = call;
+    if(dateRaw) fields.QSO_DATE = dateRaw;
+    if(timeRaw) fields.TIME_ON = timeRaw;
+    if(band) fields.BAND = band;
+    if(mode) fields.MODE = mode;
+
+    // Date display: YYYYMMDD → DD.MM.YYYY
+    let dateDisp = dateRaw;
+    if(/^\d{8}$/.test(dateRaw))
+      dateDisp = `${dateRaw.slice(6,8)}.${dateRaw.slice(4,6)}.${dateRaw.slice(0,4)}`;
+
+    // Time display: HHMM → HH:MM
+    let timeDisp = time;
+    if(/^\d{4}$/.test(time))
+      timeDisp = `${time.slice(0,2)}:${time.slice(2,4)}`;
+
+    qsos.push({
+      call, date:dateRaw, time, dateDisp, timeDisp,
+      band, mode, rstS, rstR, grid,
+      src: filename,
+      fields,
+    });
+  }
+  return qsos;
+}
+
+// ════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════
+let _all      = [];
+let _filtered = [];
+let _sources  = []; // {name, color}
+let _sortCol  = 1;
+let _sortAsc  = true;
+const _desel  = new Set();
+let _editActive = null;
+const FILE_COLORS = ['#4d9de0','#2ecc8a','#f0a500','#e05c4d','#a371f7','#79c0ff'];
+
+// ════════════════════════════════════════
+//  FILE LOADING
+// ════════════════════════════════════════
+function handleFiles(files){
+  let pending = Array.from(files).length;
+  if(!pending) return;
+
+  Array.from(files).forEach(f => {
+    const r = new FileReader();
+    r.onload = e => {
+      try{
+        const qsos = parseADIF(e.target.result, f.name);
+        const color = FILE_COLORS[_sources.length % FILE_COLORS.length];
+        _sources.push({name: f.name, color});
+        _all.push(...qsos);
+      } catch(err){
+        showToast(t('errAdif') + ': ' + f.name, true);
+      }
+      if(--pending === 0) finishLoad();
+    };
+    r.onerror = () => {
+      showToast(t('errAdif') + ': ' + f.name, true);
+      if(--pending === 0) finishLoad();
+    };
+    r.readAsText(f, 'utf-8');
+  });
+}
+
+function finishLoad(){
+  // Stable insertion index
+  _all.forEach((q,i) => q._idx = i);
+
+  // Build dedup key and mark duplicates (first occurrence wins)
+  const seen = new Set();
+  _all.forEach(q => {
+    q._key = `${q.call}|${q.band}|${q.mode}|${q.date}|${q.time}`;
+    q.dupe = seen.has(q._key);
+    if(!q.dupe) seen.add(q._key);
+  });
+
+  document.getElementById('dropzone').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('statsBar').style.display = 'flex';
+  updateStats();
+  buildFilters();
+  rebuildFileTags();
+  applyFilters();
+}
+
+function updateStats(){
+  const dupCount = _all.filter(q => q.dupe).length;
+  document.getElementById('sSrc').textContent = _sources.length;
+  document.getElementById('sQso').textContent = _all.length;
+  document.getElementById('sDups').textContent = dupCount;
+  document.getElementById('sDups').style.color = dupCount > 0 ? 'var(--accent3)' : 'var(--muted)';
+
+  const bands = [...new Set(_all.map(q => q.band).filter(Boolean))].sort();
+  document.getElementById('sBands').textContent = bands.join(' · ') || '—';
+
+  const dates = _all.map(q => q.date).filter(d => /^\d{8}$/.test(d)).sort();
+  if(dates.length){
+    const fmt = d => `${d.slice(6,8)}.${d.slice(4,6)}.${d.slice(0,4)}`;
+    const d0 = dates[0], d1 = dates[dates.length-1];
+    document.getElementById('sDates').textContent = d0===d1 ? fmt(d0) : `${fmt(d0)}–${fmt(d1)}`;
+  } else {
+    document.getElementById('sDates').textContent = '—';
+  }
+}
+
+function buildFilters(){
+  const bands = [...new Set(_all.map(q => q.band).filter(Boolean))].sort();
+  const modes = [...new Set(_all.map(q => q.mode).filter(Boolean))].sort();
+  const srcs  = [...new Set(_all.map(q => q.src))];
+  const bSel = document.getElementById('filterBand');
+  const mSel = document.getElementById('filterMode');
+  const sSel = document.getElementById('filterSrc');
+  [bSel,mSel,sSel].forEach(s => { while(s.options.length > 1) s.remove(1); });
+  bands.forEach(b => bSel.add(new Option(b,b)));
+  modes.forEach(m => mSel.add(new Option(m,m)));
+  srcs.forEach(s  => sSel.add(new Option(s,s)));
+}
+
+function rebuildFileTags(){
+  document.getElementById('fileTags').innerHTML = _sources.map(s =>
+    `<div class="file-tag"><span class="file-tag-dot" style="background:${s.color}"></span>${htmlEsc(s.name)}</div>`
+  ).join('');
+}
+
+// ════════════════════════════════════════
+//  FILTER + SORT
+// ════════════════════════════════════════
+const COL_KEYS = ['_idx','dateDisp','timeDisp','call','band','mode','rstS','rstR','grid','src'];
+
+function applyFilters(){
+  const q    = (document.getElementById('searchInp').value||'').toUpperCase().trim();
+  const band = document.getElementById('filterBand').value;
+  const mode = document.getElementById('filterMode').value;
+  const src  = document.getElementById('filterSrc').value;
+  const hide = document.getElementById('hideDups').checked;
+
+  _filtered = _all.filter(r => {
+    if(q    && !r.call.includes(q)) return false;
+    if(band && r.band !== band)     return false;
+    if(mode && r.mode !== mode)     return false;
+    if(src  && r.src  !== src)      return false;
+    if(hide && r.dupe)              return false;
+    return true;
+  });
+  sortFiltered();
+  renderTable();
+  updateExportCount();
+}
+
+function sortFiltered(){
+  const k = COL_KEYS[_sortCol];
+  _filtered.sort((a,b) => {
+    let va = a[k] ?? '', vb = b[k] ?? '';
+    if(k === '_idx')     { va = a._idx;   vb = b._idx; }
+    if(k === 'dateDisp') { va = a.date;   vb = b.date; }
+    if(k === 'timeDisp') { va = a.time;   vb = b.time; }
+    const r = va < vb ? -1 : va > vb ? 1 : 0;
+    return _sortAsc ? r : -r;
+  });
+}
+
+// ════════════════════════════════════════
+//  TABLE RENDER
+// ════════════════════════════════════════
+function renderTable(){
+  const cols = [
+    {k:'_idx',    i18n:'thNum'},
+    {k:'dateDisp',i18n:'thDate'},
+    {k:'timeDisp',i18n:'thTime'},
+    {k:'call',    i18n:'thCall'},
+    {k:'band',    i18n:'thBand'},
+    {k:'mode',    i18n:'thMode'},
+    {k:'rstS',    i18n:'thRstS'},
+    {k:'rstR',    i18n:'thRstR'},
+    {k:'grid',    i18n:'thGrid'},
+    {k:'src',     i18n:'thSrc'},
+  ];
+
+  document.getElementById('tHead').innerHTML = `<tr>
+    <th><input type="checkbox" class="chk" id="chkAll" onchange="toggleAll(this.checked)"></th>
+    ${cols.map((c,i) => `<th class="${_sortCol===i?'sorted':''}" onclick="setSort(${i})">
+      ${t(c.i18n)}<span class="sort-ico">${_sortCol===i?(_sortAsc?'▲':'▼'):'⇅'}</span>
+    </th>`).join('')}
+  </tr>`;
+
+  const rows = [];
+  _filtered.forEach((q,idx) => {
+    const srcColor = (_sources.find(s => s.name===q.src)||{}).color || 'var(--dim)';
+    const ek = htmlEsc(q._key);
+    rows.push(`<tr class="${q.dupe?'dup':''}" data-key="${ek}">
+      <td><input type="checkbox" class="chk row-chk" data-key="${ek}"
+        ${_desel.has(q._key)?'':'checked'} onchange="toggleRow(this)"></td>
+      <td class="num">${idx+1}</td>
+      <td class="editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'dateDisp')">${htmlEsc(q.dateDisp)}</td>
+      <td class="num editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'timeDisp')">${htmlEsc(q.timeDisp)}</td>
+      <td class="call editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'call')">${htmlEsc(q.call)}${q.dupe?`<span class="badge badge-dup">${t('dupLabel')}</span>`:''}</td>
+      <td class="band editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'band')"><span class="badge badge-band">${htmlEsc(q.band||'?')}</span></td>
+      <td class="editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'mode')"><span class="badge ${modeBadge(q.mode)}">${htmlEsc(q.mode||'?')}</span></td>
+      <td class="editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'rstS')">${htmlEsc(q.rstS)}</td>
+      <td class="editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'rstR')">${htmlEsc(q.rstR)}</td>
+      <td class="loc editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'grid')">${htmlEsc(q.grid)||'—'}</td>
+      <td class="src" title="${htmlEsc(q.src)}"><span style="color:${srcColor}">●</span> ${htmlEsc(q.src)}</td>
+    </tr>`);
+  });
+  document.getElementById('tBody').innerHTML = rows.join('');
+  document.getElementById('rowCount').textContent = `${_filtered.length} / ${_all.length} QSO`;
+  const allChk = document.getElementById('chkAll');
+  if(allChk) allChk.checked = _desel.size === 0;
+}
+
+function toggleAll(checked){
+  _desel.clear();
+  if(!checked) _all.forEach(q => _desel.add(q._key));
+  renderTable(); updateExportCount();
+}
+function toggleRow(cb){
+  if(cb.checked) _desel.delete(cb.dataset.key);
+  else           _desel.add(cb.dataset.key);
+  updateExportCount();
+}
+function setSort(i){
+  if(_sortCol === i) _sortAsc = !_sortAsc;
+  else { _sortCol = i; _sortAsc = true; }
+  sortFiltered(); renderTable();
+}
+
+// ════════════════════════════════════════
+//  INLINE EDIT
+// ════════════════════════════════════════
+const ADIF_MODES = ['SSB','CW','FM','AM','USB','LSB','RTTY','FT8','FT4','JS8','JT65','JT9',
+  'WSPR','PSK31','PSK63','MSK144','MFSK','SSTV','ATV','PACKET','DMR','C4FM','DSTAR','DIGITALVOICE','OTHER'];
+
+function startEdit(td, idx, field){
+  if(_editActive) commitEdit();
+  const qso = _all.find(q => q._idx === idx);
+  if(!qso) return;
+  td.classList.add('editing');
+
+  let ctrl;
+  if(field === 'mode'){
+    ctrl = document.createElement('select');
+    ctrl.className = 'cell-sel';
+    // Prepend current mode if not in list
+    const modeList = ADIF_MODES.includes(qso.mode) ? ADIF_MODES : [qso.mode, ...ADIF_MODES];
+    modeList.forEach(m => { const o = new Option(m,m); if(m===qso.mode) o.selected=true; ctrl.add(o); });
+  } else {
+    ctrl = document.createElement('input');
+    ctrl.className = 'cell-inp';
+    ctrl.value = qso[field] || '';
+    if(field==='rstS'||field==='rstR') ctrl.maxLength = 5;
+    if(field==='grid')                 ctrl.maxLength = 8;
+    if(field==='timeDisp')             ctrl.maxLength = 5;
+    if(field==='band')                 ctrl.style.textTransform = 'lowercase';
+    if(field==='call') ctrl.addEventListener('input', () => { ctrl.value = ctrl.value.toUpperCase(); });
+  }
+
+  td.innerHTML = '';
+  td.appendChild(ctrl);
+  ctrl.focus();
+  if(ctrl.tagName === 'INPUT') ctrl.select();
+
+  _editActive = {idx, field, td};
+  ctrl.addEventListener('blur',    () => commitEdit());
+  ctrl.addEventListener('keydown', e => { if(e.key==='Enter') ctrl.blur(); if(e.key==='Escape') cancelEdit(); });
+  td.onclick = null;
+}
+
+function updateKey(q){
+  q._key = `${q.call}|${q.band}|${q.mode}|${q.date}|${q.time}`;
+}
+
+function recomputeDupes(){
+  _all.forEach(q => q.dupe = false);
+  const seen = new Set();
+  _all.forEach(q => { if(seen.has(q._key)) q.dupe=true; else seen.add(q._key); });
+}
+
+function commitEdit(){
+  if(!_editActive) return;
+  const {idx, field, td} = _editActive;
+  _editActive = null;
+  const ctrl = td.querySelector('input,select');
+  const qso  = _all.find(q => q._idx === idx);
+
+  if(ctrl && qso){
+    const v = ctrl.value.trim();
+    const affectsKey = ['call','dateDisp','timeDisp','band','mode'].includes(field);
+    const oldKey = qso._key;
+
+    if(field === 'call'){
+      const uc = v.toUpperCase();
+      if(/^[A-Z0-9/]{2,}$/.test(uc)){ qso.call = uc; qso.fields.CALL = uc; }
+      else showToast(t('errCall'), true);
+
+    } else if(field === 'dateDisp'){
+      const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(v);
+      if(m){
+        qso.date = `${m[3]}${m[2]}${m[1]}`;
+        qso.dateDisp = v;
+        qso.fields.QSO_DATE = qso.date;
+      } else showToast(t('errDate'), true);
+
+    } else if(field === 'timeDisp'){
+      const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(v);
+      if(m){
+        qso.time = `${m[1]}${m[2]}`;
+        qso.timeDisp = v;
+        qso.fields.TIME_ON = qso.time;
+      } else showToast(t('errTime'), true);
+
+    } else if(field === 'band'){
+      if(!v){ showToast(t('errBand'), true); }
+      else { qso.band = v.toLowerCase(); qso.fields.BAND = qso.band; }
+
+    } else if(field === 'mode'){
+      qso.mode = v.toUpperCase();
+      qso.fields.MODE = qso.mode;
+
+    } else if(field === 'rstS'){
+      qso.rstS = v; qso.fields.RST_SENT = v;
+
+    } else if(field === 'rstR'){
+      qso.rstR = v; qso.fields.RST_RCVD = v;
+
+    } else if(field === 'grid'){
+      const uc = v.toUpperCase();
+      if(!v || /^[A-R]{2}[0-9]{2}([A-X]{2}([0-9]{2})?)?$/i.test(uc)){
+        qso.grid = uc.length >= 6 ? uc.slice(0,4) + uc.slice(4).toLowerCase() : uc;
+        qso.fields.GRIDSQUARE = qso.grid;
+      } else {
+        qso.grid = '';
+        qso.fields.GRIDSQUARE = '';
+        if(v) showToast(t('errGrid'), true);
+      }
+    }
+
+    if(affectsKey){
+      const wasSelected = !_desel.has(oldKey);
+      _desel.delete(oldKey);
+      updateKey(qso);
+      if(!wasSelected) _desel.add(qso._key);
+      recomputeDupes();
+      applyFilters();
+      return;
+    }
+  }
+  restoreCell(td, field, qso);
+}
+
+function cancelEdit(){
+  if(!_editActive) return;
+  const {field, td} = _editActive;
+  const qso = _all.find(q => q._idx === _editActive.idx);
+  _editActive = null;
+  restoreCell(td, field, qso);
+}
+
+function restoreCell(td, field, qso){
+  td.classList.remove('editing');
+  td.onclick = () => startEdit(td, qso ? qso._idx : -1, field);
+  if(!qso){ td.textContent=''; return; }
+  if(field === 'mode'){
+    td.innerHTML = `<span class="badge ${modeBadge(qso.mode)}">${htmlEsc(qso.mode||'?')}</span>`;
+  } else if(field === 'band'){
+    td.innerHTML = `<span class="badge badge-band">${htmlEsc(qso.band||'?')}</span>`;
+  } else if(field === 'call'){
+    const dup = qso.dupe ? `<span class="badge badge-dup">${t('dupLabel')}</span>` : '';
+    td.innerHTML = `${htmlEsc(qso.call)}${dup}`;
+  } else if(field === 'grid'){
+    td.textContent = qso.grid || '—';
+  } else if(field === 'dateDisp'){
+    td.textContent = qso.dateDisp;
+  } else if(field === 'timeDisp'){
+    td.textContent = qso.timeDisp;
+  } else {
+    td.textContent = qso[field] || '';
+  }
+}
+
+// ════════════════════════════════════════
+//  EXPORT HELPERS
+// ════════════════════════════════════════
+function getExportPool(){
+  const onlySel = document.getElementById('onlySelected').checked;
+  const base = onlySel ? _filtered : _all;
+  return base.filter(q => !_desel.has(q._key) && !q.dupe);
+}
+
+function updateExportCount(){
+  const pool = getExportPool();
+  document.getElementById('exportCount').textContent = `(${pool.length} QSO)`;
+}
+
+function adifField(tag, val){
+  if(val===null||val===undefined||val==='') return '';
+  const s = String(val);
+  return `<${tag.toUpperCase()}:${s.length}>${s} `;
+}
+
+function adifTimestamp(){
+  const n = new Date();
+  const p = x => String(x).padStart(2,'0');
+  return `${n.getUTCFullYear()}${p(n.getUTCMonth()+1)}${p(n.getUTCDate())} ${p(n.getUTCHours())}${p(n.getUTCMinutes())}${p(n.getUTCSeconds())}`;
+}
+
+function buildFilename(ext){
+  const calls = [...new Set(_all.map(q =>
+    (q.fields.STATION_CALLSIGN || q.fields.MY_CALLSIGN || '').trim().toUpperCase()
+  ).filter(Boolean))];
+  const base = (calls.length ? calls[0] : 'merged').replace(/\//g,'-');
+  return `${base}_merged.${ext}`;
+}
+
+// ════════════════════════════════════════
+//  EXPORT: ADIF
+// ════════════════════════════════════════
+function exportADIF(){
+  const pool = getExportPool();
+  if(!pool.length){ showToast(t('toastNoQso'), true); return; }
+
+  const ts = adifTimestamp();
+  const lines = [
+    `ADIF Merge ${ts}`,
+    adifField('adif_ver','3.1.4'),
+    adifField('created_timestamp', ts),
+    adifField('programid','ADIF-Merge'),
+    adifField('programversion','1.0'),
+    '<EOH>',''
+  ];
+
+  pool.forEach(q => {
+    // Remove stale merge annotation so we don't duplicate it if re-merging
+    delete q.fields.APP_ADIFMERGE_SRC;
+    let rec = '';
+    for(const [tag, val] of Object.entries(q.fields))
+      rec += adifField(tag, val);
+    rec += adifField('APP_ADIFMERGE_SRC', q.src);
+    lines.push(rec.trimEnd() + ' <EOR>');
+  });
+
+  dl(lines.join('\n'), buildFilename('adi'), 'text/plain');
+  showToast(`${t('toastAdif')} (${pool.length} QSO)`);
+}
+
+// ════════════════════════════════════════
+//  EXPORT: CSV
+// ════════════════════════════════════════
+function exportCSV(){
+  const pool = getExportPool();
+  if(!pool.length){ showToast(t('toastNoQso'), true); return; }
+
+  const header = ['#','Date','Time','Callsign','Band','Mode','RST Sent','RST Rcvd',
+    'Gridsquare','Station Callsign','My Gridsquare','Comment','Source File'];
+  const rows = [header.map(csvEsc).join(',')];
+
+  pool.forEach((q,i) => {
+    rows.push([
+      i+1,
+      q.dateDisp, q.timeDisp,
+      q.call, q.band, q.mode, q.rstS, q.rstR,
+      q.grid || '',
+      (q.fields.STATION_CALLSIGN || q.fields.MY_CALLSIGN || '').trim(),
+      (q.fields.MY_GRIDSQUARE || '').trim(),
+      (q.fields.COMMENT || q.fields.NOTES || '').trim(),
+      q.src,
+    ].map(csvEsc).join(','));
+  });
+
+  dl('﻿' + rows.join('\n'), buildFilename('csv'), 'text/csv;charset=utf-8');
+  showToast(`${t('toastCsv')} (${pool.length} QSO)`);
+}
+
+// ════════════════════════════════════════
+//  UTILITIES
+// ════════════════════════════════════════
+function csvEsc(v){
+  const s = String(v ?? '');
+  if(s.includes(',')||s.includes('"')||s.includes('\n')||s.includes('\r'))
+    return `"${s.replace(/"/g,'""')}"`;
+  return s;
+}
+function htmlEsc(s){
+  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function modeBadge(mode){
+  if(mode==='SSB'||mode==='AM'||mode==='USB'||mode==='LSB') return 'badge-ssb';
+  if(mode==='CW')  return 'badge-cw';
+  if(mode==='FM')  return 'badge-fm';
+  return 'badge-digi';
+}
+function dl(content, filename, mime){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content],{type:mime}));
+  a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 0);
+}
+
+// ════════════════════════════════════════
+//  TOAST
+// ════════════════════════════════════════
+let _toastTimer = null;
+function showToast(msg, err=false){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (err?' err':'');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.className='', 2800);
+}
+
+// ════════════════════════════════════════
+//  RESET
+// ════════════════════════════════════════
+function resetApp(){
+  cancelEdit();
+  _all.length = 0; _sources.length = 0; _filtered.length = 0;
+  _desel.clear();
+  _sortCol = 1; _sortAsc = true;
+  document.getElementById('searchInp').value = '';
+  document.getElementById('filterBand').selectedIndex = 0;
+  document.getElementById('filterMode').selectedIndex = 0;
+  document.getElementById('filterSrc').selectedIndex = 0;
+  document.getElementById('hideDups').checked = false;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('dropzone').style.display = 'flex';
+  document.getElementById('statsBar').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+
+// ════════════════════════════════════════
+//  DRAG & DROP + FILE INPUT
+// ════════════════════════════════════════
+const dropArea = document.getElementById('dropArea');
+dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('drag'); });
+dropArea.addEventListener('dragleave', () => dropArea.classList.remove('drag'));
+dropArea.addEventListener('drop', e => {
+  e.preventDefault(); dropArea.classList.remove('drag');
+  handleFiles(e.dataTransfer.files);
+});
+document.getElementById('fileInput').addEventListener('change', e => handleFiles(e.target.files));
+
+// Allow drop anywhere once loaded
+document.addEventListener('dragover', e => { if(e.dataTransfer.types.includes('Files')) e.preventDefault(); });
+document.addEventListener('drop', e => {
+  if(!e.dataTransfer.files.length) return;
+  e.preventDefault();
+  if(document.getElementById('app').style.display !== 'none') handleFiles(e.dataTransfer.files);
+});
+
+// ════════════════════════════════════════
+//  THEME
+// ════════════════════════════════════════
+function toggleTheme(){
+  const html = document.documentElement;
+  const toLight = html.dataset.theme !== 'light';
+  html.dataset.theme = toLight ? 'light' : 'dark';
+  document.getElementById('btnTheme').textContent = toLight ? '☾' : '☀';
+  localStorage.setItem('theme', html.dataset.theme);
+}
+(function(){
+  const saved = localStorage.getItem('theme');
+  if(saved === 'light'){
+    document.documentElement.dataset.theme = 'light';
+    document.getElementById('btnTheme').textContent = '☾';
+  }
+})();
+</script>
+</body>
+</html>
