@@ -1,6 +1,6 @@
 # Izboljšave — HamLogTools
 
-*Datum pregleda: 2026-05-15 · Različica: v1.8*
+*Datum pregleda: 2026-05-19 · Različica: v1.11*
 
 Dokument zajema odprte predloge izboljšav za vsa orodja projekta. Gre samo naprej — brez zgodovine opravljenih popravkov.
 
@@ -16,29 +16,26 @@ Po nalaganju prikaži povzetek: skupaj QSO po pasu/načinu, unikatni klicni znak
 **1.2 Pregled glave EDI**
 Zložljiva plošča z razčlenjenimi polji glave za vsako naloženo datoteko (operator, tekmovanje, klub, antena, moč). Koristno za preverjanje pred izvozom, da je bila izbrana prava datoteka.
 
-**1.3 Cabrillo izvoz**
-Format Cabrillo je zahtevan za nekatere tekmovalne oddaje. Osnovna implementacija za IARU R1 VKV tekmovanje je ~50–80 vrstic; format je fiksen in dokumentiran.
-
 ### Srednja prioriteta
 
-**1.4 Razreševanje duplikatov**
+**1.3 Razreševanje duplikatov**
 Duplikati so samodejno označeni, a uporabnik ne more izbrati, katero kopijo ohraniti. Pogled »reši duplikate« bi pokazal obe kopiji vzporedno z možnostjo ročne izbire.
 
-**1.5 Vizualizacija karte lokatorjev**
+**1.4 Vizualizacija karte lokatorjev**
 Prikaži delane kvadrante na Maidenhead mreži (Canvas ali SVG). Funkciji `locToLatLon` in `haversine` sta implementirani v `vhf-logger.html` — portabilni brez predelave.
 
-**1.6 Vnos iz odložišča**
+**1.5 Vnos iz odložišča**
 Dovoli lepljenje vsebine EDI datoteke neposredno v polje namesto povleci-in-spusti — koristno pri oddaljenih strojih ali kopiranju iz e-pošte.
 
 ### Nizka prioriteta
 
-**1.7 Izvoz za SOTA/POTA**
+**1.6 Izvoz za SOTA/POTA**
 Namenski CSV format za SOTA in POTA aktivacijo s specifičnimi zahtevami po poljih.
 
-**1.8 Trajne nastavitve**
+**1.7 Trajne nastavitve**
 Zapomni si jezikovno nastavitev in stanje razvrščanja stolpcev v `localStorage` med sejami brskalnika.
 
-**1.9 Navigacija s tipkovnico**
+**1.8 Navigacija s tipkovnico**
 Puščične tipke za navigacijo po vrsticah, Enter za preklop izbire, `E` za sprožitev izvoza.
 
 ---
@@ -119,7 +116,7 @@ Tabela `ALLOWED_BAND_MODE` za IARU R1 (npr. FM na 6m ni tekmovalni način v več
 ### Visoka prioriteta
 
 **3.1 Cabrillo izvoz**
-Cabrillo je zahtevan za nekatere IARU R1 tekmovalne oddaje poleg EDI. Osnovna implementacija za VKV tekmovanje je ~60–80 vrstic; format je fiksen in javno dokumentiran. Vzporedno z ZIP izvozom obstoječih EDI datotek.
+Cabrillo je zahtevan za nekatere IARU R1 tekmovalne oddaje poleg EDI. Posredni tok je zdaj mogoč: vhf-logger → EDI → edi2adif (ADIF) → adif2cab (Cabrillo), a zahteva tri korake. Direktni izvoz iz loggerja bi bil en klik: vzporedno z ZIP izvozom EDI datotek. Ocena: ~60–80 vrstic + nov gumb v export modalu.
 
 **3.2 Iskanje/filter v tabeli QSO**
 Pri večjem številu QSO (300+) je tabela neuporabna brez iskanja. Polje za hitro iskanje po klicnem znaku ali lokatorju — ni potrebna celotna filter infrastruktura iz edi2adif; zadostuje `filter()` na `_current.qsos` per band.
@@ -156,22 +153,53 @@ BAND_OPTS ima eno frekvenco per pas. V setup obrazcu dodaj spustni seznam tipič
 
 ---
 
-## 4. adif-qrz-filter.js
+## 4. adif2cab.html
 
-**4.1 HamQTH kot rezervni vir**
+### Visoka prioriteta
+
+**4.1 IARU R1 VKV tekmovanje**
+Trenutni nabor tekmovanj pokriva HF (CQ WW SSB/CW, IARU HF, ARRL DX) in generični tip. IARU R1 VHF izmenjava je lokator (npr. `JN65ar`), ne cona — zahteva poseben vnos `IARU-VHF` z `exchRcvdField:'GRIDSQUARE'`, `exchW:6`. Ocena: 1 vrstica v polju `CONTESTS` + anotacija v CLAUDE.md.
+
+**4.2 Serijska številka izmenjave**
+Za tekmovanja, kjer je oddana izmenjava serijska številka (npr. generični HF tekmovalni log), bi moralo orodje avtoinkrement-irati `exchS` po vrstnem redu QSO in omogočiti ponastavitev. Trenutno je to ročni vnos per QSO ali globalna vrednost. Ocena: ~20 vrstic + novo polje v header panelu.
+
+### Srednja prioriteta
+
+**4.3 Validacija izmenjave**
+CQ cona mora biti 1–40, ITU cona 1–90, STATE ena od 50 kratic ZDA + kanadskih provinc. Vizualna oznaka (rdeča celica) pri neveljavni vrednosti pred izvozom — brez blokade. Ocena: ~30 vrstic + tabele dovoljenih vrednosti.
+
+**4.4 Filter po pasu pred izvozom**
+Nekatere tekmovalne kategorije zahtevajo en sam pas. Filter checkbox ali spustni seznam za omejitev izvoza na izbran pas — brez brisanja podatkov iz `_all`. Ocena: ~15 vrstic.
+
+**4.5 Predogled Cabrillo**
+Pokaži prvih 10–20 vrstic izhoda (`START-OF-LOG`, glava, prvi QSO zapisi) v `<pre>` bloku pred prenosom. Pomaga ujeti napake v izmenjavi ali poravnavi polj, ne da bi odprli datoteko v urejevalniku. Ocena: ~20 vrstic.
+
+### Nizka prioriteta
+
+**4.6 Shranjevanje nastavitev glave**
+Callsign, ime, klub, naslov in kategorija so ob vsakem nalaganju prazni. Shranjuj zadnje vrednosti v `localStorage` (per-key, ne per-contest). Ocena: ~15 vrstic.
+
+**4.7 Podpora CQ WPX**
+Izmenjava = prefiks klicnega znaka + serijska številka. Zahteva ekstrakcijo prefiksa (`baseCall` + regex) in per-QSO serijske oddane izmenjave. Ocena: ~40 vrstic + nov vnos v CONTESTS.
+
+---
+
+## 5. adif-qrz-filter.js
+
+**5.1 HamQTH kot rezervni vir**
 QRZ.com zahteva plačljiv API ključ ali registracijo. HamQTH ponuja brezplačen XML API s podobnim formatom. Dodaj `--source=hamqth` parameter ali samodejni fallback ob napaki QRZ avtentikacije.
 
-**4.2 Nastavljiv TTL predpomnilnika**
+**5.2 Nastavljiv TTL predpomnilnika**
 Predpomnilnik ima trdo kodiran 7-dnevni TTL. Dodaj `--cache-ttl=DAYS` parameter (privzeto 7). Omogoča daljši TTL za redko spreminjajoče se postaje.
 
-**4.3 Ponavljanje ob napaki API**
+**5.3 Ponavljanje ob napaki API**
 Ob omrežni napaki ali rate-limit odgovoru (HTTP 429) orodje ne poskusi znova. Dodaj eksponentni backoff z do 3 ponovitvami pred preskočitvijo klicnega znaka.
 
 ---
 
-## 5. build-baseline.js
+## 6. build-baseline.js
 
-**5.1 Primerjava z obstoječim baseline (`--diff`)**
+**6.1 Primerjava z obstoječim baseline (`--diff`)**
 Zastavica, ki primerja novo zgrajeni JSON z obstoječim `crosscheck-baseline.json` in izpiše:
 - koliko novih klicnih znakov / koliko odstranjenih
 - klicni znaki s spremembo modus lokatorja
@@ -179,30 +207,33 @@ Zastavica, ki primerja novo zgrajeni JSON z obstoječim `crosscheck-baseline.jso
 
 Koristno pred zamenjavo produkcijskega baseline, da se oceni vpliv.
 
-**5.2 Eksponentna časovna teža pri gradnji**
+**6.2 Eksponentna časovna teža pri gradnji**
 Skripta agregira vse CSV-je z enako težo ne glede na starost tekmovanja. Sinhronizacija z algoritmom A10 iz edi-crosscheck: pri gradnji uteži `entry.count` z `0.85 ^ (currentYear − contestYear)`. Starejši lokatorji dobijo manjšo težo pri izračunu modusa že pri gradnji baseline-a, ne šele v orodju.
 
 ---
 
-## 6. Medorodna opažanja
+## 7. Medorodna opažanja
 
-**6.1 Podvojena crosscheck logika**
+**7.1 Podvojena crosscheck logika**
 `baseCall()`, `levenshtein()`, `_histDB`, `applyBaseline()` in `lookupCall()` so skoraj identično implementirani v `edi-crosscheck.html` in `vhf-logger.html`. Popravek v enem orodju je treba ročno prenesti v drugega — potencialni vir razsinhronizacije. Ker ohranimo single-file pristop, ob vsaki spremembi crosscheck logike preverimo obe datoteki.
 
-**6.2 Geo funkcije samo v vhf-logger**
-`locToLatLon`, `haversine`, `calcBearing` obstajajo samo v `vhf-logger.html`. Za predloge A6 (razdalja plausibility) in B1 (razdalja per pas) v edi-crosscheck ter 1.5 (karta lokatorjev) v edi2adif jih je treba portirati. Funkcije so samozadostne (~40 vrstic skupaj) in brez odvisnosti.
+**7.2 Geo funkcije samo v vhf-logger**
+`locToLatLon`, `haversine`, `calcBearing` obstajajo samo v `vhf-logger.html`. Za predloge A6 (razdalja plausibility) in B1 (razdalja per pas) v edi-crosscheck ter 1.4 (karta lokatorjev) v edi2adif jih je treba portirati. Funkcije so samozadostne (~40 vrstic skupaj) in brez odvisnosti.
 
-**6.3 Testna pokritost**
+**7.3 Testna pokritost**
 
 | Orodje | Testi | Opomba |
 |---|---|---|
 | `edi2adif.test.js` | 122 | Dobra — algoritem, izvoz, i18n |
 | `edi-crosscheck.test.js` | 56 | Osnovna — pokrita algoritem, render/UI ne |
+| `adif-merge.test.js` | 112 | Dobra — razčlenjevanje, dedup, izvoz, i18n |
 | `adif-qrz-filter.test.js` | 48 | Dobra za logiko; API mock ni realen |
 | `vhf-logger/vhf-logger.test.js` | 163 | Dobra — jedro, backup, EDI uvoz/izvoz |
+| `adif-stats.test.js` | 133 | Dobra — DXCC, statistike, SVG, i18n |
+| `adif2cab.test.js` | 156 | Dobra — Cabrillo logika, izmenjave, i18n |
 
 Za vsako novo funkcionalnost iz zgornjih predlogov je treba dodati teste pred integracijo.
 
 ---
 
-*Pregled opravil: Claude Sonnet 4.6 · 2026-05-15*
+*Pregled opravil: Claude Sonnet 4.6 · 2026-05-19*
