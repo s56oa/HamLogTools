@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S56OA ADIF → Cabrillo</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #0a0e14;
+  --bg2:    #0f1520;
+  --bg3:    #162030;
+  --bg4:    #1c2a3a;
+  --border: #1e3048;
+  --border2:#254060;
+  --text:   #cdd9e5;
+  --muted:  #637e96;
+  --dim:    #3d5a70;
+  --accent: #4d9de0;
+  --accent2:#2ecc8a;
+  --accent3:#f0a500;
+  --danger: #e05c4d;
+  --hdr:    linear-gradient(135deg,#0a0e14 0%,#0d1a28 100%);
+  --call:   #79c0ff;
+  --r:      6px;
+}
+html[data-theme="light"] {
+  --bg:     #f0f4f8;
+  --bg2:    #ffffff;
+  --bg3:    #e4ecf3;
+  --bg4:    #d4e0eb;
+  --border: #bfcfdd;
+  --border2:#96b0c6;
+  --text:   #18273a;
+  --muted:  #4a6275;
+  --dim:    #7a9ab0;
+  --accent: #1a6fad;
+  --accent2:#178a58;
+  --accent3:#a06800;
+  --danger: #c03030;
+  --hdr:    linear-gradient(135deg,#dde8f2 0%,#eaf2f8 100%);
+  --call:   var(--accent);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;min-height:100vh;transition:background-color .2s,color .2s}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+header{
+  background:var(--hdr);border-bottom:1px solid var(--border);
+  padding:.9rem 1.5rem;display:flex;align-items:center;gap:1rem;
+  position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);
+}
+.logo{font-family:'Space Mono',monospace;font-size:1rem;letter-spacing:-.02em}
+.logo .arr{color:var(--accent);margin:0 .3rem}
+.logo .fmt{color:var(--muted)}
+.version{font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);
+  padding:1px 6px;border:1px solid var(--border);border-radius:3px;
+  margin-left:-.2rem;white-space:nowrap;}
+.stats-bar{display:flex;gap:1.5rem;margin-left:1rem;
+  font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;}
+.stat{display:flex;flex-direction:column;gap:1px}
+.stat-val{color:var(--accent);font-weight:700;font-size:13px}
+.stat-val.warn{color:var(--accent3)}
+.lang-wrap{margin-left:auto;display:flex;gap:4px}
+.lang-btn{background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;
+  transition:all .15s;font-family:'Space Mono',monospace}
+.lang-btn.active{background:var(--bg4);border-color:var(--accent);color:var(--accent)}
+.theme-btn{background:transparent;border:1px solid var(--border);color:var(--muted);
+  border-radius:4px;padding:2px 7px;font-size:13px;cursor:pointer;line-height:1;transition:all .15s}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+main{max-width:1600px;margin:0 auto;padding:1.25rem 1.5rem 3rem}
+
+#dropzone{min-height:calc(100vh - 60px);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:1.25rem;padding:2rem;}
+.drop-area{border:1.5px dashed var(--border2);border-radius:12px;
+  padding:3rem 5rem;text-align:center;cursor:pointer;
+  transition:all .2s;background:var(--bg2);max-width:500px;width:100%;}
+.drop-area:hover,.drop-area.drag{border-color:var(--accent);background:rgba(77,157,224,.05)}
+.drop-ico{font-size:2.5rem;margin-bottom:.75rem;opacity:.7}
+.drop-title{font-family:'Space Mono',monospace;font-size:.95rem;margin-bottom:.4rem}
+.drop-sub{font-size:.8rem;color:var(--muted);margin-bottom:1rem}
+.btn{border:none;border-radius:var(--r);padding:.45rem 1.1rem;font-size:.8rem;
+  font-weight:600;cursor:pointer;transition:all .15s;font-family:'IBM Plex Sans',sans-serif}
+.btn-primary{background:var(--accent);color:#0a0e14}
+.btn-primary:hover{opacity:.85}
+.btn-secondary{background:var(--bg4);color:var(--text);border:1px solid var(--border2)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:.3rem .8rem;font-size:.75rem}
+.drop-note{font-size:.75rem;color:var(--dim);max-width:480px;text-align:center;line-height:1.6}
+#fileInput{display:none}
+
+#app{display:none}
+
+/* CAB HEADER PANEL */
+.cab-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);margin-bottom:1rem;}
+.cab-panel-hdr{padding:.65rem 1rem;cursor:pointer;display:flex;align-items:center;gap:.5rem;
+  font-size:.8rem;font-weight:600;color:var(--muted);user-select:none;}
+.cab-panel-hdr:hover{color:var(--accent)}
+.tog{font-size:10px;transition:transform .2s;display:inline-block;line-height:1}
+.cab-panel.open .tog{transform:rotate(90deg)}
+.cab-panel-body{display:none;padding:.8rem 1rem 1rem;border-top:1px solid var(--border)}
+.cab-panel.open .cab-panel-body{display:block}
+.hf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:.5rem .75rem}
+.hf-wide{grid-column:1/-1}
+.hf-field{display:flex;flex-direction:column;gap:3px}
+.hf-label{font-size:10px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.06em;font-family:'Space Mono',monospace}
+.hf-inp,.hf-sel{background:var(--bg3);border:1px solid var(--border2);border-radius:4px;
+  color:var(--text);padding:.3rem .6rem;font-size:.8rem;
+  font-family:'IBM Plex Sans',sans-serif;width:100%;}
+.hf-inp:focus,.hf-sel:focus{outline:none;border-color:var(--accent)}
+.hf-mono{font-family:'Space Mono',monospace}
+
+/* TOOLBAR */
+.toolbar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+  padding:.8rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;}
+.toolbar-sep{width:1px;height:20px;background:var(--border);margin:0 .2rem}
+.search-inp{background:var(--bg3);border:1px solid var(--border2);border-radius:4px;
+  color:var(--text);padding:.35rem .7rem;font-size:.8rem;width:180px;
+  font-family:'IBM Plex Sans',sans-serif;}
+.search-inp:focus{outline:none;border-color:var(--accent)}
+.sel{background:var(--bg3);border:1px solid var(--border2);border-radius:4px;
+  color:var(--text);padding:.35rem .6rem;font-size:.8rem;cursor:pointer;}
+.file-tags{display:flex;gap:.4rem;flex-wrap:wrap;margin-left:.4rem}
+.file-tag{background:var(--bg4);border:1px solid var(--border2);border-radius:3px;
+  padding:2px 8px;font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;
+  display:flex;align-items:center;gap:4px;}
+.file-tag-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.row-count{font-size:11px;color:var(--dim);margin-left:auto;font-family:'Space Mono',monospace;white-space:nowrap}
+
+/* EXPORT BAR */
+.export-bar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+  padding:.8rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;}
+.export-label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-right:.25rem}
+
+/* TABLE */
+.tbl-wrap{overflow:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead{position:sticky;top:0;z-index:2}
+th{background:var(--bg3);border-bottom:1px solid var(--border2);
+  padding:.5rem .7rem;text-align:left;white-space:nowrap;
+  font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+  cursor:pointer;user-select:none;transition:color .1s;}
+th:hover{color:var(--accent)}
+th.sorted{color:var(--accent)}
+th .sort-ico{margin-left:4px;opacity:.5;font-size:9px}
+th.sorted .sort-ico{opacity:1}
+td{padding:.45rem .7rem;border-bottom:.5px solid var(--border);
+  color:var(--text);white-space:nowrap;vertical-align:middle;}
+td.call{font-family:'Space Mono',monospace;font-weight:700;color:var(--call)}
+td.num{font-family:'Space Mono',monospace;color:var(--dim);font-size:11px}
+td.mono{font-family:'Space Mono',monospace;font-size:11px}
+td.muted{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)}
+td.src{font-size:10px;color:var(--dim);max-width:130px;overflow:hidden;text-overflow:ellipsis}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(77,157,224,.04)}
+tr.desel td{opacity:.35}
+.badge{display:inline-block;font-size:9px;padding:1px 5px;border-radius:2px;
+  font-family:'Space Mono',monospace;vertical-align:middle}
+.badge-ssb {background:rgba(77,157,224,.2);color:var(--call)}
+.badge-cw  {background:rgba(46,204,138,.2);color:#3fb950}
+.badge-fm  {background:rgba(240,165,0,.2);color:var(--accent3)}
+.badge-digi{background:rgba(163,113,247,.2);color:#a371f7}
+.badge-band{background:rgba(99,126,150,.2);color:var(--muted)}
+.badge-miss{background:rgba(224,92,77,.15);color:var(--danger)}
+.chk{accent-color:var(--accent);width:13px;height:13px;cursor:pointer}
+
+/* EDITABLE CELLS */
+td.editable{cursor:text;transition:background .1s}
+td.editable:hover{background:rgba(77,157,224,.07)!important;outline:1px dashed var(--border2)}
+td.editing{background:rgba(77,157,224,.1)!important;outline:1px solid var(--accent)}
+.cell-inp{background:transparent;border:none;outline:none;
+  color:inherit;padding:0;font-size:12px;font-family:'Space Mono',monospace;
+  width:100%;box-sizing:border-box;}
+
+/* TOAST */
+#toast{position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;
+  background:var(--bg3);border:1px solid var(--accent2);border-radius:var(--r);
+  padding:.6rem 1rem;font-size:.8rem;color:var(--accent2);
+  transform:translateY(100px);opacity:0;transition:all .3s;pointer-events:none;
+  font-family:'Space Mono',monospace;}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.err {border-color:var(--danger);color:var(--danger)}
+#toast.warn{border-color:var(--accent3);color:var(--accent3)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">S56OA ADIF<span class="arr">→</span>CAB<span class="fmt"> converter</span></div>
+  <span class="version">v1.0</span>
+  <div class="stats-bar" id="statsBar" style="display:none">
+    <div class="stat"><span class="stat-val" id="sSrc">0</span><span data-i18n="statFiles">datotek</span></div>
+    <div class="stat"><span class="stat-val" id="sQso">0</span>QSO</div>
+    <div class="stat"><span class="stat-val" id="sBands">—</span><span data-i18n="statBands">pasovi</span></div>
+    <div class="stat"><span class="stat-val" id="sDates">—</span><span data-i18n="statDates">obdobje</span></div>
+    <div class="stat"><span class="stat-val warn" id="sMiss">0</span><span data-i18n="statMiss">brez izm.</span></div>
+  </div>
+  <div class="lang-wrap">
+    <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" title="Toggle theme">☀</button>
+    <button class="lang-btn active" id="btnSL" onclick="setLang('sl')">SL</button>
+    <button class="lang-btn"        id="btnEN" onclick="setLang('en')">EN</button>
+  </div>
+</header>
+
+<div id="dropzone">
+  <div class="drop-area" id="dropArea">
+    <div class="drop-ico">📋</div>
+    <div class="drop-title" data-i18n="dropTitle">Naloži ADIF dnevnike</div>
+    <div class="drop-sub"   data-i18n="dropSub">povleci eno ali več .adi / .adif datotek</div>
+    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()" data-i18n="dropBtn">Izberi datoteke</button>
+  </div>
+  <div class="drop-note" data-i18n="dropNote">Pretvori ADIF dnevnik v Cabrillo v3 (.cab). Izberi contest, izpolni header, uredi izmenjave, izvozi. Obdelava poteka lokalno v brskalniku.</div>
+  <input type="file" id="fileInput" multiple accept=".adi,.adif,.ADI,.ADIF">
+</div>
+
+<main id="app">
+
+  <!-- CABRILLO HEADER PANEL -->
+  <div class="cab-panel open" id="cabPanel">
+    <div class="cab-panel-hdr" onclick="document.getElementById('cabPanel').classList.toggle('open')">
+      <span class="tog">▶</span>
+      <span data-i18n="panelHdr">Cabrillo Header</span>
+      <span style="font-size:10px;color:var(--dim);margin-left:.4rem" data-i18n="panelHint">(izpolni pred izvozom)</span>
+    </div>
+    <div class="cab-panel-body">
+      <div class="hf-grid">
+
+        <div class="hf-field">
+          <div class="hf-label">CALLSIGN</div>
+          <input class="hf-inp hf-mono" id="hfCall" placeholder="S56OA"
+            oninput="this.value=this.value.toUpperCase()">
+        </div>
+
+        <div class="hf-field">
+          <div class="hf-label" data-i18n="hfContestLbl">CONTEST</div>
+          <select class="hf-sel" id="hfContest" onchange="onContestChange()">
+            <option value="CQ-WW-SSB">CQ WW SSB</option>
+            <option value="CQ-WW-CW">CQ WW CW</option>
+            <option value="IARU-HF">IARU HF Championship</option>
+            <option value="ARRL-DX">ARRL DX</option>
+            <option value="GENERIC">Generic / Custom</option>
+          </select>
+        </div>
+
+        <div class="hf-field" id="customNameField" style="display:none">
+          <div class="hf-label" data-i18n="hfCustomName">IME CONTESTA</div>
+          <input class="hf-inp hf-mono" id="hfCustomContest" placeholder="MY-CONTEST"
+            oninput="this.value=this.value.toUpperCase()">
+        </div>
+
+        <div class="hf-field">
+          <div class="hf-label" id="hfExchSentLbl">CQ cona (oddana)</div>
+          <input class="hf-inp hf-mono" id="hfExchSent" placeholder="15"
+            title="Default za vse QSO — uredi posamezno v tabeli"
+            oninput="onExchSentChange()">
+        </div>
+
+        <div class="hf-field">
+          <div class="hf-label">CATEGORY-OPERATOR</div>
+          <select class="hf-sel" id="hfCatOp">
+            <option value="SINGLE-OP">SINGLE-OP</option>
+            <option value="MULTI-OP">MULTI-OP</option>
+            <option value="CHECKLOG">CHECKLOG</option>
+          </select>
+        </div>
+
+        <div class="hf-field">
+          <div class="hf-label">CATEGORY-ASSISTED</div>
+          <select class="hf-sel" id="hfCatAsst">
+            <option value="NON-ASSISTED">NON-ASSISTED</option>
+            <option value="ASSISTED">ASSISTED</option>
+          </select>
+        </div>
+
+        <div class="hf-field">
+          <div class="hf-label">CATEGORY-POWER</div>
+          <select class="hf-sel" id="hfCatPwr">
+            <option value="HIGH">HIGH</option>
+            <option value="LOW">LOW</option>
+            <option value="QRP">QRP</option>
+          </select>
+        </div>
+
+        <div class="hf-field">
+          <div class="hf-label">CATEGORY-BAND</div>
+          <select class="hf-sel" id="hfCatBand">
+            <option value="ALL">ALL</option>
+            <option value="160M">160M</option>
+            <option value="80M">80M</option>
+            <option value="40M">40M</option>
+            <option value="20M">20M</option>
+            <option value="15M">15M</option>
+            <option value="10M">10M</option>
+            <option value="6M">6M</option>
+            <option value="2M">2M</option>
+          </select>
+        </div>
+
+        <div class="hf-field">
+          <div class="hf-label">CATEGORY-MODE</div>
+          <select class="hf-sel" id="hfCatMode">
+            <option value="SSB">SSB</option>
+            <option value="CW">CW</option>
+            <option value="MIXED">MIXED</option>
+            <option value="DIGITAL">DIGITAL</option>
+          </select>
+        </div>
+
+        <div class="hf-field">
+          <div class="hf-label">CLAIMED-SCORE</div>
+          <input class="hf-inp" id="hfScore" type="number" placeholder="0" min="0">
+        </div>
+
+        <div class="hf-field">
+          <div class="hf-label">CLUB</div>
+          <input class="hf-inp" id="hfClub" placeholder="S56OA Contest Group">
+        </div>
+
+        <div class="hf-field">
+          <div class="hf-label">NAME</div>
+          <input class="hf-inp" id="hfName" placeholder="Operator Name">
+        </div>
+
+        <div class="hf-field">
+          <div class="hf-label">EMAIL</div>
+          <input class="hf-inp" id="hfEmail" type="email" placeholder="op@example.com">
+        </div>
+
+        <div class="hf-field hf-wide">
+          <div class="hf-label">SOAPBOX</div>
+          <input class="hf-inp" id="hfSoapbox" placeholder="…">
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('fileInput').click()" data-i18n="btnAdd">+ Dodaj datoteke</button>
+    <button class="btn btn-secondary btn-sm" onclick="resetApp()" data-i18n="btnReset">↩ Ponastavi</button>
+    <div class="toolbar-sep"></div>
+    <input class="search-inp" id="searchInp" placeholder="Išči klicni znak…" oninput="applyFilters()">
+    <select class="sel" id="filterBand" onchange="applyFilters()"><option value="">— pas —</option></select>
+    <select class="sel" id="filterMode" onchange="applyFilters()"><option value="">— način —</option></select>
+    <select class="sel" id="filterSrc"  onchange="applyFilters()"><option value="">— datoteka —</option></select>
+    <div class="toolbar-sep"></div>
+    <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="checkbox" id="onlyMissing" class="chk" onchange="applyFilters()">
+      <span data-i18n="filterMiss">Samo brez izmenjave</span>
+    </label>
+    <div class="file-tags" id="fileTags"></div>
+    <div class="row-count" id="rowCount"></div>
+  </div>
+
+  <!-- EXPORT BAR -->
+  <div class="export-bar">
+    <span class="export-label" data-i18n="exportLbl">Izvoz</span>
+    <button class="btn btn-primary btn-sm" onclick="exportCAB()" data-i18n="btnCab">⬇ Cabrillo (.cab)</button>
+    <div class="toolbar-sep"></div>
+    <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="checkbox" id="onlySelected" class="chk" onchange="updateExportCount()">
+      <span data-i18n="onlySel">Samo označene</span>
+    </label>
+    <span id="exportCount" style="font-size:11px;color:var(--dim);font-family:'Space Mono',monospace"></span>
+  </div>
+
+  <!-- TABLE -->
+  <div class="tbl-wrap">
+    <table id="mainTable">
+      <thead id="tHead"></thead>
+      <tbody id="tBody"></tbody>
+    </table>
+  </div>
+
+</main>
+
+<div id="toast" aria-live="polite"></div>
+
+<script>
+// ════════════════════════════════════════
+//  CONTEST DEFINITIONS
+// ════════════════════════════════════════
+const CONTESTS = [
+  { id:'CQ-WW-SSB', name:'CQ WW SSB',
+    exchSentLbl:{sl:'CQ cona (oddana)',   en:'CQ Zone (Sent)'},
+    exchRcvdLbl:{sl:'CQ cona (sprejeta)',en:'CQ Zone (Rcvd)'},
+    exchRcvdField:'CQZONE', exchW:4 },
+  { id:'CQ-WW-CW', name:'CQ WW CW',
+    exchSentLbl:{sl:'CQ cona (oddana)',   en:'CQ Zone (Sent)'},
+    exchRcvdLbl:{sl:'CQ cona (sprejeta)',en:'CQ Zone (Rcvd)'},
+    exchRcvdField:'CQZONE', exchW:4 },
+  { id:'IARU-HF', name:'IARU HF Championship',
+    exchSentLbl:{sl:'ITU cona / HQ (odd.)',en:'ITU Zone / HQ (Sent)'},
+    exchRcvdLbl:{sl:'ITU cona / HQ (spr.)',en:'ITU Zone / HQ (Rcvd)'},
+    exchRcvdField:'ITUZ', exchW:6 },
+  { id:'ARRL-DX', name:'ARRL DX',
+    exchSentLbl:{sl:'Moč (W)',          en:'Power (W)'},
+    exchRcvdLbl:{sl:'Država/Provinca',  en:'State/Province'},
+    exchRcvdField:'STATE', exchW:6 },
+  { id:'GENERIC', name:'Generic / Custom',
+    exchSentLbl:{sl:'Izm. oddana',en:'Exch Sent'},
+    exchRcvdLbl:{sl:'Izm. sprejeta',en:'Exch Rcvd'},
+    exchRcvdField:'SRX_STRING', exchW:6 },
+];
+
+// ════════════════════════════════════════
+//  I18N
+// ════════════════════════════════════════
+const S = {
+sl:{
+  dropTitle:'Naloži ADIF dnevnike', dropSub:'povleci eno ali več .adi / .adif datotek',
+  dropBtn:'Izberi datoteke',
+  dropNote:'Pretvori ADIF dnevnik v Cabrillo v3 (.cab). Izberi contest, izpolni header, uredi izmenjave, izvozi. Obdelava poteka lokalno v brskalniku.',
+  statFiles:'datotek', statBands:'pasovi', statDates:'obdobje', statMiss:'brez izm.',
+  panelHdr:'Cabrillo Header', panelHint:'(izpolni pred izvozom)',
+  hfContestLbl:'CONTEST', hfCustomName:'IME CONTESTA',
+  btnAdd:'+ Dodaj datoteke', btnReset:'↩ Ponastavi',
+  filterMiss:'Samo brez izmenjave', exportLbl:'Izvoz',
+  btnCab:'⬇ Cabrillo (.cab)', onlySel:'Samo označene',
+  thNum:'#', thDate:'Datum', thTime:'Čas', thCall:'Klicni znak',
+  thBand:'Pas', thMode:'Način', thCabMode:'CAB', thFreq:'Freq (kHz)',
+  thRstS:'RST odd.', thExchS:'Izm. odd.', thRstR:'RST spr.', thExchR:'Izm. spr.', thSrc:'Datoteka',
+  toastCab:'Cabrillo izvožen', toastNoQso:'Ni zvez za izvoz',
+  errNoCall:'Vnesi CALLSIGN v Cabrillo header', errAdif:'Napaka pri branju ADIF',
+  warnMissExch:'Prazna izmenjava pri {n} QSO',
+  editHint:'Klikni za urejanje', errCall:'Napačen klicni znak',
+},
+en:{
+  dropTitle:'Load ADIF Logs', dropSub:'drag one or more .adi / .adif files',
+  dropBtn:'Choose files',
+  dropNote:'Convert ADIF log to Cabrillo v3 (.cab). Select contest, fill in header, edit exchanges, export. Processing is local in your browser.',
+  statFiles:'files', statBands:'bands', statDates:'period', statMiss:'no exch.',
+  panelHdr:'Cabrillo Header', panelHint:'(fill in before export)',
+  hfContestLbl:'CONTEST', hfCustomName:'CONTEST NAME',
+  btnAdd:'+ Add files', btnReset:'↩ Reset',
+  filterMiss:'Only missing exchange', exportLbl:'Export',
+  btnCab:'⬇ Cabrillo (.cab)', onlySel:'Selected only',
+  thNum:'#', thDate:'Date', thTime:'Time', thCall:'Callsign',
+  thBand:'Band', thMode:'Mode', thCabMode:'CAB', thFreq:'Freq (kHz)',
+  thRstS:'RST Sent', thExchS:'Exch Sent', thRstR:'RST Rcvd', thExchR:'Exch Rcvd', thSrc:'File',
+  toastCab:'Cabrillo exported', toastNoQso:'No QSOs to export',
+  errNoCall:'Enter CALLSIGN in Cabrillo header', errAdif:'ADIF read error',
+  warnMissExch:'Empty exchange for {n} QSO(s)',
+  editHint:'Click to edit', errCall:'Invalid callsign',
+}};
+let _lang = 'sl';
+function t(k){ return (S[_lang]||S.sl)[k] || (S.sl[k]||k); }
+function setLang(l){
+  _lang = l;
+  document.getElementById('btnSL').classList.toggle('active', l==='sl');
+  document.getElementById('btnEN').classList.toggle('active', l==='en');
+  document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.dataset.i18n));
+  updateContestLabels();
+  if(document.getElementById('app').style.display !== 'none') renderTable();
+}
+
+// ════════════════════════════════════════
+//  BAND → KHZ FALLBACK
+// ════════════════════════════════════════
+const BAND_KHZ = {
+  '160m':1825,'80m':3700,'60m':5357,'40m':7100,'30m':10125,
+  '20m':14200,'17m':18100,'15m':21200,'12m':24940,'10m':28500,
+  '6m':50200,'4m':70200,'2m':144300,'70cm':432200,'23cm':1296100,
+};
+function freqToKHz(q){
+  const f = parseFloat(q.fields && q.fields.FREQ);
+  if(f > 0) return Math.round(f * 1000);
+  return BAND_KHZ[q.band] || 0;
+}
+
+// ════════════════════════════════════════
+//  MODE HELPERS
+// ════════════════════════════════════════
+function modeToCAB(mode){
+  const m = (mode||'').toUpperCase();
+  if(['SSB','USB','LSB','AM'].includes(m)) return 'PH';
+  if(m === 'CW') return 'CW';
+  if(['FM','C4FM','DSTAR','DMR','DIGITALVOICE'].includes(m)) return 'FM';
+  if(m === 'RTTY') return 'RY';
+  return 'DG';
+}
+function dfltRST(cabMode){
+  return (cabMode==='CW'||cabMode==='DG'||cabMode==='RY') ? '599' : '59';
+}
+function modeBadge(mode){
+  if(['SSB','USB','LSB','AM'].includes(mode)) return 'badge-ssb';
+  if(mode==='CW')  return 'badge-cw';
+  if(mode==='FM')  return 'badge-fm';
+  return 'badge-digi';
+}
+function cabModeBadge(cm){
+  if(cm==='PH') return 'badge-ssb';
+  if(cm==='CW') return 'badge-cw';
+  return 'badge-digi';
+}
+
+// ════════════════════════════════════════
+//  ADIF PARSER (same sequential scanner as adif-merge)
+// ════════════════════════════════════════
+function parseADIF(text, filename){
+  text = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const eohMatch = text.match(/<EOH>/i);
+  const body = eohMatch ? text.slice(eohMatch.index + eohMatch[0].length) : text;
+  const qsos = [];
+  let pos = 0;
+  while(pos < body.length){
+    const eorMatch = body.slice(pos).match(/<EOR>/i);
+    if(!eorMatch) break;
+    const chunkEnd = pos + eorMatch.index;
+    const chunk = body.slice(pos, chunkEnd);
+    pos = chunkEnd + eorMatch[0].length;
+    if(!chunk.trim()) continue;
+    const fields = {};
+    let fp = 0;
+    while(fp < chunk.length){
+      const open = chunk.indexOf('<', fp);
+      if(open === -1) break;
+      const close = chunk.indexOf('>', open+1);
+      if(close === -1) break;
+      const spec = chunk.slice(open+1, close);
+      const parts = spec.split(':');
+      const tag = parts[0].toUpperCase();
+      const len = parts.length >= 2 ? parseInt(parts[1]) : NaN;
+      fp = close + 1;
+      if(!isNaN(len) && len >= 0){ fields[tag] = chunk.slice(fp, fp+len); fp += len; }
+    }
+    if(!fields.CALL) continue;
+    const call = fields.CALL.trim().toUpperCase();
+    const dateRaw = (fields.QSO_DATE||'').trim().replace(/[-/]/g,'');
+    const timeRaw = (fields.TIME_ON||'').trim().replace(/:/g,'');
+    const time = timeRaw.slice(0,4);
+    const band = (fields.BAND||'').trim().toLowerCase();
+    const mode = (fields.MODE||'').trim().toUpperCase();
+    fields.CALL = call;
+    if(dateRaw) fields.QSO_DATE = dateRaw;
+    if(timeRaw) fields.TIME_ON  = timeRaw;
+    let dateDisp = dateRaw;
+    if(/^\d{8}$/.test(dateRaw))
+      dateDisp = `${dateRaw.slice(6,8)}.${dateRaw.slice(4,6)}.${dateRaw.slice(0,4)}`;
+    let timeDisp = time;
+    if(/^\d{4}$/.test(time)) timeDisp = `${time.slice(0,2)}:${time.slice(2,4)}`;
+    qsos.push({
+      call, date:dateRaw, time, dateDisp, timeDisp,
+      band, mode,
+      rstS:(fields.RST_SENT||'').trim(),
+      rstR:(fields.RST_RCVD||'').trim(),
+      src:filename, fields,
+    });
+  }
+  return qsos;
+}
+
+// ════════════════════════════════════════
+//  EXCHANGE EXTRACTION
+// ════════════════════════════════════════
+function extractExchR(fields, contestId){
+  switch(contestId){
+    case 'CQ-WW-SSB': case 'CQ-WW-CW':
+      return (fields.CQZONE || fields.SRX_STRING || fields.SRX || '').trim();
+    case 'IARU-HF':
+      return (fields.ITUZ || fields.SRX_STRING || fields.SRX || '').trim();
+    case 'ARRL-DX':
+      return (fields.STATE || fields.SRX_STRING || fields.SRX || '').trim();
+    default:
+      return (fields.SRX_STRING || fields.SRX || '').trim();
+  }
+}
+
+// ════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════
+let _all = [], _filtered = [], _sources = [];
+let _sortCol = 1, _sortAsc = true;
+const _desel = new Set();
+let _editActive = null;
+const FILE_COLORS = ['#4d9de0','#2ecc8a','#f0a500','#e05c4d','#a371f7','#79c0ff'];
+
+// ════════════════════════════════════════
+//  FILE LOADING
+// ════════════════════════════════════════
+function handleFiles(files){
+  let pending = Array.from(files).length;
+  if(!pending) return;
+  Array.from(files).forEach(f => {
+    const r = new FileReader();
+    r.onload = e => {
+      try{
+        const qsos = parseADIF(e.target.result, f.name);
+        const color = FILE_COLORS[_sources.length % FILE_COLORS.length];
+        _sources.push({name:f.name, color});
+        _all.push(...qsos);
+      } catch { showToast(t('errAdif') + ': ' + f.name, true); }
+      if(--pending === 0) finishLoad();
+    };
+    r.onerror = () => { showToast(t('errAdif') + ': ' + f.name, true); if(--pending === 0) finishLoad(); };
+    r.readAsText(f, 'utf-8');
+  });
+}
+
+function finishLoad(){
+  const contestId = document.getElementById('hfContest').value;
+  _all.forEach((q, i) => {
+    q._idx    = i;
+    q._key    = `${q.call}|${q.band}|${q.mode}|${q.date}|${q.time}`;
+    q.cabMode = modeToCAB(q.mode);
+    q.freqKHz = freqToKHz(q);
+    q.exchR   = extractExchR(q.fields, contestId);
+    q.exchS   = ''; // empty = use header default; non-empty = per-row override
+  });
+  // Auto-populate CALLSIGN from first STATION_CALLSIGN if header is empty
+  if(!document.getElementById('hfCall').value && _all.length){
+    const mc = (_all[0].fields.STATION_CALLSIGN || _all[0].fields.MY_CALLSIGN || '').trim().toUpperCase();
+    if(mc) document.getElementById('hfCall').value = mc;
+  }
+  document.getElementById('dropzone').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('statsBar').style.display = 'flex';
+  updateStats();
+  buildFilters();
+  rebuildFileTags();
+  applyFilters();
+}
+
+function updateStats(){
+  const missing = _all.filter(q => !q.exchR).length;
+  document.getElementById('sSrc').textContent  = _sources.length;
+  document.getElementById('sQso').textContent  = _all.length;
+  document.getElementById('sMiss').textContent = missing;
+  document.getElementById('sMiss').style.color = missing > 0 ? 'var(--accent3)' : 'var(--muted)';
+  const bands = [...new Set(_all.map(q => q.band).filter(Boolean))].sort();
+  document.getElementById('sBands').textContent = bands.join(' · ') || '—';
+  const dates = _all.map(q => q.date).filter(d => /^\d{8}$/.test(d)).sort();
+  if(dates.length){
+    const fmt = d => `${d.slice(6,8)}.${d.slice(4,6)}.${d.slice(0,4)}`;
+    const d0 = dates[0], d1 = dates[dates.length-1];
+    document.getElementById('sDates').textContent = d0===d1 ? fmt(d0) : `${fmt(d0)}–${fmt(d1)}`;
+  } else { document.getElementById('sDates').textContent = '—'; }
+}
+
+function buildFilters(){
+  const bands = [...new Set(_all.map(q => q.band).filter(Boolean))].sort();
+  const modes = [...new Set(_all.map(q => q.mode).filter(Boolean))].sort();
+  const srcs  = [...new Set(_all.map(q => q.src))];
+  const bSel  = document.getElementById('filterBand');
+  const mSel  = document.getElementById('filterMode');
+  const sSel  = document.getElementById('filterSrc');
+  [bSel,mSel,sSel].forEach(s => { while(s.options.length > 1) s.remove(1); });
+  bands.forEach(b => bSel.add(new Option(b,b)));
+  modes.forEach(m => mSel.add(new Option(m,m)));
+  srcs.forEach(s  => sSel.add(new Option(s,s)));
+}
+
+function rebuildFileTags(){
+  document.getElementById('fileTags').innerHTML = _sources.map(s =>
+    `<div class="file-tag"><span class="file-tag-dot" style="background:${s.color}"></span>${htmlEsc(s.name)}</div>`
+  ).join('');
+}
+
+// ════════════════════════════════════════
+//  CONTEST CHANGE
+// ════════════════════════════════════════
+function onContestChange(){
+  const contestId = document.getElementById('hfContest').value;
+  document.getElementById('customNameField').style.display = contestId==='GENERIC' ? '' : 'none';
+  updateContestLabels();
+  _all.forEach(q => { q.exchR = extractExchR(q.fields, contestId); });
+  updateStats();
+  if(document.getElementById('app').style.display !== 'none') renderTable();
+}
+
+function updateContestLabels(){
+  const contestId = document.getElementById('hfContest').value;
+  const c = CONTESTS.find(x => x.id===contestId) || CONTESTS[CONTESTS.length-1];
+  document.getElementById('hfExchSentLbl').textContent = c.exchSentLbl[_lang] || c.exchSentLbl.en;
+}
+
+function onExchSentChange(){
+  if(document.getElementById('app').style.display !== 'none') renderTable();
+}
+
+// ════════════════════════════════════════
+//  FILTER + SORT
+// ════════════════════════════════════════
+const COL_KEYS = ['_idx','dateDisp','timeDisp','call','band','mode','cabMode','freqKHz','rstS','exchS','rstR','exchR','src'];
+
+function applyFilters(){
+  const q      = (document.getElementById('searchInp').value||'').toUpperCase().trim();
+  const band   = document.getElementById('filterBand').value;
+  const mode   = document.getElementById('filterMode').value;
+  const src    = document.getElementById('filterSrc').value;
+  const onlyM  = document.getElementById('onlyMissing').checked;
+  _filtered = _all.filter(r => {
+    if(q    && !r.call.includes(q)) return false;
+    if(band && r.band !== band)     return false;
+    if(mode && r.mode !== mode)     return false;
+    if(src  && r.src  !== src)      return false;
+    if(onlyM && r.exchR)            return false;
+    return true;
+  });
+  sortFiltered();
+  renderTable();
+  updateExportCount();
+}
+
+function sortFiltered(){
+  const k = COL_KEYS[_sortCol];
+  _filtered.sort((a,b) => {
+    let va = a[k]??'', vb = b[k]??'';
+    if(k==='freqKHz')  { va=+va; vb=+vb; }
+    if(k==='dateDisp') { va=a.date; vb=b.date; }
+    if(k==='timeDisp') { va=a.time; vb=b.time; }
+    const r = va<vb ? -1 : va>vb ? 1 : 0;
+    return _sortAsc ? r : -r;
+  });
+}
+
+// ════════════════════════════════════════
+//  TABLE RENDER
+// ════════════════════════════════════════
+function contestNow(){
+  const id = document.getElementById('hfContest').value;
+  return CONTESTS.find(c => c.id===id) || CONTESTS[CONTESTS.length-1];
+}
+
+function miss(v){ return v ? htmlEsc(v) : '<span class="badge badge-miss">—</span>'; }
+
+function renderTable(){
+  const contest = contestNow();
+  const exchSentDefault = document.getElementById('hfExchSent').value.trim();
+
+  const cols = [
+    {k:'_idx',    lbl:()=>t('thNum')},
+    {k:'dateDisp',lbl:()=>t('thDate')},
+    {k:'timeDisp',lbl:()=>t('thTime')},
+    {k:'call',    lbl:()=>t('thCall')},
+    {k:'band',    lbl:()=>t('thBand')},
+    {k:'mode',    lbl:()=>t('thMode')},
+    {k:'cabMode', lbl:()=>t('thCabMode')},
+    {k:'freqKHz', lbl:()=>t('thFreq')},
+    {k:'rstS',    lbl:()=>t('thRstS')},
+    {k:'exchS',   lbl:()=>contest.exchSentLbl[_lang]||contest.exchSentLbl.en},
+    {k:'rstR',    lbl:()=>t('thRstR')},
+    {k:'exchR',   lbl:()=>contest.exchRcvdLbl[_lang]||contest.exchRcvdLbl.en},
+    {k:'src',     lbl:()=>t('thSrc')},
+  ];
+
+  document.getElementById('tHead').innerHTML = `<tr>
+    <th><input type="checkbox" class="chk" id="chkAll" onchange="toggleAll(this.checked)"></th>
+    ${cols.map((c,i) => `<th class="${_sortCol===i?'sorted':''}" onclick="setSort(${i})">
+      ${htmlEsc(c.lbl())}<span class="sort-ico">${_sortCol===i?(_sortAsc?'▲':'▼'):'⇅'}</span>
+    </th>`).join('')}
+  </tr>`;
+
+  const rows = [];
+  _filtered.forEach((q, idx) => {
+    const srcColor = (_sources.find(s => s.name===q.src)||{}).color || 'var(--dim)';
+    const ek = htmlEsc(q._key);
+    const exchSDisp = q.exchS || exchSentDefault;
+    rows.push(`<tr data-key="${ek}">
+      <td><input type="checkbox" class="chk row-chk" data-key="${ek}"
+        ${_desel.has(q._key)?'':'checked'} onchange="toggleRow(this)"></td>
+      <td class="num">${idx+1}</td>
+      <td class="mono">${htmlEsc(q.dateDisp)}</td>
+      <td class="mono">${htmlEsc(q.timeDisp)}</td>
+      <td class="call editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'call')">${htmlEsc(q.call)}</td>
+      <td><span class="badge badge-band">${htmlEsc(q.band||'?')}</span></td>
+      <td><span class="badge ${modeBadge(q.mode)}">${htmlEsc(q.mode||'?')}</span></td>
+      <td><span class="badge ${cabModeBadge(q.cabMode)}">${htmlEsc(q.cabMode)}</span></td>
+      <td class="muted">${q.freqKHz||'—'}</td>
+      <td class="mono editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'rstS')">${htmlEsc(q.rstS||dfltRST(q.cabMode))}</td>
+      <td class="mono editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'exchS')">${miss(exchSDisp)}</td>
+      <td class="mono editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'rstR')">${htmlEsc(q.rstR||dfltRST(q.cabMode))}</td>
+      <td class="mono editable" title="${t('editHint')}" onclick="startEdit(this,${q._idx},'exchR')">${miss(q.exchR)}</td>
+      <td class="src" title="${htmlEsc(q.src)}"><span style="color:${srcColor}">●</span> ${htmlEsc(q.src)}</td>
+    </tr>`);
+  });
+  document.getElementById('tBody').innerHTML = rows.join('');
+  document.getElementById('rowCount').textContent = `${_filtered.length} / ${_all.length} QSO`;
+  const allChk = document.getElementById('chkAll');
+  if(allChk) allChk.checked = _desel.size === 0;
+}
+
+function toggleAll(checked){
+  _desel.clear();
+  if(!checked) _all.forEach(q => _desel.add(q._key));
+  renderTable(); updateExportCount();
+}
+function toggleRow(cb){
+  if(cb.checked) _desel.delete(cb.dataset.key); else _desel.add(cb.dataset.key);
+  updateExportCount();
+}
+function setSort(i){
+  if(_sortCol===i) _sortAsc = !_sortAsc;
+  else { _sortCol=i; _sortAsc=true; }
+  sortFiltered(); renderTable();
+}
+
+// ════════════════════════════════════════
+//  INLINE EDIT
+// ════════════════════════════════════════
+function startEdit(td, idx, field){
+  if(_editActive) commitEdit();
+  const qso = _all.find(q => q._idx===idx);
+  if(!qso) return;
+  td.classList.add('editing');
+  const exchSentDefault = document.getElementById('hfExchSent').value.trim();
+
+  const ctrl = document.createElement('input');
+  ctrl.className = 'cell-inp';
+  if(field==='call')  { ctrl.value=qso.call; ctrl.addEventListener('input',()=>{ctrl.value=ctrl.value.toUpperCase();}); }
+  if(field==='rstS')  { ctrl.value=qso.rstS||dfltRST(qso.cabMode); ctrl.maxLength=3; }
+  if(field==='rstR')  { ctrl.value=qso.rstR||dfltRST(qso.cabMode); ctrl.maxLength=3; }
+  if(field==='exchS') { ctrl.value=qso.exchS||exchSentDefault; ctrl.maxLength=20; }
+  if(field==='exchR') { ctrl.value=qso.exchR; ctrl.maxLength=20; }
+
+  td.innerHTML = '';
+  td.appendChild(ctrl);
+  ctrl.focus(); ctrl.select();
+
+  _editActive = {idx, field, td};
+  ctrl.addEventListener('blur',    () => commitEdit());
+  ctrl.addEventListener('keydown', e => { if(e.key==='Enter') ctrl.blur(); if(e.key==='Escape') cancelEdit(); });
+  td.onclick = null;
+}
+
+function commitEdit(){
+  if(!_editActive) return;
+  const {idx, field, td} = _editActive;
+  _editActive = null;
+  const ctrl = td.querySelector('input');
+  const qso  = _all.find(q => q._idx===idx);
+  if(ctrl && qso){
+    const v = ctrl.value.trim();
+    if(field==='call'){
+      const uc = v.toUpperCase();
+      if(/^[A-Z0-9/]{2,}$/.test(uc)) qso.call = uc;
+      else showToast(t('errCall'), true);
+    } else if(field==='rstS'){
+      qso.rstS = v;
+    } else if(field==='rstR'){
+      qso.rstR = v;
+    } else if(field==='exchS'){
+      qso.exchS = v;
+    } else if(field==='exchR'){
+      qso.exchR = v;
+      updateStats();
+    }
+  }
+  restoreCell(td, field, qso);
+}
+
+function cancelEdit(){
+  if(!_editActive) return;
+  const {field, td} = _editActive;
+  const qso = _all.find(q => q._idx===_editActive.idx);
+  _editActive = null;
+  restoreCell(td, field, qso);
+}
+
+function restoreCell(td, field, qso){
+  td.classList.remove('editing');
+  if(!qso){ td.textContent=''; return; }
+  td.onclick = () => startEdit(td, qso._idx, field);
+  const exchSentDefault = document.getElementById('hfExchSent').value.trim();
+  if(field==='call')  { td.textContent = qso.call; }
+  if(field==='rstS')  { td.textContent = qso.rstS||dfltRST(qso.cabMode); }
+  if(field==='rstR')  { td.textContent = qso.rstR||dfltRST(qso.cabMode); }
+  if(field==='exchS') { td.innerHTML   = miss(qso.exchS||exchSentDefault); }
+  if(field==='exchR') { td.innerHTML   = miss(qso.exchR); }
+}
+
+// ════════════════════════════════════════
+//  EXPORT POOL
+// ════════════════════════════════════════
+function getExportPool(){
+  const onlySel = document.getElementById('onlySelected').checked;
+  const base = onlySel ? _filtered : _all;
+  return base.filter(q => !_desel.has(q._key));
+}
+function updateExportCount(){
+  document.getElementById('exportCount').textContent = `(${getExportPool().length} QSO)`;
+}
+
+// ════════════════════════════════════════
+//  CABRILLO EXPORT
+// ════════════════════════════════════════
+function formatCabDate(dateRaw){
+  if(/^\d{8}$/.test(dateRaw))
+    return `${dateRaw.slice(0,4)}-${dateRaw.slice(4,6)}-${dateRaw.slice(6,8)}`;
+  return dateRaw || '0000-00-00';
+}
+
+function buildQSOLine(q, contest, myCall, exchSentDefault){
+  const freqW = (q.freqKHz||0) >= 100000 ? 7 : (q.freqKHz||0) >= 10000 ? 6 : 5;
+  const freq  = String(q.freqKHz||0).padStart(freqW);
+  const cm    = q.cabMode||'PH';
+  const date  = formatCabDate(q.date);
+  const time  = (q.time||'0000').slice(0,4);
+  const myc   = (myCall||'').padEnd(13);
+  const rstS  = String(q.rstS||dfltRST(cm)).padEnd(3);
+  const exchS = String(q.exchS||exchSentDefault||'').padEnd(contest.exchW);
+  const call  = q.call.padEnd(13);
+  const rstR  = String(q.rstR||dfltRST(cm)).padEnd(3);
+  const exchR = String(q.exchR||'').padEnd(contest.exchW);
+  return `QSO: ${freq} ${cm} ${date} ${time} ${myc} ${rstS} ${exchS} ${call} ${rstR} ${exchR} 0`;
+}
+
+function exportCAB(){
+  const pool = getExportPool();
+  if(!pool.length){ showToast(t('toastNoQso'), true); return; }
+
+  const myCall = document.getElementById('hfCall').value.trim().toUpperCase();
+  if(!myCall){ showToast(t('errNoCall'), true); return; }
+
+  const contestId      = document.getElementById('hfContest').value;
+  const contest        = CONTESTS.find(c => c.id===contestId) || CONTESTS[CONTESTS.length-1];
+  const exchSentDefault = document.getElementById('hfExchSent').value.trim();
+  const missingExch    = pool.filter(q => !q.exchR).length;
+
+  const contestName = contestId==='GENERIC'
+    ? (document.getElementById('hfCustomContest').value.trim().toUpperCase() || 'CONTEST')
+    : contestId;
+
+  const lines = ['START-OF-LOG: 3.0'];
+  lines.push(`CALLSIGN: ${myCall}`);
+  lines.push(`CONTEST: ${contestName}`);
+  lines.push(`CATEGORY-OPERATOR: ${document.getElementById('hfCatOp').value}`);
+  lines.push(`CATEGORY-ASSISTED: ${document.getElementById('hfCatAsst').value}`);
+  lines.push(`CATEGORY-POWER: ${document.getElementById('hfCatPwr').value}`);
+  lines.push(`CATEGORY-BAND: ${document.getElementById('hfCatBand').value}`);
+  lines.push(`CATEGORY-MODE: ${document.getElementById('hfCatMode').value}`);
+
+  const score = document.getElementById('hfScore').value.trim();
+  if(score) lines.push(`CLAIMED-SCORE: ${score}`);
+  const club = document.getElementById('hfClub').value.trim();
+  if(club) lines.push(`CLUB: ${club}`);
+  const name = document.getElementById('hfName').value.trim();
+  if(name) lines.push(`NAME: ${name}`);
+  const email = document.getElementById('hfEmail').value.trim();
+  if(email) lines.push(`EMAIL: ${email}`);
+  const soapbox = document.getElementById('hfSoapbox').value.trim();
+  if(soapbox) lines.push(`SOAPBOX: ${soapbox}`);
+  lines.push('CREATED-BY: ADIF-Cabrillo Converter v1.0');
+  lines.push('');
+
+  pool.forEach(q => lines.push(buildQSOLine(q, contest, myCall, exchSentDefault)));
+  lines.push('');
+  lines.push('END-OF-LOG:');
+
+  dl(lines.join('\n'), buildFilename(), 'text/plain');
+
+  if(missingExch > 0) showToast(t('warnMissExch').replace('{n}', missingExch), false, true);
+  else showToast(`${t('toastCab')} (${pool.length} QSO)`);
+}
+
+// ════════════════════════════════════════
+//  UTILITIES
+// ════════════════════════════════════════
+function htmlEsc(s){
+  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function dl(content, filename, mime){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content],{type:mime}));
+  a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 0);
+}
+function buildFilename(){
+  const call = (document.getElementById('hfCall').value.trim().toUpperCase()||'log').replace(/\//g,'-');
+  const cid  = document.getElementById('hfContest').value.toLowerCase().replace(/-/g,'');
+  return `${call}_${cid}.cab`;
+}
+
+// ════════════════════════════════════════
+//  TOAST
+// ════════════════════════════════════════
+let _toastTimer = null;
+function showToast(msg, err=false, warn=false){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (err?' err':warn?' warn':'');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.className='', 3500);
+}
+
+// ════════════════════════════════════════
+//  RESET
+// ════════════════════════════════════════
+function resetApp(){
+  if(_editActive) cancelEdit();
+  _all.length=0; _sources.length=0; _filtered.length=0; _desel.clear();
+  _sortCol=1; _sortAsc=true;
+  document.getElementById('searchInp').value='';
+  document.getElementById('filterBand').selectedIndex=0;
+  document.getElementById('filterMode').selectedIndex=0;
+  document.getElementById('filterSrc').selectedIndex=0;
+  document.getElementById('onlyMissing').checked=false;
+  document.getElementById('onlySelected').checked=false;
+  document.getElementById('app').style.display='none';
+  document.getElementById('dropzone').style.display='flex';
+  document.getElementById('statsBar').style.display='none';
+  document.getElementById('fileInput').value='';
+}
+
+// ════════════════════════════════════════
+//  DRAG & DROP + FILE INPUT
+// ════════════════════════════════════════
+const dropArea = document.getElementById('dropArea');
+dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('drag'); });
+dropArea.addEventListener('dragleave', () => dropArea.classList.remove('drag'));
+dropArea.addEventListener('drop', e => {
+  e.preventDefault(); dropArea.classList.remove('drag');
+  handleFiles(e.dataTransfer.files);
+});
+document.getElementById('fileInput').addEventListener('change', e => handleFiles(e.target.files));
+document.addEventListener('dragover', e => { if(Array.from(e.dataTransfer.types).includes('Files')) e.preventDefault(); });
+document.addEventListener('drop', e => {
+  if(!e.dataTransfer.files.length) return;
+  e.preventDefault();
+  if(document.getElementById('app').style.display !== 'none') handleFiles(e.dataTransfer.files);
+});
+
+// ════════════════════════════════════════
+//  THEME
+// ════════════════════════════════════════
+function toggleTheme(){
+  const html = document.documentElement;
+  const toLight = html.dataset.theme !== 'light';
+  html.dataset.theme = toLight ? 'light' : 'dark';
+  document.getElementById('btnTheme').textContent = toLight ? '☾' : '☀';
+  localStorage.setItem('theme', html.dataset.theme);
+}
+(function(){
+  const saved = localStorage.getItem('theme');
+  if(saved==='light'){
+    document.documentElement.dataset.theme='light';
+    document.getElementById('btnTheme').textContent='☾';
+  }
+})();
+</script>
+</body>
+</html>

@@ -15,6 +15,7 @@ Tools for amateur radio log processing and format conversion.
 | [`vhf-logger/vhf-logger.html`](vhf-logger/vhf-logger.html) | Browser app | Real-time VHF/UHF/SHF contest logger with live crosscheck hints, QRB/bearing display, and REG1TEST EDI export |
 | [`adif-merge.html`](adif-merge.html) | Browser app | Merge multiple ADIF log files — deduplication, filter by band/mode/source, inline editing, export to ADIF and CSV |
 | [`adif-stats.html`](adif-stats.html) | Browser app | Analyse an ADIF log — statistics by band/mode/continent/country/time, DXCC per band, activity heatmap, band×hour propagation matrix, QRB distribution, HTML export |
+| [`adif2cab.html`](adif2cab.html) | Browser app | Convert an ADIF log to Cabrillo v3 contest format for CQ WW SSB/CW, IARU HF, ARRL DX, or any custom contest |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filter an ADIF log to keep only QSOs with BURO-accepting stations |
 | [`build-baseline.js`](build-baseline.js) | Node.js CLI | Build `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports for use with `edi-crosscheck.html` and `vhf-logger/vhf-logger.html` |
 
@@ -260,6 +261,41 @@ No internet connection required. All processing happens in your browser — no f
 
 ---
 
+## S56OA ADIF → Cabrillo Converter (`adif2cab.html`)
+
+Converts an ADIF log file to [Cabrillo v3](https://wwrof.org/cabrillo/) contest format.
+Open the file in any modern browser — no installation required.
+
+**[➜ Open adif2cab.html](adif2cab.html)**
+
+### Features
+
+- **Drag & drop** an `.adi` / `.adif` file onto the drop zone, or click to browse
+- **Contest selector** — CQ WW SSB, CQ WW CW, IARU HF Championship, ARRL DX, or Generic / Custom
+- **Cabrillo header panel** — all standard header fields (CALLSIGN, CONTEST, CATEGORY-*, CLAIMED-SCORE, OPERATORS, NAME, ADDRESS, CLUB, CREATED-BY, SOAPBOX) as inputs; collapsible
+- **QSO preview table** — all parsed QSOs with Cabrillo mode, frequency (kHz), and exchange columns visible
+- **Inline editing** — correct RST sent/received and exchange fields per QSO before export
+- **Empty-field warnings** — missing CALLSIGN header or missing exchange values trigger a toast warning; export proceeds with empty values
+- **Cabrillo v3 mode mapping** — spec-correct: `PH` (SSB/AM), `CW`, `FM` (separate category), `RY` (RTTY), `DG` (all other digital)
+- **Frequency column** — uses ADIF `FREQ` field (MHz → kHz); falls back to band-centre kHz if absent
+- **Exchange per contest:** CQ WW → CQ zone (`CQZONE`), IARU HF → ITU zone / HQ (`ITUZ`), ARRL DX → state/province (`STATE`), Generic → exchange string (`SRX_STRING` / `SRX`)
+- **Bilingual UI** — Slovenian and English
+- **Dark/light theme** toggle with `localStorage` persistence
+
+### How to Use
+
+1. Download `adif2cab.html` (single file)
+2. Open it in any modern browser (Chrome, Firefox, Edge, Safari)
+3. Drag an `.adi` or `.adif` file onto the drop zone, or click **Choose file**
+4. Select the contest from the dropdown
+5. Fill in the Cabrillo header fields (callsign, category, power, etc.)
+6. Review the QSO table — edit RST or exchange fields inline if needed
+7. Click **Export Cabrillo**
+
+No internet connection required. All processing happens in your browser — no files or QSO data are uploaded anywhere.
+
+---
+
 ## Baseline Builder (`build-baseline.js`)
 
 Node.js CLI script that builds `crosscheck-baseline.json` from a directory of OEVSV IARU R1 contest CSV exports. Used to occasionally refresh the prebuilt baseline that `edi-crosscheck.html` loads on startup.
@@ -428,6 +464,9 @@ node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 
 # ADIF Statistics
 node --test --test-reporter=spec adif-stats.test.js
+
+# ADIF → Cabrillo converter
+node --test --test-reporter=spec adif2cab.test.js
 ```
 
 | Test file | Tests | Groups |
@@ -438,6 +477,7 @@ node --test --test-reporter=spec adif-stats.test.js
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 | `vhf-logger/vhf-logger.test.js` | 163 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
 | `adif-stats.test.js` | 133 | 21 (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`) |
+| `adif2cab.test.js` | 153 | 25 (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×5, `formatCabDate`, `buildQSOLine` ×3, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` structure, `I18N`) |
 
 See [TESTING.md](TESTING.md) for full test documentation.
 
@@ -471,6 +511,7 @@ Orodja za obdelavo in pretvorbo formatov radioamaterskih dnevnikov.
 | [`vhf-logger/vhf-logger.html`](vhf-logger/vhf-logger.html) | Brskalniška app | Beležnik tekmovalnih dnevnikov VHF/UHF/SHF v realnem času z live crosscheckom, prikazom QRB/azimuta in izvozom REG1TEST EDI |
 | [`adif-merge.html`](adif-merge.html) | Brskalniška app | Združevanje več ADIF dnevniških datotek — deduplikacija, filtri po pasu/načinu/izvoru, urejanje v živo, izvoz ADIF in CSV |
 | [`adif-stats.html`](adif-stats.html) | Brskalniška app | Analiza ADIF dnevnika — statistika po pasu/načinu/kontinentu/državi/času, DXCC per pas, toplotna karta aktivnosti, matrika pas×ura, porazdelitev QRB, HTML izvoz |
+| [`adif2cab.html`](adif2cab.html) | Brskalniška app | Pretvorba ADIF dnevnika v format Cabrillo v3 za CQ WW SSB/CW, IARU HF, ARRL DX ali poljubno tekmovanje |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filtriranje ADIF dnevnika — ohrani samo zveze s postajami, ki sprejemajo biro |
 | [`build-baseline.js`](build-baseline.js) | Node.js CLI | Zgradi `crosscheck-baseline.json` iz OEVSV IARU R1 contest CSV exportov za uporabo z `edi-crosscheck.html` in `vhf-logger/vhf-logger.html` |
 
@@ -716,6 +757,41 @@ Po nalaganju strani internetna povezava ni potrebna. Vsa obdelava poteka v brska
 
 ---
 
+## S56OA ADIF → Cabrillo pretvornik (`adif2cab.html`)
+
+Pretvori ADIF dnevniško datoteko v format [Cabrillo v3](https://wwrof.org/cabrillo/) za oddajo tekmovalnih dnevnikov.
+Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
+
+**[➜ Odpri adif2cab.html](adif2cab.html)**
+
+### Funkcionalnosti
+
+- **Povleci in spusti** `.adi` / `.adif` datoteko na območje za spuščanje ali klikni za iskanje
+- **Izbira tekmovanja** — CQ WW SSB, CQ WW CW, IARU HF Championship, ARRL DX ali Splošno / po meri
+- **Plošča glave Cabrillo** — vsa standardna polja glave (CALLSIGN, CONTEST, CATEGORY-*, CLAIMED-SCORE, OPERATORS, NAME, ADDRESS, CLUB, CREATED-BY, SOAPBOX) kot vnosna polja; zložljiva
+- **Tabela predogleda QSO** — vsi razčlenjeni QSO-ji z vidnimi stolpci za Cabrillo način, frekvenco (kHz) in izmenjavo
+- **Urejanje v živo** — popravi RST oddano/sprejeto in polja izmenjave per QSO pred izvozom
+- **Opozorila za prazna polja** — manjkajoč CALLSIGN v glavi ali manjkajoča polja izmenjave sprožijo toast opozorilo; izvoz se nadaljuje s praznimi vrednostmi
+- **Mapiranje načinov Cabrillo v3** — skladno s specifikacijo: `PH` (SSB/AM), `CW`, `FM` (ločena kategorija), `RY` (RTTY), `DG` (vsi ostali digitalni načini)
+- **Stolpec frekvence** — uporablja ADIF polje `FREQ` (MHz → kHz); v primeru odsotnosti pade na center pasu
+- **Izmenjava per tekmovanje:** CQ WW → CQ cona (`CQZONE`), IARU HF → ITU cona / HQ (`ITUZ`), ARRL DX → država/provinca (`STATE`), Splošno → niz izmenjave (`SRX_STRING` / `SRX`)
+- **Dvojezični vmesnik** — slovenščina in angleščina
+- **Temna/svetla tema** s shranitvijo v `localStorage`
+
+### Navodila za uporabo
+
+1. Prenesi `adif2cab.html` (ena datoteka)
+2. Odpri jo v katerem koli sodobnem brskalniku (Chrome, Firefox, Edge, Safari)
+3. Povleci `.adi` ali `.adif` datoteko na območje za spuščanje ali klikni **Izberi datoteko**
+4. Izberi tekmovanje iz spustnega menija
+5. Izpolni polja glave Cabrillo (klicni znak, kategorija, moč itd.)
+6. Preglej tabelo QSO — uredi RST ali polja izmenjave v živo po potrebi
+7. Klikni **Izvozi Cabrillo**
+
+Po nalaganju strani internetna povezava ni potrebna. Vsa obdelava poteka v brskalniku — nobene datoteke ali podatki o zvezah niso nikamor naloženi.
+
+---
+
 ## Graditelj baseline-a (`build-baseline.js`)
 
 Node.js CLI skripta, ki gradi `crosscheck-baseline.json` iz mape OEVSV IARU R1 tekmovalnih CSV exportov. Uporablja se za občasno osveževanje pred-zgrajenega baseline-a, ki ga `edi-crosscheck.html` naloži ob zagonu.
@@ -884,6 +960,9 @@ node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 
 # ADIF Statistics
 node --test --test-reporter=spec adif-stats.test.js
+
+# ADIF → Cabrillo pretvornik
+node --test --test-reporter=spec adif2cab.test.js
 ```
 
 | Testna datoteka | Testov | Skupin |
@@ -894,6 +973,7 @@ node --test --test-reporter=spec adif-stats.test.js
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 | `vhf-logger/vhf-logger.test.js` | 163 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
 | `adif-stats.test.js` | 133 | 21 (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`) |
+| `adif2cab.test.js` | 153 | 25 (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×5, `formatCabDate`, `buildQSOLine` ×3, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` struktura, `I18N`) |
 
 Celotna dokumentacija je v [TESTING.md](TESTING.md).
 

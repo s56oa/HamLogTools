@@ -16,6 +16,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 163 | 16 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
+| `adif2cab.test.js` | `adif2cab.html` | 153 | 25 |
 
 The sections below document each test file in detail.
 
@@ -30,6 +31,7 @@ node --test --test-reporter=spec adif-merge.test.js
 node --test --test-reporter=spec adif-qrz-filter.test.js
 node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 node --test --test-reporter=spec adif-stats.test.js
+node --test --test-reporter=spec adif2cab.test.js
 ```
 
 Requires **Node.js v18 or later** (`node:test` was stabilised in v18;
@@ -199,6 +201,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 163 | 16 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
+| `adif2cab.test.js` | `adif2cab.html` | 153 | 25 |
 
 Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 
@@ -213,6 +216,7 @@ node --test --test-reporter=spec adif-merge.test.js
 node --test --test-reporter=spec adif-qrz-filter.test.js
 node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 node --test --test-reporter=spec adif-stats.test.js
+node --test --test-reporter=spec adif2cab.test.js
 ```
 
 Zahteva **Node.js v18 ali novejši** (`node:test` je bil stabiliziran v v18;
@@ -957,6 +961,182 @@ Replicates the date-range filtering logic in isolation:
 
 ---
 
+## `adif2cab.test.js` — 153 tests · 25 groups
+
+Covers the pure logic of `adif2cab.html`: Cabrillo mode mapping, RST defaults, frequency conversion, ADIF parsing, exchange extraction per contest, QSO line formatting, XSS escaping, badge helpers, CONTESTS array structure, and i18n key completeness.
+
+### How the tests work
+
+`adif2cab.html` is evaluated inside a `node:vm` context using the same Proxy-based DOM mock as the other HTML tools. Only the `<script>` block is extracted. Pure functions are accessed directly as context properties.
+
+Three injected helpers give access to `const`/`let` module state:
+- `_getContests()` — returns the `CONTESTS` array
+- `_getLangKeys(lang)` — lists all i18n keys for a given language
+- `_getI18n(lang, key)` — reads a value from the `S` i18n object
+
+A local `adif()` helper builds ADIF fixture strings with correct `<TAG:length>value` encoding.
+A `makeQso()` helper builds a minimal QSO object with sensible defaults; individual fields are overridden per test via spread.
+
+### Test groups
+
+#### 1 · `modeToCAB — phone modes → PH` (5 tests)
+
+- `SSB`, `USB`, `LSB`, `AM` → `PH`.
+- Lowercase `ssb` normalised to uppercase before lookup → `PH`.
+
+#### 2 · `modeToCAB — CW → CW` (2 tests)
+
+- `CW` (upper and lower) → `CW`.
+
+#### 3 · `modeToCAB — FM-based voice → FM` (5 tests)
+
+Cabrillo v3 spec defines `FM` as a distinct mode value (not `PH`).
+
+- `FM`, `C4FM`, `DSTAR`, `DMR`, `DIGITALVOICE` → `FM`.
+
+#### 4 · `modeToCAB — RTTY → RY` (2 tests)
+
+Cabrillo v3 spec defines `RY` for RTTY (not the `DG` catch-all).
+
+- `RTTY` (upper and lower) → `RY`.
+
+#### 5 · `modeToCAB — digital modes → DG` (8 tests)
+
+- `FT8`, `FT4`, `PSK31`, `JT65`, `JS8`, `WSPR` → `DG`.
+- Empty string and `null` → `DG` (safe catch-all).
+
+#### 6 · `dfltRST` (7 tests)
+
+- `PH` and `FM` → `'59'` (two-digit phone RST).
+- `CW`, `DG`, `RY` → `'599'` (three-digit CW/digital RST; RTTY uses 3-digit by convention).
+- Unknown mode and empty string → `'59'` (phone default).
+
+#### 7 · `freqToKHz — FREQ field conversion` (6 tests)
+
+- `14.210 MHz` → `14210`, `144.300 MHz` → `144300`, `432.200 MHz` → `432200`.
+- Half-kHz value rounded correctly (`14.0005` → `14001`).
+- `FREQ '0'` and `FREQ ''` (not `> 0`) fall back to `BAND_KHZ`.
+
+#### 8 · `freqToKHz — BAND_KHZ fallback` (8 tests)
+
+- `20m` → 14200, `2m` → 144300, `40m` → 7100, `70cm` → 432200, `23cm` → 1296100.
+- Unknown band string → `0`.
+- No `fields` property falls back gracefully; no band → `0`.
+
+#### 9 · `parseADIF — basic extraction` (8 tests)
+
+- Minimal QSO parsed: `call`, `date`, `time`, `band`, `mode` extracted correctly.
+- `CALL` normalised to uppercase; `BAND` to lowercase; `MODE` to uppercase.
+- `RST_SENT` → `rstS`, `RST_RCVD` → `rstR`.
+- `src` set to the filename argument.
+- Records without `CALL` field are silently skipped.
+- Arbitrary ADIF fields preserved in `fields` dict with uppercase keys.
+
+#### 10 · `parseADIF — date/time normalization` (7 tests)
+
+- `YYYYMMDD` stored as-is; ISO `YYYY-MM-DD` stripped of dashes.
+- Display date formatted as `DD.MM.YYYY`.
+- `HHMMSS` time truncated to `HHMM`; display time formatted as `HH:MM`.
+- Missing `QSO_DATE` or `TIME_ON` → empty string (no crash).
+
+#### 11 · `parseADIF — multi-record / edge cases` (8 tests)
+
+- Two-QSO file parsed correctly.
+- File without `<EOH>` (headerless ADIF) accepted.
+- Tags case-insensitive; `<TAG:len:type>` type-specifier variant handled.
+- CRLF line endings handled.
+- `STATION_CALLSIGN` preserved in `fields` (used to auto-populate the header callsign).
+- Empty file returns zero QSOs.
+- `fields` dict keys are uppercase regardless of input case.
+
+#### 12 · `extractExchR — CQ-WW-SSB` (6 tests)
+
+- `CQZONE` field returned when present; whitespace trimmed.
+- Falls back to `SRX_STRING`, then `SRX` when `CQZONE` absent.
+- `CQZONE` takes priority over `SRX_STRING` when both present.
+- All fields absent → `''`.
+
+#### 13 · `extractExchR — CQ-WW-CW` (3 tests)
+
+- Same `CQZONE` priority chain as CQ-WW-SSB.
+
+#### 14 · `extractExchR — IARU-HF` (6 tests)
+
+- `ITUZ` returned when present; whitespace trimmed.
+- `SRX_STRING` fallback accepts HQ abbreviations (e.g. `DARC`).
+- `ITUZ` takes priority over `SRX_STRING`; `SRX` is the tertiary fallback.
+
+#### 15 · `extractExchR — ARRL-DX` (6 tests)
+
+- `STATE` returned when present; whitespace trimmed.
+- `STATE` takes priority over `SRX_STRING`; `SRX` tertiary fallback.
+
+#### 16 · `extractExchR — GENERIC` (5 tests)
+
+- `SRX_STRING` returned; falls back to `SRX`; `SRX_STRING` has priority.
+- Unknown `contestId` behaves as GENERIC.
+
+#### 17 · `formatCabDate` (7 tests)
+
+- `YYYYMMDD` → `YYYY-MM-DD` (e.g. `20241026` → `2024-10-26`).
+- `null`, `undefined`, empty string → `'0000-00-00'` (safe sentinel).
+- Non-8-digit string returned as-is (pass-through for already-formatted dates).
+
+#### 18 · `buildQSOLine — structure` (9 tests)
+
+- Line starts with `QSO: ` and ends with ` 0` (transmitter ID).
+- CAB mode, date (`YYYY-MM-DD`), time (`HHMM`), my callsign, their callsign appear in the output.
+- Frequency right-aligned to 5 characters; zero freq → `    0`.
+
+#### 19 · `buildQSOLine — exchange handling` (6 tests)
+
+- Per-row `exchS` used when non-empty; header-level default fills in when `exchS = ''`.
+- `exchR` included in line; empty `exchR` produces padded empty field without crashing.
+- Exchange fields padded to `contest.exchW`: `4` for CQ WW, `6` for IARU.
+
+#### 20 · `buildQSOLine — RST defaults` (3 tests)
+
+- Empty `rstS` → `dfltRST(cabMode)` applied (`59` for PH, `599` for CW).
+- Explicit `rstS` value overrides the default.
+
+#### 21 · `htmlEsc` (9 tests)
+
+- `&`, `<`, `>`, `"` escaped to HTML entities.
+- Plain strings returned unchanged.
+- `null` and `undefined` → `''`; numbers coerced to string.
+- XSS payload `<script>alert(1)</script>` neutralised.
+
+#### 22 · `cabModeBadge` (6 tests)
+
+Maps Cabrillo mode to CSS badge class for the preview table.
+
+- `PH` → `badge-ssb`.
+- `CW` → `badge-cw`.
+- `FM`, `DG`, `RY`, `''` → `badge-digi`.
+
+#### 23 · `modeBadge` (9 tests)
+
+Maps ADIF mode to CSS badge class for the preview table.
+
+- `SSB`, `USB`, `LSB`, `AM` → `badge-ssb`.
+- `CW` → `badge-cw`.
+- `FM` → `badge-fm`.
+- `FT8`, `RTTY`, `''` → `badge-digi`.
+
+#### 24 · `CONTESTS — structure` (7 tests)
+
+- Array contains exactly 5 entries.
+- Each entry has required fields: `id`, `name`, `exchSentLbl`, `exchRcvdLbl`, `exchRcvdField`, `exchW > 0`.
+- `exchRcvdField` correct per contest: `CQ-WW-SSB`/`CQ-WW-CW` → `CQZONE`, `IARU-HF` → `ITUZ`, `ARRL-DX` → `STATE`, `GENERIC` → `SRX_STRING`.
+- Each label has both `sl` and `en` sub-keys.
+
+#### 25 · `I18N` (3 tests)
+
+- All SL keys present in EN and vice versa (no orphaned translations).
+- Required UI keys verified for both languages (drop zone, header panel, export button, stat chips, toast messages).
+
+---
+
 ## `edi-crosscheck.test.js` — 56 testov · 8 skupin
 
 Pokriva čisto logiko `edi-crosscheck.html`: odstranjevanje pripon, razdalja urejanja, razčlenjevanje EDI in vse algoritme crosschecka, vključno z nastavljivimi pragovi in predlogi za manjkajoče lokatorje.
@@ -1515,6 +1695,155 @@ Replicira logiko filtriranja datumskega obsega v izolaciji:
 - Razred 4 (`5 000–10 000 km`): qrb 5 000 in 9 999.
 - Razred 5 (`≥ 10 000 km`): qrb 10 000 in 15 000.
 - `qrb === 0` ne spade v noben razred (pomeni neznano razdaljo).
+
+---
+
+## `adif2cab.test.js` — 153 testov · 25 skupin
+
+Pokriva čisto logiko `adif2cab.html`: preslikavo načinov Cabrillo, privzete RST, pretvorbo frekvence, razčlenjevanje ADIF, ekstrakcijo izmenjave per tekmovanje, formatiranje vrstic QSO, XSS ubežanje, pomočnike za značke, strukturo polja CONTESTS in celovitost i18n ključev.
+
+### Kako testi delujejo
+
+`adif2cab.html` se izvede znotraj konteksta `node:vm` z enakim nadomestkom DOM na osnovi Proxy kot ostala HTML orodja. Izvleče se le blok `<script>`. Do čistih funkcij se dostopa neposredno kot do lastnosti konteksta.
+
+Trije injicirani pomočniki omogočajo dostop do stanja modulne ravni (`const`/`let`):
+- `_getContests()` — vrne polje `CONTESTS`
+- `_getLangKeys(lang)` — seznam vseh i18n ključev za podan jezik
+- `_getI18n(lang, key)` — prebere vrednost iz i18n objekta `S`
+
+Lokalni pomočnik `adif()` gradi testne nize ADIF s pravilnim kodiranjem `<OZNAKA:dolžina>vrednost`. Pomočnik `makeQso()` gradi minimalni objekt QSO s smiselnimi privzetimi vrednostmi.
+
+### Skupine testov
+
+#### 1 · `modeToCAB — phone modes → PH` (5 testov)
+
+- `SSB`, `USB`, `LSB`, `AM` → `PH`.
+- Male črke `ssb` normalizirane → `PH`.
+
+#### 2 · `modeToCAB — CW → CW` (2 testa)
+
+- `CW` (velike in male) → `CW`.
+
+#### 3 · `modeToCAB — FM-based voice → FM` (5 testov)
+
+Cabrillo v3 specifikacija določa `FM` kot ločeno vrednost načina (ne `PH`).
+
+- `FM`, `C4FM`, `DSTAR`, `DMR`, `DIGITALVOICE` → `FM`.
+
+#### 4 · `modeToCAB — RTTY → RY` (2 testa)
+
+Cabrillo v3 specifikacija določa `RY` za RTTY (ne splošnega `DG`).
+
+- `RTTY` (velike in male) → `RY`.
+
+#### 5 · `modeToCAB — digital modes → DG` (8 testov)
+
+- `FT8`, `FT4`, `PSK31`, `JT65`, `JS8`, `WSPR` → `DG`.
+- Prazen niz in `null` → `DG` (varni splošni primer).
+
+#### 6 · `dfltRST` (7 testov)
+
+- `PH` in `FM` → `'59'` (dvomestni RST za foničke načine).
+- `CW`, `DG`, `RY` → `'599'` (tromestni RST; RTTY po konvenciji tromestni).
+- Neznan način in prazen niz → `'59'` (privzeto za foniko).
+
+#### 7 · `freqToKHz — pretvorba polja FREQ` (6 testov)
+
+- `14.210 MHz` → `14210`, `144.300 MHz` → `144300`, `432.200 MHz` → `432200`.
+- Vrednost polkHz pravilno zaokrožena.
+- `FREQ '0'` in `FREQ ''` padeta na `BAND_KHZ`.
+
+#### 8 · `freqToKHz — rezervna vrednost BAND_KHZ` (8 testov)
+
+- `20m` → 14200, `2m` → 144300, `40m` → 7100, `70cm` → 432200, `23cm` → 1296100.
+- Neznani pas → `0`. Brez polja `fields` deluje brez napake.
+
+#### 9 · `parseADIF — osnovna ekstrakcija` (8 testov)
+
+- Minimalen QSO razčlenjen; `CALL` normaliziran v velike črke, `BAND` v male, `MODE` v velike.
+- `RST_SENT` → `rstS`, `RST_RCVD` → `rstR`; `src` nastavljen na ime datoteke.
+- Zapisi brez `CALL` tiho preskočeni; poljubna ADIF polja ohranjena v slovarju `fields`.
+
+#### 10 · `parseADIF — normalizacija datuma/časa` (7 testov)
+
+- `YYYYMMDD` shranjen nespremenjen; ISO `YYYY-MM-DD` brez pomišljajev.
+- Prikazni datum kot `DD.MM.YYYY`; čas `HHMMSS` okrajšan na `HHMM`, prikazan kot `HH:MM`.
+- Manjkajoči `QSO_DATE` ali `TIME_ON` → prazen niz.
+
+#### 11 · `parseADIF — večzapisni / robni primeri` (8 testov)
+
+- Datoteka z dvema QSO-jema razčlenjena pravilno. Datoteka brez `<EOH>` sprejeta.
+- Oznake neobčutljive na velikost; variant `<OZNAKA:dol:tip>` podprt.
+- Zaključki vrstic CRLF obdelani. `STATION_CALLSIGN` ohranjen v `fields`.
+- Prazna datoteka → nič QSO-jev. Ključi v `fields` so v velikih črkah.
+
+#### 12 · `extractExchR — CQ-WW-SSB` (6 testov)
+
+- `CQZONE` vrnjen ko je prisoten; beli prostor obrezan.
+- Rezervni vrstni red: `CQZONE` → `SRX_STRING` → `SRX` → `''`.
+
+#### 13 · `extractExchR — CQ-WW-CW` (3 testi)
+
+- Enak prednostni vrstni red `CQZONE` kot pri CQ-WW-SSB.
+
+#### 14 · `extractExchR — IARU-HF` (6 testov)
+
+- `ITUZ` vrnjen ko je prisoten; beli prostor obrezan.
+- `SRX_STRING` rezerva sprejme kratice HQ (npr. `DARC`). Vrstni red: `ITUZ` → `SRX_STRING` → `SRX`.
+
+#### 15 · `extractExchR — ARRL-DX` (6 testov)
+
+- `STATE` vrnjen ko je prisoten; beli prostor obrezan. Vrstni red: `STATE` → `SRX_STRING` → `SRX`.
+
+#### 16 · `extractExchR — GENERIC` (5 testov)
+
+- `SRX_STRING` ima prednost pred `SRX`. Neznan `contestId` se obnaša kot GENERIC.
+
+#### 17 · `formatCabDate` (7 testov)
+
+- `YYYYMMDD` → `YYYY-MM-DD`. `null`, `undefined`, prazen niz → `'0000-00-00'`.
+- Niz, ki ni 8-mestni, vrnjen nespremenjen.
+
+#### 18 · `buildQSOLine — struktura` (9 testov)
+
+- Vrstica se začne z `QSO: ` in konča z ` 0` (ID oddajnika).
+- Način CAB, datum, čas, moj klicni znak, klicni znak partnerja so v izhodu.
+- Frekvenca poravnana desno na 5 znakov; ničelna frekvenca → `    0`.
+
+#### 19 · `buildQSOLine — obdelava izmenjave` (6 testov)
+
+- Per-vrstica `exchS` se uporabi ko je neprazna; privzeta vrednost glave zapolni pri `exchS = ''`.
+- `exchR` vključen; prazna `exchR` ustvari zapolnjeno prazno polje brez napake.
+- Izmenjava zapolnjena na `contest.exchW`: `4` za CQ WW, `6` za IARU.
+
+#### 20 · `buildQSOLine — privzeti RST` (3 testi)
+
+- Prazna `rstS` → `dfltRST(cabMode)` se uporabi (`59` za PH, `599` za CW).
+- Eksplicitna vrednost `rstS` prepiše privzeto.
+
+#### 21 · `htmlEsc` (9 testov)
+
+- `&`, `<`, `>`, `"` ubežani v HTML entitete. Navadni nizi nespremenjeni.
+- `null` in `undefined` → `''`; števila pretvorjena v niz.
+- XSS koristna obremenitev nevtralizirana.
+
+#### 22 · `cabModeBadge` (6 testov)
+
+- `PH` → `badge-ssb`; `CW` → `badge-cw`; `FM`, `DG`, `RY`, `''` → `badge-digi`.
+
+#### 23 · `modeBadge` (9 testov)
+
+- `SSB`, `USB`, `LSB`, `AM` → `badge-ssb`; `CW` → `badge-cw`; `FM` → `badge-fm`; `FT8`, `RTTY`, `''` → `badge-digi`.
+
+#### 24 · `CONTESTS — struktura` (7 testov)
+
+- Polje vsebuje točno 5 vnosov; vsak ima zahtevana polja in `exchW > 0`.
+- `exchRcvdField` pravilen per tekmovanje: `CQZONE`, `ITUZ`, `STATE`, `SRX_STRING`.
+- Vsaka oznaka ima podključa `sl` in `en`.
+
+#### 25 · `I18N` (3 testi)
+
+- Vsi ključi SL prisotni v EN in obratno; zahtevani ključi vmesnika preverjeni v obeh jezikih.
 
 ---
 

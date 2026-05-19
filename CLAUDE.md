@@ -14,6 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `vhf-logger/vhf-logger.html` — real-time VHF/UHF/SHF contest logger; EDI export, live crosscheck hints
 - `adif-merge.html` — merge multiple ADIF files; dedup, filter, inline edit, ADIF+CSV export
 - `adif-stats.html` — ADIF log dashboard: band/mode/cont/country/time stats, DXCC per band, activity heatmap, band×hour matrix, QRB histogram, HTML export
+- `adif2cab.html` — ADIF → Cabrillo v3 converter; CQ WW SSB/CW, IARU HF, ARRL DX, Generic contests
 - `adif-qrz-filter.js` — Node.js CLI: filter ADIF to BURO-accepting stations via QRZ.com XML API
 - `build-baseline.js` — Node.js CLI: build `crosscheck-baseline.json` from OEVSV IARU R1 CSV exports
 
@@ -72,6 +73,39 @@ _idx, _key (call|date|time), _bandKey (call|date|time|band)
 - Variable shadowing risk inside heatmap helpers: `const t = ...` shadows global `t()`. Use `ratio` or any other name.
 
 **Tests:** `adif-stats.test.js` — 133 tests, 21 groups (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`).
+
+---
+
+## Architecture of adif2cab.html
+
+**Key functions:** `modeToCAB(mode)` → Cabrillo mode string; `dfltRST(cabMode)` → default RST string; `freqToKHz(q)` → integer kHz from `FREQ` field or `BAND_KHZ` fallback; `extractExchR(fields, contestId)` → received exchange string; `formatCabDate(dateRaw)` → `YYYY-MM-DD`; `buildQSOLine(q, contest, myCall, exchSentDefault)` → formatted `QSO:` record line.
+
+**QSO shape** (after `parseADIF` + enrichment):
+```
+call, date (YYYYMMDD), time (HHMM), dateDisp, timeDisp, band, mode,
+rstS, rstR, cabMode, freqKHz, exchR, exchS, src, fields (all ADIF tags uppercase)
+```
+
+**CONTESTS array entries:** `id`, `name`, `exchSentLbl {sl,en}`, `exchRcvdLbl {sl,en}`, `exchRcvdField` (primary ADIF lookup key), `exchW` (exchange column width for padding).
+
+**CAB mode mapping (`modeToCAB`):**
+- `SSB`, `USB`, `LSB`, `AM` → `PH`
+- `CW` → `CW`
+- `FM`, `C4FM`, `DSTAR`, `DMR`, `DIGITALVOICE` → `FM`
+- `RTTY` → `RY`
+- all others → `DG`
+
+**Default RST (`dfltRST`):** `CW`, `DG`, `RY` → `'599'`; all others → `'59'`.
+
+**Exchange extraction priority chain (`extractExchR`):** primary ADIF field (`CQZONE`/`ITUZ`/`STATE`/`SRX_STRING`) → `SRX_STRING` → `SRX` → `''`.
+
+**Key invariants:**
+- `exchS=''` on a QSO means use the header-level sent-exchange default; non-empty overrides per-row.
+- `buildFilename()` returns `CALL_contestid.cab`.
+- Header panel collapsible (open by default); all standard Cabrillo header fields exposed as inputs.
+- `BAND_KHZ` table maps band strings to kHz centre frequencies for when ADIF has no `FREQ` field.
+
+**Tests:** `adif2cab.test.js` — 153 tests, 25 groups (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×5, `formatCabDate`, `buildQSOLine` ×3, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` structure, `I18N`).
 
 ---
 

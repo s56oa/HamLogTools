@@ -980,7 +980,7 @@ dropArea.addEventListener('drop',e=>{
 document.getElementById('fileInput').addEventListener('change',e=>handleFiles(e.target.files));
 
 // Also allow drop on app area when loaded
-document.addEventListener('dragover',e=>{if(e.dataTransfer.types.includes('Files'))e.preventDefault();});
+document.addEventListener('dragover',e=>{if(Array.from(e.dataTransfer.types).includes('Files'))e.preventDefault();});
 document.addEventListener('drop',e=>{
   if(!e.dataTransfer.files.length) return;
   e.preventDefault();
