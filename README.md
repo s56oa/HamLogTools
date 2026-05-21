@@ -477,7 +477,7 @@ node --test --test-reporter=spec adif2cab.test.js
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 | `vhf-logger/vhf-logger.test.js` | 163 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
 | `adif-stats.test.js` | 133 | 21 (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`) |
-| `adif2cab.test.js` | 153 | 25 (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×5, `formatCabDate`, `buildQSOLine` ×3, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` structure, `I18N`) |
+| `adif2cab.test.js` | 156 | 25 (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×5, `formatCabDate`, `buildQSOLine` ×3, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` structure, `I18N`) |
 
 See [TESTING.md](TESTING.md) for full test documentation.
 
@@ -973,7 +973,7 @@ node --test --test-reporter=spec adif2cab.test.js
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 | `vhf-logger/vhf-logger.test.js` | 163 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
 | `adif-stats.test.js` | 133 | 21 (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`) |
-| `adif2cab.test.js` | 153 | 25 (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×5, `formatCabDate`, `buildQSOLine` ×3, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` struktura, `I18N`) |
+| `adif2cab.test.js` | 156 | 25 (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×5, `formatCabDate`, `buildQSOLine` ×3, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` struktura, `I18N`) |
 
 Celotna dokumentacija je v [TESTING.md](TESTING.md).
 

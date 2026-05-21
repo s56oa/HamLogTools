@@ -105,7 +105,7 @@ rstS, rstR, cabMode, freqKHz, exchR, exchS, src, fields (all ADIF tags uppercase
 - Header panel collapsible (open by default); all standard Cabrillo header fields exposed as inputs.
 - `BAND_KHZ` table maps band strings to kHz centre frequencies for when ADIF has no `FREQ` field.
 
-**Tests:** `adif2cab.test.js` — 153 tests, 25 groups (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×5, `formatCabDate`, `buildQSOLine` ×3, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` structure, `I18N`).
+**Tests:** `adif2cab.test.js` — 156 tests, 25 groups (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×5, `formatCabDate`, `buildQSOLine` ×3, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` structure, `I18N`).
 
 ---
 

@@ -16,7 +16,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 163 | 16 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
-| `adif2cab.test.js` | `adif2cab.html` | 153 | 25 |
+| `adif2cab.test.js` | `adif2cab.html` | 156 | 25 |
 
 The sections below document each test file in detail.
 
@@ -201,7 +201,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 163 | 16 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
-| `adif2cab.test.js` | `adif2cab.html` | 153 | 25 |
+| `adif2cab.test.js` | `adif2cab.html` | 156 | 25 |
 
 Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 
@@ -961,7 +961,7 @@ Replicates the date-range filtering logic in isolation:
 
 ---
 
-## `adif2cab.test.js` — 153 tests · 25 groups
+## `adif2cab.test.js` — 156 tests · 25 groups
 
 Covers the pure logic of `adif2cab.html`: Cabrillo mode mapping, RST defaults, frequency conversion, ADIF parsing, exchange extraction per contest, QSO line formatting, XSS escaping, badge helpers, CONTESTS array structure, and i18n key completeness.
 
@@ -1698,7 +1698,7 @@ Replicira logiko filtriranja datumskega obsega v izolaciji:
 
 ---
 
-## `adif2cab.test.js` — 153 testov · 25 skupin
+## `adif2cab.test.js` — 156 testov · 25 skupin
 
 Pokriva čisto logiko `adif2cab.html`: preslikavo načinov Cabrillo, privzete RST, pretvorbo frekvence, razčlenjevanje ADIF, ekstrakcijo izmenjave per tekmovanje, formatiranje vrstic QSO, XSS ubežanje, pomočnike za značke, strukturo polja CONTESTS in celovitost i18n ključev.
 
