@@ -16,7 +16,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 163 | 16 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
-| `adif2cab.test.js` | `adif2cab.html` | 156 | 25 |
+| `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
 
 The sections below document each test file in detail.
 
@@ -201,7 +201,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 163 | 16 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
-| `adif2cab.test.js` | `adif2cab.html` | 156 | 25 |
+| `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
 
 Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 
@@ -961,7 +961,7 @@ Replicates the date-range filtering logic in isolation:
 
 ---
 
-## `adif2cab.test.js` — 156 tests · 25 groups
+## `adif2cab.test.js` — 191 tests · 31 groups
 
 Covers the pure logic of `adif2cab.html`: Cabrillo mode mapping, RST defaults, frequency conversion, ADIF parsing, exchange extraction per contest, QSO line formatting, XSS escaping, badge helpers, CONTESTS array structure, and i18n key completeness.
 
@@ -1017,9 +1017,10 @@ Cabrillo v3 spec defines `RY` for RTTY (not the `DG` catch-all).
 - Half-kHz value rounded correctly (`14.0005` → `14001`).
 - `FREQ '0'` and `FREQ ''` (not `> 0`) fall back to `BAND_KHZ`.
 
-#### 8 · `freqToKHz — BAND_KHZ fallback` (8 tests)
+#### 8 · `freqToKHz — BAND_KHZ fallback` (10 tests)
 
 - `20m` → 14200, `2m` → 144300, `40m` → 7100, `70cm` → 432200, `23cm` → 1296100.
+- `6m` → 50200, `4m` → 70200.
 - Unknown band string → `0`.
 - No `fields` property falls back gracefully; no band → `0`.
 
@@ -1039,7 +1040,7 @@ Cabrillo v3 spec defines `RY` for RTTY (not the `DG` catch-all).
 - `HHMMSS` time truncated to `HHMM`; display time formatted as `HH:MM`.
 - Missing `QSO_DATE` or `TIME_ON` → empty string (no crash).
 
-#### 11 · `parseADIF — multi-record / edge cases` (8 tests)
+#### 11 · `parseADIF — multi-record / edge cases` (11 tests)
 
 - Two-QSO file parsed correctly.
 - File without `<EOH>` (headerless ADIF) accepted.
@@ -1048,6 +1049,7 @@ Cabrillo v3 spec defines `RY` for RTTY (not the `DG` catch-all).
 - `STATION_CALLSIGN` preserved in `fields` (used to auto-populate the header callsign).
 - Empty file returns zero QSOs.
 - `fields` dict keys are uppercase regardless of input case.
+- `STX` (WPX sent serial), `SRX` (received serial), and `SRX_STRING` preserved in `fields`.
 
 #### 12 · `extractExchR — CQ-WW-SSB` (6 tests)
 
@@ -1076,37 +1078,73 @@ Cabrillo v3 spec defines `RY` for RTTY (not the `DG` catch-all).
 - `SRX_STRING` returned; falls back to `SRX`; `SRX_STRING` has priority.
 - Unknown `contestId` behaves as GENERIC.
 
-#### 17 · `formatCabDate` (7 tests)
+#### 17 · `extractExchR — CQ-WW-RTTY` (5 tests)
+
+- Same `CQZONE` priority chain as CQ-WW-SSB/CW.
+- `CQZONE` takes priority over `SRX_STRING`; `SRX` tertiary fallback.
+
+#### 18 · `extractExchR — IARU-VHF` (7 tests)
+
+- `GRIDSQUARE` field returned and **uppercased** (ADIF stores mixed-case, Cabrillo expects uppercase).
+- Already-uppercase locator unchanged.
+- Whitespace trimmed before uppercasing.
+- `SRX_STRING` and `SRX` fallbacks also uppercased.
+- `GRIDSQUARE` takes priority over `SRX_STRING`.
+
+#### 19 · `extractExchR — CQ-WPX-SSB` (4 tests)
+
+- `SRX_STRING` returned; falls back to `SRX`; `SRX_STRING` has priority.
+- All absent → `''`.
+
+#### 20 · `extractExchR — CQ-WPX-CW` (3 tests)
+
+- Same `SRX_STRING`/`SRX` priority chain as CQ-WPX-SSB.
+
+#### 21 · `formatCabDate` (7 tests)
 
 - `YYYYMMDD` → `YYYY-MM-DD` (e.g. `20241026` → `2024-10-26`).
 - `null`, `undefined`, empty string → `'0000-00-00'` (safe sentinel).
 - Non-8-digit string returned as-is (pass-through for already-formatted dates).
 
-#### 18 · `buildQSOLine — structure` (9 tests)
+#### 22 · `buildQSOLine — structure` (12 tests)
 
 - Line starts with `QSO: ` and ends with ` 0` (transmitter ID).
 - CAB mode, date (`YYYY-MM-DD`), time (`HHMM`), my callsign, their callsign appear in the output.
-- Frequency right-aligned to 5 characters; zero freq → `    0`.
+- HF frequency right-aligned to 5 chars (`7100` → `' 7100'`); zero freq → `'    0'`.
+- VHF/UHF frequencies use 7-char field: `144300` → `' 144300'`, `432200` → `' 432200'`, `1296100` → `'1296100'`.
 
-#### 19 · `buildQSOLine — exchange handling` (6 tests)
+#### 23 · `buildQSOLine — exchange handling` (6 tests)
 
 - Per-row `exchS` used when non-empty; header-level default fills in when `exchS = ''`.
 - `exchR` included in line; empty `exchR` produces padded empty field without crashing.
 - Exchange fields padded to `contest.exchW`: `4` for CQ WW, `6` for IARU.
 
-#### 20 · `buildQSOLine — RST defaults` (3 tests)
+#### 24 · `buildQSOLine — RST defaults` (3 tests)
 
 - Empty `rstS` → `dfltRST(cabMode)` applied (`59` for PH, `599` for CW).
 - Explicit `rstS` value overrides the default.
 
-#### 21 · `htmlEsc` (9 tests)
+#### 25 · `buildQSOLine — IARU-VHF locator exchange` (4 tests)
+
+- 6-char locator (`JN65AR`) fits `exchW:6` exactly.
+- 4-char locator (`JN65`) padded to 6 with trailing spaces.
+- Sent locator (`exchS`) included in the line.
+- Empty `exchR` produces padded empty field without crashing.
+
+#### 26 · `buildQSOLine — CQ WPX per-QSO serial` (3 tests)
+
+- Per-QSO `exchS` serial number used when set (e.g. `'001'`).
+- Serial padded to `exchW:6`.
+- Falls back to the header default when `exchS` is empty.
+
+#### 27 · `htmlEsc` (9 tests)
 
 - `&`, `<`, `>`, `"` escaped to HTML entities.
 - Plain strings returned unchanged.
 - `null` and `undefined` → `''`; numbers coerced to string.
 - XSS payload `<script>alert(1)</script>` neutralised.
 
-#### 22 · `cabModeBadge` (6 tests)
+#### 28 · `cabModeBadge` (6 tests)
 
 Maps Cabrillo mode to CSS badge class for the preview table.
 
@@ -1114,7 +1152,7 @@ Maps Cabrillo mode to CSS badge class for the preview table.
 - `CW` → `badge-cw`.
 - `FM`, `DG`, `RY`, `''` → `badge-digi`.
 
-#### 23 · `modeBadge` (9 tests)
+#### 29 · `modeBadge` (9 tests)
 
 Maps ADIF mode to CSS badge class for the preview table.
 
@@ -1123,17 +1161,18 @@ Maps ADIF mode to CSS badge class for the preview table.
 - `FM` → `badge-fm`.
 - `FT8`, `RTTY`, `''` → `badge-digi`.
 
-#### 24 · `CONTESTS — structure` (7 tests)
+#### 30 · `CONTESTS — structure` (11 tests)
 
-- Array contains exactly 5 entries.
+- Array contains exactly 9 entries.
 - Each entry has required fields: `id`, `name`, `exchSentLbl`, `exchRcvdLbl`, `exchRcvdField`, `exchW > 0`.
-- `exchRcvdField` correct per contest: `CQ-WW-SSB`/`CQ-WW-CW` → `CQZONE`, `IARU-HF` → `ITUZ`, `ARRL-DX` → `STATE`, `GENERIC` → `SRX_STRING`.
+- `exchRcvdField` correct per contest: `CQ-WW-SSB`/`CQ-WW-CW`/`CQ-WW-RTTY` → `CQZONE`, `IARU-HF` → `ITUZ`, `IARU-VHF` → `GRIDSQUARE`, `ARRL-DX` → `STATE`, `CQ-WPX-SSB`/`CQ-WPX-CW`/`GENERIC` → `SRX_STRING`.
 - Each label has both `sl` and `en` sub-keys.
 
-#### 25 · `I18N` (3 tests)
+#### 31 · `I18N` (4 tests)
 
 - All SL keys present in EN and vice versa (no orphaned translations).
 - Required UI keys verified for both languages (drop zone, header panel, export button, stat chips, toast messages).
+- SL and EN `dropTitle` values differ (sanity check that translations are distinct).
 
 ---
 
@@ -1698,7 +1737,7 @@ Replicira logiko filtriranja datumskega obsega v izolaciji:
 
 ---
 
-## `adif2cab.test.js` — 156 testov · 25 skupin
+## `adif2cab.test.js` — 191 testov · 31 skupin
 
 Pokriva čisto logiko `adif2cab.html`: preslikavo načinov Cabrillo, privzete RST, pretvorbo frekvence, razčlenjevanje ADIF, ekstrakcijo izmenjave per tekmovanje, formatiranje vrstic QSO, XSS ubežanje, pomočnike za značke, strukturo polja CONTESTS in celovitost i18n ključev.
 
@@ -1753,9 +1792,10 @@ Cabrillo v3 specifikacija določa `RY` za RTTY (ne splošnega `DG`).
 - Vrednost polkHz pravilno zaokrožena.
 - `FREQ '0'` in `FREQ ''` padeta na `BAND_KHZ`.
 
-#### 8 · `freqToKHz — rezervna vrednost BAND_KHZ` (8 testov)
+#### 8 · `freqToKHz — rezervna vrednost BAND_KHZ` (10 testov)
 
 - `20m` → 14200, `2m` → 144300, `40m` → 7100, `70cm` → 432200, `23cm` → 1296100.
+- `6m` → 50200, `4m` → 70200.
 - Neznani pas → `0`. Brez polja `fields` deluje brez napake.
 
 #### 9 · `parseADIF — osnovna ekstrakcija` (8 testov)
@@ -1770,12 +1810,13 @@ Cabrillo v3 specifikacija določa `RY` za RTTY (ne splošnega `DG`).
 - Prikazni datum kot `DD.MM.YYYY`; čas `HHMMSS` okrajšan na `HHMM`, prikazan kot `HH:MM`.
 - Manjkajoči `QSO_DATE` ali `TIME_ON` → prazen niz.
 
-#### 11 · `parseADIF — večzapisni / robni primeri` (8 testov)
+#### 11 · `parseADIF — večzapisni / robni primeri` (11 testov)
 
 - Datoteka z dvema QSO-jema razčlenjena pravilno. Datoteka brez `<EOH>` sprejeta.
 - Oznake neobčutljive na velikost; variant `<OZNAKA:dol:tip>` podprt.
 - Zaključki vrstic CRLF obdelani. `STATION_CALLSIGN` ohranjen v `fields`.
 - Prazna datoteka → nič QSO-jev. Ključi v `fields` so v velikih črkah.
+- `STX` (oddana serijska številka WPX), `SRX` (sprejeta) in `SRX_STRING` ohranjeni v `fields`.
 
 #### 12 · `extractExchR — CQ-WW-SSB` (6 testov)
 
@@ -1799,51 +1840,88 @@ Cabrillo v3 specifikacija določa `RY` za RTTY (ne splošnega `DG`).
 
 - `SRX_STRING` ima prednost pred `SRX`. Neznan `contestId` se obnaša kot GENERIC.
 
-#### 17 · `formatCabDate` (7 testov)
+#### 17 · `extractExchR — CQ-WW-RTTY` (5 testov)
+
+- Enak prednostni vrstni red `CQZONE` kot pri CQ-WW-SSB/CW.
+- Rezervni vrstni red: `CQZONE` → `SRX_STRING` → `SRX` → `''`.
+
+#### 18 · `extractExchR — IARU-VHF` (7 testov)
+
+- `GRIDSQUARE` vrnjen in **pretvorjen v velike črke** (ADIF shranjuje mešano, Cabrillo pričakuje velike).
+- Že obstoječe velike črke ostanejo nespremenjene.
+- Beli prostor obrezan pred pretvorbo.
+- Rezervni vrednosti `SRX_STRING` in `SRX` prav tako v velikih črkah.
+- `GRIDSQUARE` ima prednost pred `SRX_STRING`.
+
+#### 19 · `extractExchR — CQ-WPX-SSB` (4 testi)
+
+- `SRX_STRING` vrnjen; rezerva `SRX`; `SRX_STRING` ima prednost.
+- Vse odsotno → `''`.
+
+#### 20 · `extractExchR — CQ-WPX-CW` (3 testi)
+
+- Enak prednostni vrstni red `SRX_STRING`/`SRX` kot pri CQ-WPX-SSB.
+
+#### 21 · `formatCabDate` (7 testov)
 
 - `YYYYMMDD` → `YYYY-MM-DD`. `null`, `undefined`, prazen niz → `'0000-00-00'`.
 - Niz, ki ni 8-mestni, vrnjen nespremenjen.
 
-#### 18 · `buildQSOLine — struktura` (9 testov)
+#### 22 · `buildQSOLine — struktura` (12 testov)
 
 - Vrstica se začne z `QSO: ` in konča z ` 0` (ID oddajnika).
 - Način CAB, datum, čas, moj klicni znak, klicni znak partnerja so v izhodu.
-- Frekvenca poravnana desno na 5 znakov; ničelna frekvenca → `    0`.
+- HF frekvenca poravnana desno na 5 znakov (`7100` → `' 7100'`); ničelna → `'    0'`.
+- VHF/UHF frekvence 7-mestno polje: `144300` → `' 144300'`, `432200` → `' 432200'`, `1296100` → `'1296100'`.
 
-#### 19 · `buildQSOLine — obdelava izmenjave` (6 testov)
+#### 23 · `buildQSOLine — obdelava izmenjave` (6 testov)
 
 - Per-vrstica `exchS` se uporabi ko je neprazna; privzeta vrednost glave zapolni pri `exchS = ''`.
 - `exchR` vključen; prazna `exchR` ustvari zapolnjeno prazno polje brez napake.
 - Izmenjava zapolnjena na `contest.exchW`: `4` za CQ WW, `6` za IARU.
 
-#### 20 · `buildQSOLine — privzeti RST` (3 testi)
+#### 24 · `buildQSOLine — privzeti RST` (3 testi)
 
 - Prazna `rstS` → `dfltRST(cabMode)` se uporabi (`59` za PH, `599` za CW).
 - Eksplicitna vrednost `rstS` prepiše privzeto.
 
-#### 21 · `htmlEsc` (9 testov)
+#### 25 · `buildQSOLine — izmenjava lokatorja IARU-VHF` (4 testi)
+
+- 6-mestni lokator (`JN65AR`) se natanko ujema z `exchW:6`.
+- 4-mestni lokator (`JN65`) zapolnjen na 6 z repi presledkov.
+- Oddani lokator (`exchS`) vključen v vrstico.
+- Prazna `exchR` ustvari zapolnjeno prazno polje brez napake.
+
+#### 26 · `buildQSOLine — per-QSO serijska številka CQ WPX` (3 testi)
+
+- Per-QSO `exchS` serijska številka se uporabi ko je nastavljena (npr. `'001'`).
+- Serijska številka zapolnjena na `exchW:6`.
+- Pade na privzeto glave ko je `exchS` prazna.
+
+#### 27 · `htmlEsc` (9 testov)
 
 - `&`, `<`, `>`, `"` ubežani v HTML entitete. Navadni nizi nespremenjeni.
 - `null` in `undefined` → `''`; števila pretvorjena v niz.
 - XSS koristna obremenitev nevtralizirana.
 
-#### 22 · `cabModeBadge` (6 testov)
+#### 28 · `cabModeBadge` (6 testov)
 
 - `PH` → `badge-ssb`; `CW` → `badge-cw`; `FM`, `DG`, `RY`, `''` → `badge-digi`.
 
-#### 23 · `modeBadge` (9 testov)
+#### 29 · `modeBadge` (9 testov)
 
 - `SSB`, `USB`, `LSB`, `AM` → `badge-ssb`; `CW` → `badge-cw`; `FM` → `badge-fm`; `FT8`, `RTTY`, `''` → `badge-digi`.
 
-#### 24 · `CONTESTS — struktura` (7 testov)
+#### 30 · `CONTESTS — struktura` (11 testov)
 
-- Polje vsebuje točno 5 vnosov; vsak ima zahtevana polja in `exchW > 0`.
-- `exchRcvdField` pravilen per tekmovanje: `CQZONE`, `ITUZ`, `STATE`, `SRX_STRING`.
+- Polje vsebuje točno 9 vnosov; vsak ima zahtevana polja in `exchW > 0`.
+- `exchRcvdField` pravilen per tekmovanje: `CQ-WW-SSB`/`CQ-WW-CW`/`CQ-WW-RTTY` → `CQZONE`, `IARU-HF` → `ITUZ`, `IARU-VHF` → `GRIDSQUARE`, `ARRL-DX` → `STATE`, `CQ-WPX-SSB`/`CQ-WPX-CW`/`GENERIC` → `SRX_STRING`.
 - Vsaka oznaka ima podključa `sl` in `en`.
 
-#### 25 · `I18N` (3 testi)
+#### 31 · `I18N` (4 testi)
 
 - Vsi ključi SL prisotni v EN in obratno; zahtevani ključi vmesnika preverjeni v obeh jezikih.
+- Vrednosti `dropTitle` v SL in EN sta različni (preverba, da so prevodi dejansko različni).
 
 ---
 

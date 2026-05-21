@@ -189,6 +189,8 @@ describe('freqToKHz — BAND_KHZ fallback', () => {
   it('unknown band → 0',     () => assert.equal(freqToKHz({ fields:{}, band:'999m' }), 0));
   it('no fields → 0',        () => assert.equal(freqToKHz({ band:'20m' }),              14200));
   it('no fields, no band → 0', () => assert.equal(freqToKHz({ band:'' }), 0));
+  it('band "6m"  → 50200',  () => assert.equal(freqToKHz({ fields:{}, band:'6m'   }), 50200));
+  it('band "4m"  → 70200',  () => assert.equal(freqToKHz({ fields:{}, band:'4m'   }), 70200));
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -329,6 +331,21 @@ describe('parseADIF — multi-record / edge cases', () => {
     assert.ok('QSO_DATE' in q.fields);
     assert.ok('TIME_ON'  in q.fields);
   });
+
+  it('STX field preserved in fields (WPX sent serial)', () => {
+    const q = parseADIF(adif({ CALL:'G3ABC', QSO_DATE:'20241026', TIME_ON:'1200', BAND:'20m', MODE:'SSB', STX:'042' }), 'f.adi')[0];
+    assert.equal(q.fields.STX, '042');
+  });
+
+  it('SRX field preserved in fields (WPX received serial)', () => {
+    const q = parseADIF(adif({ CALL:'G3ABC', QSO_DATE:'20241026', TIME_ON:'1200', BAND:'20m', MODE:'SSB', SRX:'137' }), 'f.adi')[0];
+    assert.equal(q.fields.SRX, '137');
+  });
+
+  it('SRX_STRING field preserved in fields', () => {
+    const q = parseADIF(adif({ CALL:'G3ABC', QSO_DATE:'20241026', TIME_ON:'1200', BAND:'20m', MODE:'SSB', SRX_STRING:'OE5' }), 'f.adi')[0];
+    assert.equal(q.fields.SRX_STRING, 'OE5');
+  });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -433,6 +450,83 @@ describe('extractExchR — GENERIC', () => {
 
   it('unknown contestId behaves as GENERIC', () =>
     assert.equal(extractExchR({ SRX_STRING:'XYZ' }, 'MY-CONTEST'), 'XYZ'));
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  extractExchR — CQ-WW-RTTY (CQZONE field, same as SSB/CW)
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('extractExchR — CQ-WW-RTTY', () => {
+  it('CQZONE field → returned', () =>
+    assert.equal(extractExchR({ CQZONE:'14' }, 'CQ-WW-RTTY'), '14'));
+
+  it('SRX_STRING fallback when CQZONE absent', () =>
+    assert.equal(extractExchR({ SRX_STRING:'14' }, 'CQ-WW-RTTY'), '14'));
+
+  it('SRX fallback when CQZONE and SRX_STRING absent', () =>
+    assert.equal(extractExchR({ SRX:'14' }, 'CQ-WW-RTTY'), '14'));
+
+  it('CQZONE takes priority over SRX_STRING', () =>
+    assert.equal(extractExchR({ CQZONE:'14', SRX_STRING:'99' }, 'CQ-WW-RTTY'), '14'));
+
+  it('all empty → empty string', () =>
+    assert.equal(extractExchR({}, 'CQ-WW-RTTY'), ''));
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  extractExchR — IARU-VHF (GRIDSQUARE field)
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('extractExchR — IARU-VHF', () => {
+  it('GRIDSQUARE field → returned uppercase', () =>
+    assert.equal(extractExchR({ GRIDSQUARE:'JN65ar' }, 'IARU-VHF'), 'JN65AR'));
+
+  it('already uppercase stays uppercase', () =>
+    assert.equal(extractExchR({ GRIDSQUARE:'JN76AR' }, 'IARU-VHF'), 'JN76AR'));
+
+  it('trims whitespace and uppercases', () =>
+    assert.equal(extractExchR({ GRIDSQUARE:' JN76 ' }, 'IARU-VHF'), 'JN76'));
+
+  it('SRX_STRING fallback uppercased', () =>
+    assert.equal(extractExchR({ SRX_STRING:'jn65ar' }, 'IARU-VHF'), 'JN65AR'));
+
+  it('SRX fallback uppercased', () =>
+    assert.equal(extractExchR({ SRX:'jn65' }, 'IARU-VHF'), 'JN65'));
+
+  it('GRIDSQUARE takes priority over SRX_STRING', () =>
+    assert.equal(extractExchR({ GRIDSQUARE:'JN65ar', SRX_STRING:'JN76' }, 'IARU-VHF'), 'JN65AR'));
+
+  it('all empty → empty string', () =>
+    assert.equal(extractExchR({}, 'IARU-VHF'), ''));
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  extractExchR — CQ-WPX-SSB / CQ-WPX-CW (serial number)
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('extractExchR — CQ-WPX-SSB', () => {
+  it('SRX_STRING → returned', () =>
+    assert.equal(extractExchR({ SRX_STRING:'001' }, 'CQ-WPX-SSB'), '001'));
+
+  it('SRX fallback when SRX_STRING absent', () =>
+    assert.equal(extractExchR({ SRX:'001' }, 'CQ-WPX-SSB'), '001'));
+
+  it('SRX_STRING takes priority over SRX', () =>
+    assert.equal(extractExchR({ SRX_STRING:'A', SRX:'B' }, 'CQ-WPX-SSB'), 'A'));
+
+  it('all empty → empty string', () =>
+    assert.equal(extractExchR({}, 'CQ-WPX-SSB'), ''));
+});
+
+describe('extractExchR — CQ-WPX-CW', () => {
+  it('SRX_STRING → returned', () =>
+    assert.equal(extractExchR({ SRX_STRING:'042' }, 'CQ-WPX-CW'), '042'));
+
+  it('SRX fallback when SRX_STRING absent', () =>
+    assert.equal(extractExchR({ SRX:'042' }, 'CQ-WPX-CW'), '042'));
+
+  it('all empty → empty string', () =>
+    assert.equal(extractExchR({}, 'CQ-WPX-CW'), ''));
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -550,6 +644,50 @@ describe('buildQSOLine — exchange handling', () => {
   });
 });
 
+describe('buildQSOLine — IARU-VHF locator exchange', () => {
+  const IARU_VHF_CONTEST = { id:'IARU-VHF', exchW:6 };
+
+  it('6-char locator fits exchW:6 exactly', () => {
+    const line = buildQSOLine(makeQso({ exchR:'JN65AR' }), IARU_VHF_CONTEST, 'S56OA', 'JN76PB');
+    assert.ok(line.includes('JN65AR'), `got: ${line}`);
+  });
+
+  it('4-char locator padded to 6', () => {
+    const line = buildQSOLine(makeQso({ exchR:'JN65' }), IARU_VHF_CONTEST, 'S56OA', 'JN76PB');
+    assert.ok(line.includes('JN65  '), `got: ${line}`);
+  });
+
+  it('sent locator (exchS) included in line', () => {
+    const line = buildQSOLine(makeQso({ exchS:'JN76PB', exchR:'JN65AR' }), IARU_VHF_CONTEST, 'S56OA', '');
+    assert.ok(line.includes('JN76PB'), `got: ${line}`);
+  });
+
+  it('empty exchR → padded empty field, no crash', () => {
+    const line = buildQSOLine(makeQso({ exchR:'' }), IARU_VHF_CONTEST, 'S56OA', 'JN76PB');
+    assert.ok(line.endsWith(' 0'), `got: ${line}`);
+  });
+});
+
+describe('buildQSOLine — CQ WPX per-QSO serial', () => {
+  const WPX_CONTEST = { id:'CQ-WPX-SSB', exchW:6 };
+
+  it('per-QSO exchS serial used when set', () => {
+    const line = buildQSOLine(makeQso({ exchS:'001', exchR:'042' }), WPX_CONTEST, 'S56OA', '');
+    assert.ok(line.includes('001'), `got: ${line}`);
+    assert.ok(line.includes('042'), `got: ${line}`);
+  });
+
+  it('serial pads to exchW:6', () => {
+    const line = buildQSOLine(makeQso({ exchS:'7', exchR:'42' }), WPX_CONTEST, 'S56OA', '');
+    assert.ok(line.includes('7     '), `exchS not padded to 6: ${line}`);
+  });
+
+  it('falls back to header default when exchS empty', () => {
+    const line = buildQSOLine(makeQso({ exchS:'' }), WPX_CONTEST, 'S56OA', '001');
+    assert.ok(line.includes('001'), `got: ${line}`);
+  });
+});
+
 describe('buildQSOLine — RST defaults', () => {
   it('empty rstS → dfltRST(cabMode) applied', () => {
     const line = buildQSOLine(makeQso({ rstS:'', cabMode:'PH' }), CQ_WW_CONTEST, 'S56OA', '15');
@@ -621,8 +759,8 @@ describe('modeBadge', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('CONTESTS — structure', () => {
-  it('has exactly 5 entries', () => {
-    assert.equal(_getContests().length, 5);
+  it('has exactly 9 entries', () => {
+    assert.equal(_getContests().length, 9);
   });
 
   it('each entry has required fields', () => {
@@ -658,6 +796,26 @@ describe('CONTESTS — structure', () => {
 
   it('GENERIC uses SRX_STRING field', () => {
     const c = _getContests().find(x => x.id==='GENERIC');
+    assert.equal(c.exchRcvdField, 'SRX_STRING');
+  });
+
+  it('CQ-WW-RTTY uses CQZONE field', () => {
+    const c = _getContests().find(x => x.id==='CQ-WW-RTTY');
+    assert.equal(c.exchRcvdField, 'CQZONE');
+  });
+
+  it('IARU-VHF uses GRIDSQUARE field', () => {
+    const c = _getContests().find(x => x.id==='IARU-VHF');
+    assert.equal(c.exchRcvdField, 'GRIDSQUARE');
+  });
+
+  it('CQ-WPX-SSB uses SRX_STRING field', () => {
+    const c = _getContests().find(x => x.id==='CQ-WPX-SSB');
+    assert.equal(c.exchRcvdField, 'SRX_STRING');
+  });
+
+  it('CQ-WPX-CW uses SRX_STRING field', () => {
+    const c = _getContests().find(x => x.id==='CQ-WPX-CW');
     assert.equal(c.exchRcvdField, 'SRX_STRING');
   });
 

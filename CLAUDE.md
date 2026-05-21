@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `vhf-logger/vhf-logger.html` — real-time VHF/UHF/SHF contest logger; EDI export, live crosscheck hints
 - `adif-merge.html` — merge multiple ADIF files; dedup, filter, inline edit, ADIF+CSV export
 - `adif-stats.html` — ADIF log dashboard: band/mode/cont/country/time stats, DXCC per band, activity heatmap, band×hour matrix, QRB histogram, HTML export
-- `adif2cab.html` — ADIF → Cabrillo v3 converter; CQ WW SSB/CW, IARU HF, ARRL DX, Generic contests
+- `adif2cab.html` — ADIF → Cabrillo v3 converter; CQ WW SSB/CW/RTTY, IARU HF, IARU VHF, CQ WPX SSB/CW, ARRL DX, Generic contests
 - `adif-qrz-filter.js` — Node.js CLI: filter ADIF to BURO-accepting stations via QRZ.com XML API
 - `build-baseline.js` — Node.js CLI: build `crosscheck-baseline.json` from OEVSV IARU R1 CSV exports
 
@@ -97,7 +97,7 @@ rstS, rstR, cabMode, freqKHz, exchR, exchS, src, fields (all ADIF tags uppercase
 
 **Default RST (`dfltRST`):** `CW`, `DG`, `RY` → `'599'`; all others → `'59'`.
 
-**Exchange extraction priority chain (`extractExchR`):** primary ADIF field (`CQZONE`/`ITUZ`/`STATE`/`SRX_STRING`) → `SRX_STRING` → `SRX` → `''`.
+**Exchange extraction priority chain (`extractExchR`):** `CQZONE` (CQ WW SSB/CW/RTTY) · `ITUZ` (IARU HF) · `STATE` (ARRL DX) · `GRIDSQUARE` uppercased (IARU VHF) · `SRX_STRING`/`SRX` (WPX + GENERIC) → `''`.
 
 **Key invariants:**
 - `exchS=''` on a QSO means use the header-level sent-exchange default; non-empty overrides per-row.
@@ -105,7 +105,7 @@ rstS, rstR, cabMode, freqKHz, exchR, exchS, src, fields (all ADIF tags uppercase
 - Header panel collapsible (open by default); all standard Cabrillo header fields exposed as inputs.
 - `BAND_KHZ` table maps band strings to kHz centre frequencies for when ADIF has no `FREQ` field.
 
-**Tests:** `adif2cab.test.js` — 156 tests, 25 groups (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×5, `formatCabDate`, `buildQSOLine` ×3, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` structure, `I18N`).
+**Tests:** `adif2cab.test.js` — 191 tests, 31 groups (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×9, `formatCabDate`, `buildQSOLine` ×5, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` structure, `I18N`).
 
 ---
 
