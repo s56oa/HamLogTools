@@ -489,6 +489,14 @@ See [Improvements.md](Improvements.md) for the full bug history and feature road
 
 ---
 
+## Reference
+
+| Document | Description |
+|---|---|
+| [VHF_Handbook_V10_03_final_EDI.pdf](documentation/VHF_Handbook_V10_03_final_EDI.pdf) | IARU VHF Handbook — REG1TEST EDI v1 format specification |
+
+---
+
 ## License
 
 MIT
@@ -982,6 +990,14 @@ Celotna dokumentacija je v [TESTING.md](TESTING.md).
 ## Načrtovane izboljšave
 
 Polna zgodovina hroščev in načrt prihodnjih funkcionalnosti je v [Improvements.md](Improvements.md).
+
+---
+
+## Referenca
+
+| Dokument | Opis |
+|---|---|
+| [VHF_Handbook_V10_03_final_EDI.pdf](documentation/VHF_Handbook_V10_03_final_EDI.pdf) | IARU VHF Handbook — specifikacija formata REG1TEST EDI v1 |
 
 ---
 
