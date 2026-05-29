@@ -15,6 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `adif-merge.html` — merge multiple ADIF files; dedup, filter, inline edit, ADIF+CSV export
 - `adif-stats.html` — ADIF log dashboard: band/mode/cont/country/time stats, DXCC per band, activity heatmap, band×hour matrix, QRB histogram, HTML export
 - `adif2cab.html` — ADIF → Cabrillo v3 converter; CQ WW SSB/CW/RTTY, IARU HF, IARU VHF, CQ WPX SSB/CW, ARRL DX, Generic contests
+- `edi-validator.html` — standalone EDI file validator: spec compliance, ZRS mandatory fields, QRB deviation check
 - `adif-qrz-filter.js` — Node.js CLI: filter ADIF to BURO-accepting stations via QRZ.com XML API
 - `build-baseline.js` — Node.js CLI: build `crosscheck-baseline.json` from OEVSV IARU R1 CSV exports
 
@@ -139,17 +140,21 @@ Mirrors output to `vhf-logger/crosscheck-baseline.json`. Rebuild quarterly or af
 
 ## Architecture of vhf-logger/vhf-logger.html
 
-**Key functions:** `isDupe(call, band, excludeId)` — `baseCall()` both sides, `excludeId` prevents false-dupe on edited QSO; `recalcDupes()` full rebuild per-band from `_current.qsos`; `buildEdi()` — REG1TEST v1 spec-compliant; `validateBackup()` structural checks with `_SAFE_ID=/^[a-z0-9]+$/` on `id` and `_id`.
+**Key functions:** `isDupe(call, band, excludeId)` — `baseCall()` both sides, `excludeId` prevents false-dupe on edited QSO; `recalcDupes()` full rebuild per-band from `_current.qsos`; `buildEdi()` — REG1TEST v1 spec-compliant; `validateBackup()` — security + data checks: `_SAFE_ID=/^[a-z0-9]+$/` on `id`/`_id`, 6-char Maidenhead regex on `myLoc`, non-empty `contest`.
 
-**Session shape:** `{ id, contest, myCall, myLoc, operator, club, sect, qthName, rCall, rName, rCity, rCoun, rEmail, created, modified, activeBand, bands:[{band,freq,power,antenna,txEq,rxEq,antH}], qsos:[] }`
+**Session shape:** `{ id, contest, myCall, myLoc, operator, club, sect, qthName, padr2, pExch, rCall, rName, rCity, rCoun, rEmail, rPoCo, rPhon, created, modified, activeBand, bands:[{band,freq,power,antenna,txEq,rxEq,antH}], qsos:[] }`
 
 **QSO shape:** `{ _id, band, mode, call, wwl, rstS, rstR, nrS, nrR, utcDate, utcTime, qrb, brg, dupe, xFlags }`
 
 **EDI QSO record — 15 semicolon-separated fields (col 0–14):**
 ```
-YYMMDD;HHMM;CALL;MODE_NUM;RST_S;NR_S;RST_R;NR_R;;WWL;QRB;;;DUPE_FLAG
+YYMMDD;HHMM;CALL;MODE_NUM;RST_S;NR_S;RST_R;NR_R;;WWL;QRB;;;;DUPE_FLAG
 ```
-Col 8 = exchange (empty), col 11–12 = reserved (empty), col 13 = `D` if dupe.
+Col 8 = exchange (empty), col 11–13 = reserved (empty), col 14 = `D` if dupe.
+
+**EDI header field order** (spec 15.3.1): `[REG1TEST;1]` → `TName` → `TDate` → `PCall` → `PWWLo` → `PExch` → `PAdr1` → `PAdr2` → `PSect` → `PBand` → `PClub` → `RName` → `RCall` → `RAdr1` → `RAdr2` → `RPoCo` → `RCity` → `RCoun` → `RPhon` → `RHBBS` → `MOpe1` → `MOpe2` → `STXEq` → `SPowe` → `SRXEq` → `SAnte` → `SAntH` → `CQSOs` → `CQSOP` → `CWWLs` → `CWWLB` → `CExcs` → `CExcB` → `CDXCs` → `CDXCB` → `CToSc` → `CODXC` → `[Remarks]` → `[QSORecords;N]` → `[END;S56OA HamLogTools VHF Logger]`
+
+**EDI export validation** (`_warnEdiMissing`): toast opozorilo (ne blokira izvoza) za prazne PSect, PClub, RName, RHBBS.
 
 **Key invariants:**
 - `recalcDupes()` called after every edit, delete, or import.
@@ -160,7 +165,29 @@ Col 8 = exchange (empty), col 11–12 = reserved (empty), col 13 = `D` if dupe.
 - `_manualTime = {date:'YYYYMMDD', time:'HHMM'} | null` — read by `logQso()`.
 - `_exportingSession` — set by `_showExportFor()` so `exportAllZip()` targets the correct session from home screen.
 
-**Tests:** `vhf-logger/vhf-logger.test.js` — 163 tests, 16 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`).
+**Tests:** `vhf-logger/vhf-logger.test.js` — 191 tests, 17 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`).
+
+---
+
+## Architecture of edi-validator.html
+
+**Key functions:** `validate(text)` → `{issues[], qsoCount}` — main entry point; `locToLatLon(loc)` → `[lat,lon]|null`; `haversine(a,b)` → km.
+
+**Issue shape:** `{severity: 'error'|'warn'|'info', lineIdx: number|null, code: string, msg: string}`
+
+**Phase-based parsing:** pre → header → remarks → qso → end. Blank lines checked per phase (error in header, info in remarks).
+
+**Validation checks:**
+- Structure: `[REG1TEST;1]` present, `[Remarks]` present, `[QSORecords;N]` present, `[END;...]` present (info if missing)
+- Header: non-spec keywords (`eNonSpecKw`), keyword order (`iKwOrder`), `TDate` format, `PWWLo` format/length, `PBand` known value
+- ZRS mandatory fields: `PSect`, `PClub`, `RName`, `RHBBS`, `SPowe` — warn if empty (`wFieldEmpty`)
+- QSO count declared vs actual (`eQsoCountMismatch`)
+- Per QSO: field count=15 (`eQsoFieldCount`), date YYMMDD (`eQsoDate`), time HHMM (`eQsoTime`), mode 1–9 (`eQsoMode`), dupe flag empty or `D` (`eQsoDupe`), WWL format (`wQsoWwlFormat`), QRB numeric (`wQsoQrbNum`), QRB deviation >10% vs haversine (`wQrbDeviation`; skipped for dupes, skipped if `PWWLo` is 4-char)
+- Line length ≤75 chars (`wLineTooLong`)
+
+**i18n:** `const S = {sl:{...}, en:{...}}` — accessed in tests via second `vm.runInContext('globalThis._S = S;', ctx)`.
+
+**Tests:** `edi-validator.test.js` — 77 tests, 17 groups (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `I18N`).
 
 ---
 

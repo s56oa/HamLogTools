@@ -67,6 +67,7 @@ vm.runInContext(`
   function _getManualTimeForTest(){ return _manualTime; }
   function _setManualTimeForTest(v){ _manualTime = v; }
   function _getBandColorsForTest(){ return BAND_COLORS; }
+  globalThis._S = S;
 `, ctx);
 
 const {
@@ -80,6 +81,7 @@ const {
   _getManualTimeForTest, _setManualTimeForTest,
   _getBandColorsForTest,
 } = ctx;
+const S = ctx._S;
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  baseCall
@@ -566,6 +568,125 @@ describe('buildEdi', () => {
     const out = buildEdi(session, '2m');
     assert.ok(out.includes('PBand=145 MHz'), `PBand should be 145 MHz; got: ${out.match(/PBand=.*/)?.[0]}`);
   });
+
+  // Header keyword correctness (spec 15.3.1 compliance)
+  it('TName contains contest name (not operator)', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('TName=IARU R1 VHF Contest'), `TName should hold contest name; got: ${out.match(/TName=.*/)?.[0]}`);
+  });
+
+  it('RName contains responsible operator name (not contest)', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('RName=Test User'), `RName should hold operator name; got: ${out.match(/RName=.*/)?.[0]}`);
+  });
+
+  it('no TCall keyword (non-spec)', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(!out.includes('TCall='), 'TCall must not appear — non-spec keyword');
+  });
+
+  it('no TLocator keyword (non-spec)', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(!out.includes('TLocator='), 'TLocator must not appear — non-spec keyword');
+  });
+
+  it('no RAZ= line (non-spec)', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(!out.includes('RAZ='), 'RAZ must not appear — non-spec keyword');
+  });
+
+  it('no RClub= line (non-spec)', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(!out.includes('RClub='), 'RClub must not appear — non-spec keyword');
+  });
+
+  it('PExch line present (empty when not set)', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('PExch=\r\n'), `PExch should be present; got: ${out.match(/PExch=.*/)?.[0]}`);
+  });
+
+  it('PExch populated when session.pExch is set', () => {
+    const s = { ...session, pExch: 'JN65VP' };
+    const out = buildEdi(s, '2m');
+    assert.ok(out.includes('PExch=JN65VP\r\n'), `PExch=JN65VP not found; got: ${out.match(/PExch=.*/)?.[0]}`);
+  });
+
+  it('PAdr1 from session.qthName', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('PAdr1=Krvavec\r\n'), `PAdr1 not found; got: ${out.match(/PAdr1=.*/)?.[0]}`);
+  });
+
+  it('PAdr2 line present (empty when not set)', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('PAdr2=\r\n'), `PAdr2 should be present; got: ${out.match(/PAdr2=.*/)?.[0]}`);
+  });
+
+  it('RCall from session.rCall', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('RCall=S56OA\r\n'), `RCall not found; got: ${out.match(/RCall=.*/)?.[0]}`);
+  });
+
+  it('RHBBS from session.rEmail', () => {
+    const s = { ...session, rEmail: 'test@s56oa.si' };
+    const out = buildEdi(s, '2m');
+    assert.ok(out.includes('RHBBS=test@s56oa.si\r\n'), `RHBBS not found; got: ${out.match(/RHBBS=.*/)?.[0]}`);
+  });
+
+  it('RPoCo line present (empty when not set)', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('RPoCo=\r\n'), `RPoCo should be present; got: ${out.match(/RPoCo=.*/)?.[0]}`);
+  });
+
+  it('RPoCo populated when session.rPoCo is set', () => {
+    const s = { ...session, rPoCo: '1000' };
+    const out = buildEdi(s, '2m');
+    assert.ok(out.includes('RPoCo=1000\r\n'), `RPoCo=1000 not found; got: ${out.match(/RPoCo=.*/)?.[0]}`);
+  });
+
+  it('RPhon line present (empty when not set)', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('RPhon=\r\n'), `RPhon should be present; got: ${out.match(/RPhon=.*/)?.[0]}`);
+  });
+
+  it('RPhon populated when session.rPhon is set', () => {
+    const s = { ...session, rPhon: '+386 1 234 5678' };
+    const out = buildEdi(s, '2m');
+    assert.ok(out.includes('RPhon=+386 1 234 5678\r\n'), `RPhon not found; got: ${out.match(/RPhon=.*/)?.[0]}`);
+  });
+
+  it('correct field order: TName before TDate before PCall', () => {
+    const out = buildEdi(session, '2m');
+    const iTName = out.indexOf('TName=');
+    const iTDate = out.indexOf('TDate=');
+    const iPCall = out.indexOf('PCall=');
+    assert.ok(iTName < iTDate, 'TName must precede TDate');
+    assert.ok(iTDate < iPCall, 'TDate must precede PCall');
+  });
+
+  it('correct field order: STXEq before SPowe before SRXEq', () => {
+    const out = buildEdi(session, '2m');
+    const iSTXEq = out.indexOf('STXEq=');
+    const iSPowe = out.indexOf('SPowe=');
+    const iSRXEq = out.indexOf('SRXEq=');
+    assert.ok(iSTXEq < iSPowe, 'STXEq must precede SPowe');
+    assert.ok(iSPowe < iSRXEq, 'SPowe must precede SRXEq');
+  });
+
+  it('no blank lines between CODXC and [Remarks]', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('CODXC=OE5VRL/P;JN78DG;180\r\n[Remarks]\r\n'), 'blank line found before [Remarks]');
+  });
+
+  it('no blank line between [Remarks] and [QSORecords;N]', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('[Remarks]\r\n[QSORecords;'), 'blank line found between [Remarks] and [QSORecords;N]');
+  });
+
+  it('[END;S56OA HamLogTools VHF Logger] at end of file', () => {
+    const out = buildEdi(session, '2m');
+    assert.ok(out.includes('[END;S56OA HamLogTools VHF Logger]\r\n'), '[END;...] not found');
+    assert.ok(out.endsWith('[END;S56OA HamLogTools VHF Logger]\r\n'), '[END;...] must be last line');
+  });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -920,6 +1041,22 @@ describe('backup', () => {
     assert.equal(validateBackup({ ...minBackup, sessions: [s] }), null);
   });
 
+  it('returns null when session missing myLoc', () => {
+    const { myLoc: _, ...s } = minSession;
+    assert.equal(validateBackup({ ...minBackup, sessions: [s] }), null);
+  });
+
+  it('returns null when session has invalid myLoc format', () =>
+    assert.equal(validateBackup({ ...minBackup, sessions: [{ ...minSession, myLoc: 'XX99' }] }), null));
+
+  it('returns null when session missing contest', () => {
+    const { contest: _, ...s } = minSession;
+    assert.equal(validateBackup({ ...minBackup, sessions: [s] }), null);
+  });
+
+  it('returns null when session has empty contest', () =>
+    assert.equal(validateBackup({ ...minBackup, sessions: [{ ...minSession, contest: '' }] }), null));
+
   it('returns null when session missing bands', () => {
     const { bands: _, ...s } = minSession;
     assert.equal(validateBackup({ ...minBackup, sessions: [s] }), null);
@@ -999,5 +1136,23 @@ describe('backup', () => {
   it('en.toastRestoreDone contains ${n} placeholder', () => {
     const s = _getI18nValueForTest('en','toastRestoreDone');
     assert.ok(s.includes('${n}'), `missing \${n} in: ${s}`);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  I18N — key symmetry
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('I18N', () => {
+  it('all sl keys also present in en', () => {
+    for (const k of Object.keys(S.sl))
+      assert.ok(k in S.en, `en missing key: ${k}`);
+  });
+  it('all en keys also present in sl', () => {
+    for (const k of Object.keys(S.en))
+      assert.ok(k in S.sl, `sl missing key: ${k}`);
+  });
+  it('sl and en have same number of keys', () => {
+    assert.equal(Object.keys(S.sl).length, Object.keys(S.en).length);
   });
 });

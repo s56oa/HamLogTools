@@ -14,9 +14,10 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 163 | 16 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 191 | 17 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
 | `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
+| `edi-validator.test.js` | `edi-validator.html` | 77 | 17 |
 
 The sections below document each test file in detail.
 
@@ -32,6 +33,7 @@ node --test --test-reporter=spec adif-qrz-filter.test.js
 node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 node --test --test-reporter=spec adif-stats.test.js
 node --test --test-reporter=spec adif2cab.test.js
+node --test --test-reporter=spec edi-validator.test.js
 ```
 
 Requires **Node.js v18 or later** (`node:test` was stabilised in v18;
@@ -199,9 +201,10 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 163 | 16 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 191 | 17 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
 | `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
+| `edi-validator.test.js` | `edi-validator.html` | 77 | 17 |
 
 Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 
@@ -217,6 +220,7 @@ node --test --test-reporter=spec adif-qrz-filter.test.js
 node --test --test-reporter=spec vhf-logger/vhf-logger.test.js
 node --test --test-reporter=spec adif-stats.test.js
 node --test --test-reporter=spec adif2cab.test.js
+node --test --test-reporter=spec edi-validator.test.js
 ```
 
 Zahteva **Node.js v18 ali novejši** (`node:test` je bil stabiliziran v v18;
@@ -613,7 +617,7 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 ---
 
-## `vhf-logger/vhf-logger.test.js` — 163 tests · 16 groups
+## `vhf-logger/vhf-logger.test.js` — 191 tests · 17 groups
 
 Covers the pure logic of `vhf-logger/vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, crosscheck lookup, EDI import parsing, ZIP generation, band colors, manual time state, and backup/restore validation.
 
@@ -694,21 +698,26 @@ Verifies full dupe-flag recalculation across a session.
 - Per-band isolation: same call on different bands both get `dupe=false`.
 - After `recalcDupes`, the `_current.qsos` array is mutated in place.
 
-#### 9 · `buildEdi` (25 tests)
+#### 9 · `buildEdi` (57 tests)
 Verifies REG1TEST EDI v1 output format.
 
 - File starts with `[REG1TEST;1]` header.
-- `TDate` uses full `YYYYMMDD` (header); QSO records use `YYMMDD`.
+- `TDate` uses full `YYYYMMDD;YYYYMMDD` (start;end); QSO records use `YYMMDD`.
 - `TName`, `PCall`, `PWWLo`, `PBand`, `PClub`, `PSect`, `MOpe1` headers present and correct.
 - Equipment headers: `SPowe`, `SAnte`, `STXEq`, `SRXEq`, `SAntH` populated from band config.
 - C* summary block: `CQSOs`, `CQSOP`, `CWWLs`, `CWWLB`, `CExcs`, `CExcB`, `CDXCs`, `CDXCB`, `CToSc`, `CODXC` — computed from non-dupe QSOs.
 - `[QSORecords N]` section present with correct count.
-- QSO line has exactly 14 semicolon-separated fields (col 0–13).
-- Dupe flag at col 13: `D` for duped QSO, empty for normal QSO.
+- QSO line has exactly 15 semicolon-separated fields (col 0–14).
+- Dupe flag at col 14: `D` for duped QSO, empty for normal QSO.
 - `nrS` / `nrR` zero-padded to 3 digits.
 - `WWL` in QSO line is 6 characters uppercase.
-- `PClub` header populated from `session.club`.
+- `PClub` header populated from `session.club`; empty when not set.
 - Modes: `SSB` → `1`, `CW` → `2`, `FM` → `6`.
+- Non-spec keywords absent: `TCall`, `TLocator`, `RAZ`, `RClub` not emitted.
+- Optional headers: `PExch`, `PAdr1`, `PAdr2`, `RCall`, `RHBBS`, `RPoCo`, `RPhon` — populated from session fields or emitted as empty lines.
+- Correct field order per spec 15.3.1: `TName` before `TDate` before `PCall`; `STXEq` before `SPowe` before `SRXEq`.
+- No blank lines between `CODXC` and `[Remarks]`; no blank line between `[Remarks]` and `[QSORecords;N]`.
+- `[END;S56OA HamLogTools VHF Logger]` footer present.
 
 #### 10 · `lookupCall` (6 tests)
 Verifies crosscheck lookup against the weighted+raw baseline DB.
@@ -764,17 +773,26 @@ Verifies manual UTC time override state and i18n keys for new features.
 - `sl.btnExportAll` and `en.btnExportAll` are non-empty strings.
 - `sl.btnImport` and `en.btnImport` are non-empty strings.
 
-#### 16 · `backup` (23 tests)
+#### 16 · `backup` (32 tests)
 Verifies `validateBackup()` structure checks and i18n strings for the backup/restore feature.
 
 - Valid backup object (correct `app`, `sessions` array, valid sessions and QSOs) returns the sessions array.
 - Empty sessions array accepted.
 - Returns `null` for wrong `app` field, missing `app`, `sessions` not an array, `null` or raw array input.
 - Session-level validation: returns `null` if `id` is missing or empty, `myCall` missing, `bands` or `qsos` not arrays.
+- Session `myLoc` must be a valid 6-character Maidenhead locator (`[A-R]{2}[0-9]{2}[A-X]{2}`, case-insensitive); returns `null` if absent or malformed.
+- Session `contest` must be a non-empty string; returns `null` if absent or empty string.
 - QSO-level validation: returns `null` if `_id`, `band`, or `call` missing from any QSO.
 - `sl.btnRestore` ≠ `en.btnRestore` (distinct translations).
 - `sl.confirmRestore` and `en.confirmRestore` contain `${n}` placeholder.
 - `sl.toastRestoreDone` and `en.toastRestoreDone` contain `${n}` placeholder.
+
+#### 17 · `I18N` (3 tests)
+Verifies i18n key symmetry between SL and EN translations.
+
+- All SL keys present in EN (no orphaned SL-only translations).
+- All EN keys present in SL (no orphaned EN-only translations).
+- SL and EN have the same total number of keys.
 
 ---
 
@@ -1176,6 +1194,155 @@ Maps ADIF mode to CSS badge class for the preview table.
 
 ---
 
+## `edi-validator.test.js` — 77 tests · 17 groups
+
+Covers the pure logic of `edi-validator.html`: Maidenhead geo utilities, and the full `validate()` function across all spec checks and issue types.
+
+### How the tests work
+
+`edi-validator.html` is evaluated inside a `node:vm` context using the same Proxy-based DOM mock as the other HTML tools. The `validate(text)` function is accessed directly as a context property and accepts raw EDI file text, returning `{issues[], qsoCount}`.
+
+The `S` i18n object (`const S = {sl:{...}, en:{...}}`) is exported via a second `vm.runInContext('globalThis._S = S', ctx)` call. A minimal valid EDI fixture is defined in the test file and used as a base for mutation-based tests (each test mutates one aspect of the fixture to trigger a specific issue code).
+
+### Test groups
+
+#### 1 · `locToLatLon` (4 tests)
+Verifies Maidenhead locator → latitude/longitude conversion.
+
+- `JN65VP` → approx lat 45.5°N, lon 13.8°E.
+- 4-character locator accepted (returns approximate centre of the large square).
+- Invalid locator returns `null`.
+- Lowercase locator accepted (case-insensitive).
+
+#### 2 · `haversine` (2 tests)
+Verifies great-circle distance calculation.
+
+- Same point → distance `0`.
+- `JN65VP` → `JN78DG` ≈ 294 km (±30).
+
+#### 3 · `validate — clean EDI` (3 tests)
+Baseline sanity check with a well-formed EDI fixture.
+
+- No errors returned for valid EDI.
+- No warnings returned for EDI with all ZRS fields populated.
+- `qsoCount` matches the number of `[QSORecords;N]` QSO lines.
+
+#### 4 · `validate — structure` (7 tests)
+Checks for required section markers and blank-line rules.
+
+- Missing `[END;...]` → `iNoEnd` (info).
+- Missing `[REG1TEST;1]` → `eNoReg1test` (error).
+- Missing `[Remarks]` → `eNoRemarks` (error).
+- Missing `[QSORecords;N]` → `eNoQsoSection` (error).
+- Blank line in header section → `eBlankInHeader` (error).
+- Blank line in `[Remarks]` section → `iBlankInRemarks` (info, not error).
+- CRLF and LF line endings both accepted without error.
+
+#### 5 · `validate — non-spec keywords` (6 tests)
+Checks for keywords not defined in the REG1TEST v1 spec.
+
+- `TCall`, `TLocator`, `RAZ`, `RClub`, `RBand` → `eNonSpecKw` (error).
+- Completely unknown keyword → `eNonSpecKw`.
+
+#### 6 · `validate — header formats` (8 tests)
+Checks header field syntax.
+
+- `TDate=YYYYMMDD;YYYYMMDD` valid format → no error.
+- `TDate` wrong format → `eTDateFormat` (error).
+- `TDate` single date (missing second half) → `eTDateFormat`.
+- `PWWLo` 4-character locator → `wPwwloFormat` (warn; too short for QRB calculation).
+- `PWWLo` invalid characters → `wPwwloFormat`.
+- `PBand` unknown value → `wPBandUnknown` (warn).
+- `PBand` `145 MHz` (known value) → no `wPBandUnknown`.
+- Keyword out of spec order → `iKwOrder` (info).
+
+#### 7 · `validate — ZRS mandatory fields` (6 tests)
+Checks ZRS-required fields are non-empty.
+
+- Empty `PSect`, `PClub`, `RName`, `RHBBS`, `SPowe` each → `wFieldEmpty` (warn).
+- All mandatory fields populated → no `wFieldEmpty`.
+
+#### 8 · `validate — QSO count` (3 tests)
+Checks declared vs. actual QSO count.
+
+- Declared count matches actual → no `eQsoCountMismatch`.
+- Declared 2, found 1 → `eQsoCountMismatch` (error).
+- Declared 0, found 1 → `eQsoCountMismatch`.
+
+#### 9 · `validate — QSO field count` (3 tests)
+Checks each QSO record has exactly 15 semicolon-delimited fields.
+
+- 14 fields → `eQsoFieldCount` (error).
+- 16 fields → `eQsoFieldCount`.
+- 15 fields → no `eQsoFieldCount`.
+
+#### 10 · `validate — QSO date` (5 tests)
+Checks QSO date field (`YYMMDD` at col 0).
+
+- Valid date → no `eQsoDate`.
+- 5-digit date → `eQsoDate` (error).
+- Month `00` → `eQsoDate`.
+- Month `13` → `eQsoDate`.
+- Day `00` → `eQsoDate`.
+
+#### 11 · `validate — QSO time` (4 tests)
+Checks QSO time field (`HHMM` at col 1).
+
+- Valid time → no `eQsoTime`.
+- 5-digit time → `eQsoTime` (error).
+- Hour `24` → `eQsoTime`.
+- Minute `60` → `eQsoTime`.
+
+#### 12 · `validate — QSO mode` (4 tests)
+Checks QSO mode field (col 3, valid values 1–9).
+
+- Mode `1` and `9` → valid, no error.
+- Mode `A` (non-numeric) → `eQsoMode` (error).
+- Mode `10` (out of range) → `eQsoMode`.
+
+#### 13 · `validate — QSO dupe flag` (6 tests)
+Checks QSO dupe flag field (col 14, valid values empty or `D`).
+
+- Empty dupe field → no error.
+- `D` → no error.
+- `X` (invalid value) → `eQsoDupe` (error).
+- `d` (lowercase) → `eQsoDupe`.
+- `D` with non-zero QRB → `iDupeNonZeroQrb` (info; dupes typically report QRB 0).
+- `D` with QRB 0 → no `iDupeNonZeroQrb`.
+
+#### 14 · `validate — QSO WWL format` (4 tests)
+Checks QSO locator field (col 9).
+
+- Valid 6-char Maidenhead → no warning.
+- Valid 4-char Maidenhead → no warning (short locators permitted in QSO records).
+- Empty WWL → no warning.
+- Invalid WWL (wrong characters) → `wQsoWwlFormat` (warn).
+
+#### 15 · `validate — QRB deviation` (5 tests)
+Checks declared QRB (col 10) against haversine-calculated distance.
+
+- Declared QRB within 10% of calculated → no `wQrbDeviation`.
+- Declared QRB off by >10% → `wQrbDeviation` (warn).
+- `PWWLo` is 4-char → QRB check skipped (insufficient locator precision).
+- Dupe QSO → QRB deviation check skipped.
+- Non-numeric QRB → `wQsoQrbNum` (warn); `wQrbDeviation` not raised.
+
+#### 16 · `validate — line length` (2 tests)
+Checks each line does not exceed 75 characters.
+
+- Line ≤75 chars → no `wLineTooLong`.
+- Line 76 chars → `wLineTooLong` (warn).
+
+#### 17 · `I18N` (5 tests)
+Verifies i18n key completeness and translation distinctness.
+
+- `sl.sevError` and `en.sevError` are non-empty strings.
+- `sl.sevError` ≠ `en.sevError` (translations are distinct).
+- All SL keys present in EN (no orphaned SL-only translations).
+- All EN keys present in SL (no orphaned EN-only translations).
+
+---
+
 ## `edi-crosscheck.test.js` — 56 testov · 8 skupin
 
 Pokriva čisto logiko `edi-crosscheck.html`: odstranjevanje pripon, razdalja urejanja, razčlenjevanje EDI in vse algoritme crosschecka, vključno z nastavljivimi pragovi in predlogi za manjkajoče lokatorje.
@@ -1427,7 +1594,7 @@ CLI orodje se izvede znotraj konteksta `node:vm`, ki nadomesti `fs`, `https`, `p
 
 ---
 
-## `vhf-logger/vhf-logger.test.js` — 163 testov · 16 skupin
+## `vhf-logger/vhf-logger.test.js` — 191 testov · 17 skupin
 
 Pokriva čisto logiko `vhf-logger/vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI, crosscheck poizvedbe, razčlenjevanje uvoza EDI, generiranje ZIP, barve pasov, stanje ročnega časa in validacijo backup/obnovi.
 
@@ -1508,21 +1675,26 @@ Preverja popolni preračun zastavic duplikatov v seji.
 - Izolacija po pasovih: enak klicni znak na različnih pasovih oba dobita `dupe=false`.
 - Po `recalcDupes` je polje `_current.qsos` mutirano na mestu.
 
-#### 9 · `buildEdi` (25 testov)
+#### 9 · `buildEdi` (57 testov)
 Preverja izhodni format REG1TEST EDI v1.
 
 - Datoteka se začne z glavo `[REG1TEST;1]`.
-- `TDate` uporablja polni `YYYYMMDD` (glava); QSO zapisi uporabljajo `YYMMDD`.
+- `TDate` uporablja polni `YYYYMMDD;YYYYMMDD` (začetek;konec); QSO zapisi uporabljajo `YYMMDD`.
 - Prisotne in pravilne glave `TName`, `PCall`, `PWWLo`, `PBand`, `PClub`, `PSect`, `MOpe1`.
 - Glave opreme: `SPowe`, `SAnte`, `STXEq`, `SRXEq`, `SAntH` izpolnjene iz konfiguracije pasu.
 - Blok C*: `CQSOs`, `CQSOP`, `CWWLs`, `CWWLB`, `CExcs`, `CExcB`, `CDXCs`, `CDXCB`, `CToSc`, `CODXC` — izračunani iz QSO-jev brez duplikatov.
 - Razdelek `[QSORecords N]` prisoten s pravilnim številom.
-- Vrstica QSO ima natanko 14 polj, ločenih s podpičji (stolpci 0–13).
-- Zastavica duplikata v stolpcu 13: `D` za podvojeni QSO, prazno za normalnega.
+- Vrstica QSO ima natanko 15 polj, ločenih s podpičji (stolpci 0–14).
+- Zastavica duplikata v stolpcu 14: `D` za podvojeni QSO, prazno za normalnega.
 - `nrS` / `nrR` dopolnjeni z ničlami na 3 znake.
 - `WWL` v vrstici QSO je 6 znakov z velikimi črkami.
-- Glava `PClub` izpolnjena iz `session.club`.
+- Glava `PClub` izpolnjena iz `session.club`; prazna, ko ni nastavljena.
 - Načini: `SSB` → `1`, `CW` → `2`, `FM` → `6`.
+- Nestandardne ključne besede odsotne: `TCall`, `TLocator`, `RAZ`, `RClub` se ne oddajo.
+- Opcijske glave: `PExch`, `PAdr1`, `PAdr2`, `RCall`, `RHBBS`, `RPoCo`, `RPhon` — izpolnjene iz polj seje ali oddane kot prazne vrstice.
+- Pravilen vrstni red polj po spec 15.3.1: `TName` pred `TDate` pred `PCall`; `STXEq` pred `SPowe` pred `SRXEq`.
+- Brez praznih vrstic med `CODXC` in `[Remarks]`; brez prazne vrstice med `[Remarks]` in `[QSORecords;N]`.
+- Podnožje `[END;S56OA HamLogTools VHF Logger]` prisotno.
 
 #### 10 · `lookupCall` (6 testov)
 Preverja crosscheck poizvedbo v uteženi+raw baseline bazi.
@@ -1541,17 +1713,26 @@ Preverja stanje in i18n pokritost za funkcijo urejanja seje.
 - Štirje novi EN i18n ključi (ista množica) so neprazni nizi.
 - `sl.setupEdit` in `en.setupEdit` sta različna niza (prevod obstaja).
 
-#### 16 · `backup` (23 testov)
+#### 16 · `backup` (32 testov)
 Preverja strukturno validacijo `validateBackup()` in i18n nize za funkcijo backup/obnovi.
 
 - Veljaven backup objekt (pravilen `app`, polje `sessions`, veljavne seje in QSO-ji) vrne polje sej.
 - Prazno polje `sessions` je sprejemljivo.
 - Vrne `null` za napačno polje `app`, manjkajoč `app`, `sessions` ki ni polje, `null` ali neovit niz.
 - Validacija na ravni seje: vrne `null`, če `id` manjka ali je prazen, `myCall` manjka, `bands` ali `qsos` nista polji.
+- `myLoc` seje mora biti veljaven 6-znakovni Maidenhead lokator (`[A-R]{2}[0-9]{2}[A-X]{2}`, neobčutljivo na velikost); vrne `null`, če manjka ali je napačen.
+- `contest` seje mora biti neprazen niz; vrne `null`, če manjka ali je prazen niz.
 - Validacija na ravni QSO: vrne `null`, če v kateremkoli QSO manjka `_id`, `band` ali `call`.
 - `sl.btnRestore` ≠ `en.btnRestore` (obstajata različna prevoda).
 - `sl.confirmRestore` in `en.confirmRestore` vsebujeta `${n}` placeholder.
 - `sl.toastRestoreDone` in `en.toastRestoreDone` vsebujeta `${n}` placeholder.
+
+#### 17 · `I18N` (3 testi)
+Preverja simetričnost i18n ključev med SL in EN prevodi.
+
+- Vsi SL ključi prisotni v EN (brez osamelih SL-only prevodov).
+- Vsi EN ključi prisotni v SL (brez osamelih EN-only prevodov).
+- SL in EN imata enako skupno število ključev.
 
 ---
 
@@ -1922,6 +2103,155 @@ Cabrillo v3 specifikacija določa `RY` za RTTY (ne splošnega `DG`).
 
 - Vsi ključi SL prisotni v EN in obratno; zahtevani ključi vmesnika preverjeni v obeh jezikih.
 - Vrednosti `dropTitle` v SL in EN sta različni (preverba, da so prevodi dejansko različni).
+
+---
+
+## `edi-validator.test.js` — 77 testov · 17 skupin
+
+Pokriva čisto logiko `edi-validator.html`: Maidenhead geo pomočnike in celotno funkcijo `validate()` za vse preverbe specifikacije in tipe težav.
+
+### Kako testi delujejo
+
+`edi-validator.html` se izvede znotraj konteksta `node:vm` z enakim nadomestkom DOM na osnovi Proxy kot ostala HTML orodja. Funkcija `validate(text)` je dostopna neposredno kot lastnost konteksta in sprejme surovo besedilo EDI datoteke ter vrne `{issues[], qsoCount}`.
+
+I18n objekt `S` (`const S = {sl:{...}, en:{...}}`) se izvozi prek drugega klica `vm.runInContext('globalThis._S = S', ctx)`. V testni datoteki je definirana minimalna veljavna EDI fikstura in se uporablja kot osnova za mutacijske teste (vsak test mutira en vidik fiksture, da sproži določeno kodo težave).
+
+### Skupine testov
+
+#### 1 · `locToLatLon` (4 testi)
+Preverja pretvorbo Maidenhead lokatorja → geografske koordinate.
+
+- `JN65VP` → pribl. lat 45,5°S, lon 13,8°V.
+- 4-znakovni lokator sprejet.
+- Neveljaven lokator vrne `null`.
+- Mali lokator sprejet (neobčutljivo na velikost).
+
+#### 2 · `haversine` (2 testa)
+Preverja izračun razdalje po velikem krogu.
+
+- Ista točka → razdalja `0`.
+- `JN65VP` → `JN78DG` ≈ 294 km (±30).
+
+#### 3 · `validate — clean EDI` (3 testi)
+Osnovna preverba z dobro oblikovano EDI fikstura.
+
+- Brez napak za veljaven EDI.
+- Brez opozoril za EDI z vsemi polji ZRS.
+- `qsoCount` ustreza številu QSO vrstic v `[QSORecords;N]`.
+
+#### 4 · `validate — structure` (7 testov)
+Preverja obvezne razdelčne oznake in pravila za prazne vrstice.
+
+- Manjkajoč `[END;...]` → `iNoEnd` (info).
+- Manjkajoč `[REG1TEST;1]` → `eNoReg1test` (error).
+- Manjkajoč `[Remarks]` → `eNoRemarks` (error).
+- Manjkajoč `[QSORecords;N]` → `eNoQsoSection` (error).
+- Prazna vrstica v razdelku glave → `eBlankInHeader` (error).
+- Prazna vrstica v razdelku `[Remarks]` → `iBlankInRemarks` (info, ne error).
+- Zaključki vrstic CRLF in LF sprejeti brez napak.
+
+#### 5 · `validate — non-spec keywords` (6 testov)
+Preverja ključne besede, ki niso definirane v specifikaciji REG1TEST v1.
+
+- `TCall`, `TLocator`, `RAZ`, `RClub`, `RBand` → `eNonSpecKw` (error).
+- Popolnoma neznana ključna beseda → `eNonSpecKw`.
+
+#### 6 · `validate — header formats` (8 testov)
+Preverja sintakso polj glave.
+
+- `TDate=YYYYMMDD;YYYYMMDD` — veljaven format, brez napake.
+- Napačen format `TDate` → `eTDateFormat` (error).
+- `TDate` en sam datum (manjka drugi del) → `eTDateFormat`.
+- `PWWLo` 4-znakovni lokator → `wPwwloFormat` (warn; prekratek za QRB izračun).
+- `PWWLo` neveljavni znaki → `wPwwloFormat`.
+- Neznana vrednost `PBand` → `wPBandUnknown` (warn).
+- `PBand` `145 MHz` (znana vrednost) → brez `wPBandUnknown`.
+- Ključna beseda izven specifikacijskega vrstnega reda → `iKwOrder` (info).
+
+#### 7 · `validate — ZRS mandatory fields` (6 testov)
+Preverja, da obvezna polja ZRS niso prazna.
+
+- Prazni `PSect`, `PClub`, `RName`, `RHBBS`, `SPowe` → vsak `wFieldEmpty` (warn).
+- Vsa obvezna polja izpolnjena → brez `wFieldEmpty`.
+
+#### 8 · `validate — QSO count` (3 testi)
+Preverja deklarirano vs. dejansko število QSO.
+
+- Deklarirano število ustreza dejanskemu → brez `eQsoCountMismatch`.
+- Deklarirani 2, najdeni 1 → `eQsoCountMismatch` (error).
+- Deklarirani 0, najdeni 1 → `eQsoCountMismatch`.
+
+#### 9 · `validate — QSO field count` (3 testi)
+Preverja, da ima vsak zapis QSO natanko 15 polj, ločenih s podpičji.
+
+- 14 polj → `eQsoFieldCount` (error).
+- 16 polj → `eQsoFieldCount`.
+- 15 polj → brez `eQsoFieldCount`.
+
+#### 10 · `validate — QSO date` (5 testov)
+Preverja polje datuma QSO (`YYMMDD` pri stolpcu 0).
+
+- Veljaven datum → brez `eQsoDate`.
+- 5-mestni datum → `eQsoDate` (error).
+- Mesec `00` → `eQsoDate`.
+- Mesec `13` → `eQsoDate`.
+- Dan `00` → `eQsoDate`.
+
+#### 11 · `validate — QSO time` (4 testi)
+Preverja polje časa QSO (`HHMM` pri stolpcu 1).
+
+- Veljaven čas → brez `eQsoTime`.
+- 5-mestni čas → `eQsoTime` (error).
+- Ura `24` → `eQsoTime`.
+- Minuta `60` → `eQsoTime`.
+
+#### 12 · `validate — QSO mode` (4 testi)
+Preverja polje načina QSO (stolpec 3, veljavne vrednosti 1–9).
+
+- Način `1` in `9` → veljaven, brez napake.
+- Način `A` (neštevilčen) → `eQsoMode` (error).
+- Način `10` (izven obsega) → `eQsoMode`.
+
+#### 13 · `validate — QSO dupe flag` (6 testov)
+Preverja polje zastavice duplikata QSO (stolpec 14, veljavne vrednosti prazno ali `D`).
+
+- Prazno polje duplikata → brez napake.
+- `D` → brez napake.
+- `X` (neveljavna vrednost) → `eQsoDupe` (error).
+- `d` (mala črka) → `eQsoDupe`.
+- `D` z neničelnim QRB → `iDupeNonZeroQrb` (info; duplikati tipično poročajo QRB 0).
+- `D` z QRB 0 → brez `iDupeNonZeroQrb`.
+
+#### 14 · `validate — QSO WWL format` (4 testi)
+Preverja polje lokatorja QSO (stolpec 9).
+
+- Veljaven 6-znakovni Maidenhead → brez opozorila.
+- Veljaven 4-znakovni Maidenhead → brez opozorila (kratki lokatorji so dovoljeni v QSO zapisih).
+- Prazen WWL → brez opozorila.
+- Neveljaven WWL (napačni znaki) → `wQsoWwlFormat` (warn).
+
+#### 15 · `validate — QRB deviation` (5 testov)
+Preverja deklarirani QRB (stolpec 10) glede na haversinom izračunano razdaljo.
+
+- Deklarirani QRB znotraj 10 % izračunanega → brez `wQrbDeviation`.
+- Deklarirani QRB za >10 % drugačen → `wQrbDeviation` (warn).
+- `PWWLo` je 4-znakovni → QRB preverba preskočena (nezadostna natančnost lokatorja).
+- QSO duplikat → QRB preverba odmika preskočena.
+- Neštevilčni QRB → `wQsoQrbNum` (warn); `wQrbDeviation` se ne sproži.
+
+#### 16 · `validate — line length` (2 testa)
+Preverja, da nobena vrstica ne presega 75 znakov.
+
+- Vrstica ≤75 znakov → brez `wLineTooLong`.
+- Vrstica 76 znakov → `wLineTooLong` (warn).
+
+#### 17 · `I18N` (5 testov)
+Preverja celovitost i18n ključev in razlikovanje prevodov.
+
+- `sl.sevError` in `en.sevError` sta neprazna niza.
+- `sl.sevError` ≠ `en.sevError` (prevoda sta različna).
+- Vsi SL ključi prisotni v EN (brez osamelih SL-only prevodov).
+- Vsi EN ključi prisotni v SL (brez osamelih EN-only prevodov).
 
 ---
 

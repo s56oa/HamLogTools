@@ -16,6 +16,7 @@ Tools for amateur radio log processing and format conversion.
 | [`adif-merge.html`](adif-merge.html) | Browser app | Merge multiple ADIF log files — deduplication, filter by band/mode/source, inline editing, export to ADIF and CSV |
 | [`adif-stats.html`](adif-stats.html) | Browser app | Analyse an ADIF log — statistics by band/mode/continent/country/time, DXCC per band, activity heatmap, band×hour propagation matrix, QRB distribution, HTML export |
 | [`adif2cab.html`](adif2cab.html) | Browser app | Convert an ADIF log to Cabrillo v3 contest format; CQ WW SSB/CW/RTTY, IARU HF, IARU VHF, CQ WPX SSB/CW, ARRL DX, Generic |
+| [`edi-validator.html`](edi-validator.html) | Browser app | Standalone EDI file validator: spec compliance, ZRS mandatory fields, QRB deviation check |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filter an ADIF log to keep only QSOs with BURO-accepting stations |
 | [`build-baseline.js`](build-baseline.js) | Node.js CLI | Build `crosscheck-baseline.json` from OEVSV IARU R1 contest CSV exports for use with `edi-crosscheck.html` and `vhf-logger/vhf-logger.html` |
 
@@ -296,6 +297,40 @@ No internet connection required. All processing happens in your browser — no f
 
 ---
 
+## S56OA EDI Validator (`edi-validator.html`)
+
+Validates a REG1TEST EDI v1 log file against the EDI specification and ZRS mandatory field requirements.
+Open the file in any modern browser — no installation required.
+
+**[➜ Open edi-validator.html](edi-validator.html)**
+
+### Features
+
+- **Drag & drop** a single `.edi` file onto the drop zone, or click to browse
+- **Spec compliance check** — verifies `[REG1TEST;1]` header, `[Remarks]` section, `[QSORecords;N]` count declaration, `[END;...]` footer
+- **Keyword order validation** — checks that header fields follow the REG1TEST v1 spec order; flags non-standard keywords (`TCall`, `TLocator`, `RAZ`, `RClub`, etc.)
+- **Header field validation** — `TDate` format (`YYYYMMDD;YYYYMMDD`), `PWWLo` Maidenhead format and length, `PBand` known value
+- **ZRS mandatory fields** — warns if `PSect`, `PClub`, `RName`, `RHBBS`, or `SPowe` are empty
+- **QSO record validation** — field count (exactly 15), date `YYMMDD`, time `HHMM`, mode code 1–9, dupe flag (`D` or empty)
+- **WWL format check** — flags QSO locators that don't match the 6-character Maidenhead pattern
+- **QRB deviation check** — compares declared QRB (col 10) against haversine-calculated distance from `PWWLo` to QSO locator; warns if deviation exceeds 10%
+- **Line length check** — warns if any line exceeds 75 characters (spec limit)
+- **Severity levels** — issues classified as `error` (spec violation), `warn` (ZRS requirement or deviation), or `info` (recommendation)
+- **Bilingual UI** — Slovenian and English
+- **Dark/light theme** toggle with `localStorage` persistence
+
+### How to Use
+
+1. Download `edi-validator.html` (single file)
+2. Open it in any modern browser (Chrome, Firefox, Edge, Safari)
+3. Drag an `.edi` file onto the drop zone, or click **Choose file**
+4. Review the issues list — errors in red, warnings in amber, info in blue
+5. Fix the reported issues in your EDI log and re-validate
+
+No internet connection required. All processing happens in your browser — no files are uploaded anywhere.
+
+---
+
 ## Baseline Builder (`build-baseline.js`)
 
 Node.js CLI script that builds `crosscheck-baseline.json` from a directory of OEVSV IARU R1 contest CSV exports. Used to occasionally refresh the prebuilt baseline that `edi-crosscheck.html` loads on startup.
@@ -467,6 +502,9 @@ node --test --test-reporter=spec adif-stats.test.js
 
 # ADIF → Cabrillo converter
 node --test --test-reporter=spec adif2cab.test.js
+
+# EDI file validator
+node --test --test-reporter=spec edi-validator.test.js
 ```
 
 | Test file | Tests | Groups |
@@ -475,9 +513,10 @@ node --test --test-reporter=spec adif2cab.test.js
 | `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` locator mismatch ×6, `runCrosscheck` callsign ×8, missing locator ×4, thresholds ×3, callsign by locator ×4) |
 | `adif-merge.test.js` | 112 | 21 (`parseADIF`, `updateKey`, `recomputeDupes`, `adifField`, `htmlEsc`, `csvEsc`, `modeBadge`, `buildFilename`, ADIF export, I18N, re-merge safety, and more) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
-| `vhf-logger/vhf-logger.test.js` | 163 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
+| `vhf-logger/vhf-logger.test.js` | 191 | 17 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`) |
 | `adif-stats.test.js` | 133 | 21 (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`) |
 | `adif2cab.test.js` | 191 | 31 (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×9, `formatCabDate`, `buildQSOLine` ×5, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` structure, `I18N`) |
+| `edi-validator.test.js` | 77 | 17 (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `I18N`) |
 
 See [TESTING.md](TESTING.md) for full test documentation.
 
@@ -520,6 +559,7 @@ Orodja za obdelavo in pretvorbo formatov radioamaterskih dnevnikov.
 | [`adif-merge.html`](adif-merge.html) | Brskalniška app | Združevanje več ADIF dnevniških datotek — deduplikacija, filtri po pasu/načinu/izvoru, urejanje v živo, izvoz ADIF in CSV |
 | [`adif-stats.html`](adif-stats.html) | Brskalniška app | Analiza ADIF dnevnika — statistika po pasu/načinu/kontinentu/državi/času, DXCC per pas, toplotna karta aktivnosti, matrika pas×ura, porazdelitev QRB, HTML izvoz |
 | [`adif2cab.html`](adif2cab.html) | Brskalniška app | Pretvorba ADIF dnevnika v format Cabrillo v3; CQ WW SSB/CW/RTTY, IARU HF, IARU VHF, CQ WPX SSB/CW, ARRL DX, Splošno |
+| [`edi-validator.html`](edi-validator.html) | Brskalniška app | Samostojni validator EDI datotek: skladnost s specifikacijo, obvezna polja ZRS, preverjanje odmika QRB |
 | [`adif-qrz-filter.js`](adif-qrz-filter.js) | Node.js CLI | Filtriranje ADIF dnevnika — ohrani samo zveze s postajami, ki sprejemajo biro |
 | [`build-baseline.js`](build-baseline.js) | Node.js CLI | Zgradi `crosscheck-baseline.json` iz OEVSV IARU R1 contest CSV exportov za uporabo z `edi-crosscheck.html` in `vhf-logger/vhf-logger.html` |
 
@@ -800,6 +840,40 @@ Po nalaganju strani internetna povezava ni potrebna. Vsa obdelava poteka v brska
 
 ---
 
+## S56OA EDI Validator (`edi-validator.html`)
+
+Validira datoteko REG1TEST EDI v1 glede na EDI specifikacijo in zahteve ZRS za obvezna polja.
+Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
+
+**[➜ Odpri edi-validator.html](edi-validator.html)**
+
+### Funkcionalnosti
+
+- **Povleci in spusti** eno `.edi` datoteko na območje za spuščanje ali klikni za iskanje
+- **Preverjanje skladnosti** — preverja glavo `[REG1TEST;1]`, razdelek `[Remarks]`, deklaracijo `[QSORecords;N]` in podnožje `[END;...]`
+- **Validacija vrstnega reda ključnih besed** — preverja zaporedje polj glave glede na specifikacijo REG1TEST v1; zaznava nestandardne ključne besede (`TCall`, `TLocator`, `RAZ`, `RClub` itd.)
+- **Validacija polj glave** — format `TDate` (`YYYYMMDD;YYYYMMDD`), format in dolžina Maidenhead `PWWLo`, znana vrednost `PBand`
+- **Obvezna polja ZRS** — opozori, če so `PSect`, `PClub`, `RName`, `RHBBS` ali `SPowe` prazni
+- **Validacija zapisov QSO** — število polj (natanko 15), datum `YYMMDD`, čas `HHMM`, koda načina 1–9, zastavica duplikata (`D` ali prazno)
+- **Preverjanje formata WWL** — zaznava lokatorje QSO, ki ne ustrezajo 6-znakovnemu vzorcu Maidenhead
+- **Preverjanje odmika QRB** — primerja deklarirani QRB (stolpec 10) z razdaljo, izračunano haversinom med `PWWLo` in lokatorjem QSO; opozori, če odmik presega 10 %
+- **Preverjanje dolžine vrstic** — opozori, če katera koli vrstica presega 75 znakov (meja specifikacije)
+- **Stopnje resnosti** — težave razvrščene kot `error` (kršitev specifikacije), `warn` (zahteva ZRS ali odmik) ali `info` (priporočilo)
+- **Dvojezični vmesnik** — slovenščina in angleščina
+- **Temna/svetla tema** s shranitvijo v `localStorage`
+
+### Navodila za uporabo
+
+1. Prenesi `edi-validator.html` (ena datoteka)
+2. Odpri jo v katerem koli sodobnem brskalniku (Chrome, Firefox, Edge, Safari)
+3. Povleci `.edi` datoteko na območje za spuščanje ali klikni **Izberi datoteko**
+4. Preglej seznam težav — napake v rdeči, opozorila v jantarni, info v modri barvi
+5. Odpravi sporočene težave v tvojem EDI dnevniku in ponovi validacijo
+
+Po nalaganju strani internetna povezava ni potrebna. Vsa obdelava poteka v brskalniku — nobene datoteke niso nikamor naložene.
+
+---
+
 ## Graditelj baseline-a (`build-baseline.js`)
 
 Node.js CLI skripta, ki gradi `crosscheck-baseline.json` iz mape OEVSV IARU R1 tekmovalnih CSV exportov. Uporablja se za občasno osveževanje pred-zgrajenega baseline-a, ki ga `edi-crosscheck.html` naloži ob zagonu.
@@ -971,6 +1045,9 @@ node --test --test-reporter=spec adif-stats.test.js
 
 # ADIF → Cabrillo pretvornik
 node --test --test-reporter=spec adif2cab.test.js
+
+# EDI validator
+node --test --test-reporter=spec edi-validator.test.js
 ```
 
 | Testna datoteka | Testov | Skupin |
@@ -979,9 +1056,10 @@ node --test --test-reporter=spec adif2cab.test.js
 | `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` lokator ×6, `runCrosscheck` klicni znak ×8, manjkajoč lokator ×4, pragovi ×3, klicni znak po lokatorju ×4) |
 | `adif-merge.test.js` | 112 | 21 (`parseADIF`, `updateKey`, `recomputeDupes`, `adifField`, `htmlEsc`, `csvEsc`, `modeBadge`, `buildFilename`, ADIF izvoz, I18N, varnost ponovnega mergea in več) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
-| `vhf-logger/vhf-logger.test.js` | 163 | 16 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`) |
+| `vhf-logger/vhf-logger.test.js` | 191 | 17 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`) |
 | `adif-stats.test.js` | 133 | 21 (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`) |
 | `adif2cab.test.js` | 191 | 31 (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×9, `formatCabDate`, `buildQSOLine` ×5, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` struktura, `I18N`) |
+| `edi-validator.test.js` | 77 | 17 (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `I18N`) |
 
 Celotna dokumentacija je v [TESTING.md](TESTING.md).
 

@@ -339,7 +339,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
 
 <header>
   <div class="logo">S56OA VHF<span class="icon">◉</span>Logger</div>
-  <span class="version">v1.8</span>
+  <span class="version">v1.13</span>
   <div class="hdr-info" id="hdrInfo"></div>
   <div class="lang-wrap">
     <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" aria-label="Preklopi temo / Toggle theme">☀</button>
@@ -390,6 +390,10 @@ tr:hover td{background:rgba(77,157,224,.04)}
           <label data-i18n="lblClub">Klub (EDI PClub)</label>
           <input class="inp mono" id="fClub" placeholder="S59DGO" oninput="this.value=this.value.toUpperCase()">
         </div>
+        <div class="field" style="max-width:90px">
+          <label data-i18n="lblPExch">PExch</label>
+          <input class="inp mono" id="fPExch" maxlength="6" oninput="this.value=this.value.toUpperCase()">
+        </div>
       </div>
     </div>
     <div class="fsec">
@@ -399,9 +403,13 @@ tr:hover td{background:rgba(77,157,224,.04)}
           <label data-i18n="lblSect">Sekcija (EDI PSect)</label>
           <input class="inp mono" id="fSect" placeholder="MO" oninput="this.value=this.value.toUpperCase()">
         </div>
-        <div class="field" style="flex:3">
-          <label data-i18n="lblQthName">Ime lokacije (QTH)</label>
+        <div class="field" style="flex:2">
+          <label data-i18n="lblQthName">Lokacija (PAdr1)</label>
           <input class="inp" id="fQthName" placeholder="Krvavec">
+        </div>
+        <div class="field" style="flex:2">
+          <label data-i18n="lblPadr2">Lokacija 2 (PAdr2)</label>
+          <input class="inp" id="fPadr2">
         </div>
       </div>
       <div class="frow">
@@ -419,11 +427,21 @@ tr:hover td{background:rgba(77,157,224,.04)}
           <label data-i18n="lblRCity">Odgovorni (kraj)</label>
           <input class="inp" id="fRCity" placeholder="Ljubljana">
         </div>
-        <div class="field">
-          <label data-i18n="lblRCoun">Odgovorni (država)</label>
+        <div class="field" style="max-width:60px">
+          <label data-i18n="lblRCoun">Država</label>
           <input class="inp mono" id="fRCoun" placeholder="SI" oninput="this.value=this.value.toUpperCase()">
         </div>
-        <div class="field" style="flex:2">
+        <div class="field" style="max-width:100px">
+          <label data-i18n="lblRPoCo">Poš. št.</label>
+          <input class="inp" id="fRPoCo" placeholder="1000">
+        </div>
+        <div class="field">
+          <label data-i18n="lblRPhon">Odgovorni (tel.)</label>
+          <input class="inp" id="fRPhon" placeholder="+386 ...">
+        </div>
+      </div>
+      <div class="frow">
+        <div class="field" style="flex:3">
           <label data-i18n="lblREmail">Odgovorni (e-pošta)</label>
           <input class="inp" id="fREmail" placeholder="ime@example.com">
         </div>
@@ -658,12 +676,17 @@ sl:{
   lblClub:'Klub (EDI PClub)',
   setupReporter:'Oddajatelj',
   lblSect:'Sekcija (EDI PSect)',
-  lblQthName:'Ime lokacije (QTH)',
+  lblQthName:'Lokacija (PAdr1)',
+  lblPadr2:'Lokacija 2 (PAdr2)',
+  lblPExch:'PExch (maks. 6)',
   lblRCall:'Odgovorni (kl. znak)',
   lblRName:'Odgovorni (ime)',
   lblRCity:'Odgovorni (kraj)',
-  lblRCoun:'Odgovorni (država)',
+  lblRCoun:'Država',
+  lblRPoCo:'Poš. št.',
+  lblRPhon:'Odgovorni (tel.)',
   lblREmail:'Odgovorni (e-pošta)',
+  warnEdiMissing:'Manjkajo EDI podatki: ${fields}',
   errStorageFull:'Shranjevanje neuspešno — lokalni prostor poln',
   errBandHasQsos:'Pas ima QSO-je — najprej jih izbriši',
   btnEditSetup:'⚙ Uredi',
@@ -752,12 +775,17 @@ en:{
   lblClub:'Club (EDI PClub)',
   setupReporter:'Reporter',
   lblSect:'Section (EDI PSect)',
-  lblQthName:'QTH name',
+  lblQthName:'Location (PAdr1)',
+  lblPadr2:'Location 2 (PAdr2)',
+  lblPExch:'PExch (max. 6)',
   lblRCall:'Responsible (callsign)',
   lblRName:'Responsible (name)',
   lblRCity:'Responsible (city)',
-  lblRCoun:'Responsible (country)',
+  lblRCoun:'Country',
+  lblRPoCo:'Postal code',
+  lblRPhon:'Responsible (phone)',
   lblREmail:'Responsible (email)',
+  warnEdiMissing:'Missing EDI data: ${fields}',
   errStorageFull:'Save failed — local storage full',
   errBandHasQsos:'Band has QSOs — delete them first',
   btnEditSetup:'⚙ Edit',
@@ -1024,6 +1052,8 @@ function validateBackup(obj){
     if(!s||typeof s!=='object') return null;
     if(typeof s.id!=='string'||!_SAFE_ID.test(s.id)) return null;
     if(typeof s.myCall!=='string') return null;
+    if(!/^[A-R]{2}[0-9]{2}[A-X]{2}$/i.test(s.myLoc||'')) return null;
+    if(typeof s.contest!=='string'||!s.contest) return null;
     if(!Array.isArray(s.bands)||!Array.isArray(s.qsos)) return null;
     for(const q of s.qsos){
       if(!q||typeof q!=='object') return null;
@@ -1105,6 +1135,10 @@ function showSetup(){
   document.getElementById('fRCity').value='';
   document.getElementById('fRCoun').value='';
   document.getElementById('fREmail').value='';
+  document.getElementById('fPadr2').value='';
+  document.getElementById('fPExch').value='';
+  document.getElementById('fRPoCo').value='';
+  document.getElementById('fRPhon').value='';
   const saveBtn=document.querySelector('[data-i18n="btnSaveSetup"]');
   if(saveBtn){saveBtn.textContent=t('btnStart');saveBtn.dataset.i18n='btnStart';}
   document.getElementById('setupTitle').textContent=t('setupNew');
@@ -1213,6 +1247,10 @@ function editSessionSetup(){
   document.getElementById('fRCity').value=_current.rCity||'';
   document.getElementById('fRCoun').value=_current.rCoun||'';
   document.getElementById('fREmail').value=_current.rEmail||'';
+  document.getElementById('fPadr2').value=_current.padr2||'';
+  document.getElementById('fPExch').value=_current.pExch||'';
+  document.getElementById('fRPoCo').value=_current.rPoCo||'';
+  document.getElementById('fRPhon').value=_current.rPhon||'';
   for(const b of _current.bands) addBandRow(b);
   document.getElementById('setupTitle').textContent=t('setupEdit');
   const btn=document.querySelector('[data-i18n="btnStart"]');
@@ -1285,6 +1323,10 @@ function collectSetup(){
   const rCity=document.getElementById('fRCity').value.trim();
   const rCoun=document.getElementById('fRCoun').value.trim().toUpperCase();
   const rEmail=document.getElementById('fREmail').value.trim();
+  const padr2=document.getElementById('fPadr2').value.trim();
+  const pExch=document.getElementById('fPExch').value.trim().toUpperCase();
+  const rPoCo=document.getElementById('fRPoCo').value.trim();
+  const rPhon=document.getElementById('fRPhon').value.trim();
   if(!myCall){ showToast(t('errNoMyCall'),true); return null; }
   if(!/^[A-R]{2}[0-9]{2}[A-X]{2}$/i.test(myLoc)){ showToast(t('errNoMyLoc'),true); return null; }
   if(!contest){ showToast(t('errNoContest'),true); return null; }
@@ -1299,7 +1341,7 @@ function collectSetup(){
     });
   }
   if(bands.length===0){ showToast(t('errNoBand'),true); return null; }
-  return {myCall,myLoc,contest,operator,club,sect,qthName,rCall,rName,rCity,rCoun,rEmail,bands};
+  return {myCall,myLoc,contest,operator,club,sect,qthName,padr2,pExch,rCall,rName,rCity,rCoun,rEmail,rPoCo,rPhon,bands};
 }
 
 function startSession(){
@@ -1311,8 +1353,10 @@ function startSession(){
     Object.assign(_current,{
       contest:cfg.contest,myCall:cfg.myCall,myLoc:cfg.myLoc,
       operator:cfg.operator,club:cfg.club,sect:cfg.sect,
-      qthName:cfg.qthName,rCall:cfg.rCall,rName:cfg.rName,
+      qthName:cfg.qthName,padr2:cfg.padr2,pExch:cfg.pExch,
+      rCall:cfg.rCall,rName:cfg.rName,
       rCity:cfg.rCity,rCoun:cfg.rCoun,rEmail:cfg.rEmail,
+      rPoCo:cfg.rPoCo,rPhon:cfg.rPhon,
       bands:cfg.bands,activeBand:newActiveBand,
     });
     _editingExisting=false;
@@ -1331,11 +1375,15 @@ function startSession(){
     club:cfg.club,
     sect:cfg.sect,
     qthName:cfg.qthName,
+    padr2:cfg.padr2,
+    pExch:cfg.pExch,
     rCall:cfg.rCall,
     rName:cfg.rName,
     rCity:cfg.rCity,
     rCoun:cfg.rCoun,
     rEmail:cfg.rEmail,
+    rPoCo:cfg.rPoCo,
+    rPhon:cfg.rPhon,
     created:Date.now(),
     modified:Date.now(),
     activeBand:cfg.bands[0].band,
@@ -1865,21 +1913,43 @@ function buildEdi(session,band){
   const antH=bc.antH||'';
 
   let out='[REG1TEST;1]\r\n';
+  out+=`TName=${session.contest}\r\n`;
   out+=`TDate=${first.utcDate};${last.utcDate}\r\n`;
-  out+=`TCall=${session.myCall}\r\nTLocator=${session.myLoc}\r\n`;
-  out+=`TName=${session.operator||session.myCall}\r\n`;
-  out+=`RName=${session.contest}\r\nRBand=${ediBand}\r\nRAZ=28\r\nRHBBS=\r\n`;
-  out+=`PWWLo=${session.myLoc}\r\nPCall=${session.myCall}\r\nPBand=${ediBand}\r\n`;
-  out+=`PSect=${session.sect||''}\r\nPClub=${session.club||''}\r\nRClub=\r\n`;
-  out+=`MOpe1=${session.operator||session.myCall}\r\nMOpe2=\r\n`;
-  out+=`SPowe=${bc.power||100}\r\nSAnte=${bc.antenna||''}\r\n`;
-  out+=`STXEq=${bc.txEq||''}\r\nSRXEq=${bc.rxEq||''}\r\nSAntH=${antH};${antH}\r\n`;
-  out+=`CQSOs=${cQSOs};${cWWLs+cDXCs}\r\nCQSOP=${cQSOP}\r\n`;
-  out+=`CWWLs=${cWWLs};0;${cWWLs}\r\nCWWLB=0\r\n`;
-  out+=`CExcs=${cExcs};0;${cExcs}\r\nCExcB=0\r\n`;
-  out+=`CDXCs=${cDXCs};0;${cDXCs}\r\nCDXCB=0\r\n`;
-  out+=`CToSc=${cToSc}\r\nCODXC=${cODXC}\r\n`;
-  out+='\r\n[Remarks]\r\n\r\n';
+  out+=`PCall=${session.myCall}\r\n`;
+  out+=`PWWLo=${session.myLoc}\r\n`;
+  out+=`PExch=${session.pExch||''}\r\n`;
+  out+=`PAdr1=${session.qthName||''}\r\n`;
+  out+=`PAdr2=${session.padr2||''}\r\n`;
+  out+=`PSect=${session.sect||''}\r\n`;
+  out+=`PBand=${ediBand}\r\n`;
+  out+=`PClub=${session.club||''}\r\n`;
+  out+=`RName=${session.rName||''}\r\n`;
+  out+=`RCall=${session.rCall||''}\r\n`;
+  out+=`RAdr1=\r\n`;
+  out+=`RAdr2=\r\n`;
+  out+=`RPoCo=${session.rPoCo||''}\r\n`;
+  out+=`RCity=${session.rCity||''}\r\n`;
+  out+=`RCoun=${session.rCoun||''}\r\n`;
+  out+=`RPhon=${session.rPhon||''}\r\n`;
+  out+=`RHBBS=${session.rEmail||''}\r\n`;
+  out+=`MOpe1=${session.operator||session.myCall}\r\n`;
+  out+=`MOpe2=\r\n`;
+  out+=`STXEq=${bc.txEq||''}\r\n`;
+  out+=`SPowe=${bc.power||100}\r\n`;
+  out+=`SRXEq=${bc.rxEq||''}\r\n`;
+  out+=`SAnte=${bc.antenna||''}\r\n`;
+  out+=`SAntH=${antH};${antH}\r\n`;
+  out+=`CQSOs=${cQSOs};${cWWLs+cDXCs}\r\n`;
+  out+=`CQSOP=${cQSOP}\r\n`;
+  out+=`CWWLs=${cWWLs};0;${cWWLs}\r\n`;
+  out+=`CWWLB=0\r\n`;
+  out+=`CExcs=${cExcs};0;${cExcs}\r\n`;
+  out+=`CExcB=0\r\n`;
+  out+=`CDXCs=${cDXCs};0;${cDXCs}\r\n`;
+  out+=`CDXCB=0\r\n`;
+  out+=`CToSc=${cToSc}\r\n`;
+  out+=`CODXC=${cODXC}\r\n`;
+  out+=`[Remarks]\r\n`;
   out+=`[QSORecords;${qsos.length}]\r\n`;
   for(const q of qsos){
     const d=q.utcDate.slice(2);
@@ -1890,6 +1960,7 @@ function buildEdi(session,band){
     const qrb=Math.round(q.qrb||0);
     out+=`${d};${q.utcTime};${q.call};${mn};${q.rstS};${ns};${q.rstR};${nr};;${wwl};${qrb};;;;${q.dupe?'D':''}\r\n`;
   }
+  out+=`[END;S56OA HamLogTools VHF Logger]\r\n`;
   return out;
 }
 
@@ -1923,9 +1994,19 @@ function _showExportFor(session){
   document.getElementById('exportModal').className='modal-bg open';
 }
 
+function _warnEdiMissing(session){
+  const missing=[];
+  if(!session.sect) missing.push('PSect');
+  if(!session.club) missing.push('PClub');
+  if(!session.rName) missing.push('RName');
+  if(!session.rEmail) missing.push('RHBBS');
+  if(missing.length) showToast(t('warnEdiMissing',{fields:missing.join(', ')}));
+}
+
 function _exportBand(sessionId,band){
   const session=_sessions.find(s=>s.id===sessionId)||(_current&&_current.id===sessionId?_current:null);
   if(!session) return;
+  _warnEdiMissing(session);
   const content=buildEdi(session,band);
   if(!content){ showToast(t('errNoBand'),true); return; }
   const slug=`${session.myCall}_${band}_${session.contest}`.replace(/[^\w]/g,'_');
@@ -2114,6 +2195,7 @@ function exportAllZip(){
   if(!session) return;
   const bands=[...new Set(session.qsos.map(q=>q.band))];
   if(!bands.length){ showToast(t('errNoBand'),true); return; }
+  _warnEdiMissing(session);
   const files=[];
   for(const b of bands){
     const content=buildEdi(session,b);

@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S56OA EDI Validator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #0a0e14;
+  --bg2:    #0f1520;
+  --bg3:    #162030;
+  --bg4:    #1c2a3a;
+  --border: #1e3048;
+  --border2:#254060;
+  --text:   #cdd9e5;
+  --muted:  #637e96;
+  --dim:    #3d5a70;
+  --accent: #4d9de0;
+  --accent2:#2ecc8a;
+  --accent3:#f0a500;
+  --danger: #e05c4d;
+  --warn:   #f0a500;
+  --info:   #818cf8;
+  --ok:     #2ecc8a;
+  --r:      6px;
+}
+html[data-theme="light"] {
+  --bg:     #f0f4f8;
+  --bg2:    #ffffff;
+  --bg3:    #e4ecf3;
+  --bg4:    #d4e0eb;
+  --border: #bfcfdd;
+  --border2:#96b0c6;
+  --text:   #18273a;
+  --muted:  #4a6275;
+  --dim:    #7a9ab0;
+  --accent: #1a6fad;
+  --accent2:#178a58;
+  --accent3:#a06800;
+  --danger: #c03030;
+  --warn:   #a06800;
+  --info:   #4338ca;
+  --ok:     #178a58;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;min-height:100vh;transition:background-color .2s,color .2s}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:.9rem 1.5rem;display:flex;align-items:center;gap:1rem;position:sticky;top:0;z-index:100}
+.logo{font-family:'Space Mono',monospace;font-size:1rem;letter-spacing:-.02em}
+.logo .arr{color:var(--accent);margin:0 .3rem}
+.logo .fmt{color:var(--muted)}
+.version{font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);padding:1px 6px;border:1px solid var(--border);border-radius:3px;white-space:nowrap}
+.hdr-right{margin-left:auto;display:flex;gap:6px;align-items:center}
+.lang-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;font-family:'Space Mono',monospace}
+.lang-btn.active,.lang-btn:hover{background:var(--bg4);border-color:var(--accent);color:var(--accent)}
+.theme-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:14px}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+.wrap{max-width:960px;margin:0 auto;padding:1.5rem 1rem}
+.drop-zone{border:2px dashed var(--border2);border-radius:10px;padding:52px 24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--bg2);margin-bottom:1.5rem}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--accent);background:var(--bg3)}
+.drop-zone .icon{font-size:44px;margin-bottom:12px;opacity:.5}
+.drop-zone .hint{color:var(--muted);margin-bottom:14px;font-size:13px}
+.drop-zone input{display:none}
+.btn{padding:6px 14px;border:none;border-radius:var(--r);cursor:pointer;font-size:13px;font-weight:500;background:var(--bg4);color:var(--text);border:1px solid var(--border);transition:all .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{opacity:.85;color:#fff}
+.btn-sm{padding:3px 10px;font-size:12px}
+.btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* Summary */
+.summary{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:10px;flex-wrap:wrap}
+.sum-file{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px}
+.chip{padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap}
+.chip-err{background:rgba(224,92,77,.18);color:var(--danger)}
+.chip-warn{background:rgba(240,165,0,.18);color:var(--warn)}
+.chip-info{background:rgba(129,140,248,.18);color:var(--info)}
+.chip-ok{background:rgba(46,204,138,.18);color:var(--ok)}
+.chip-qso{background:var(--bg3);color:var(--muted)}
+/* Filter */
+.filter-bar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+.filter-bar .sp{flex:1}
+/* Table */
+.tbl-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th,td{padding:7px 12px;border-bottom:1px solid var(--border);text-align:left}
+th{font-size:11px;font-weight:600;color:var(--muted);background:var(--bg3);letter-spacing:.04em}
+td.lnum{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);width:52px;text-align:right}
+.sev{display:inline-flex;align-items:center;gap:4px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap}
+.sev-error{background:rgba(224,92,77,.18);color:var(--danger)}
+.sev-warn{background:rgba(240,165,0,.18);color:var(--warn)}
+.sev-info{background:rgba(129,140,248,.18);color:var(--info)}
+td.msg{font-size:13px}
+.all-ok{padding:32px;text-align:center;color:var(--ok);font-weight:600;font-size:15px}
+.hidden{display:none}
+/* Toast */
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:8px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:999}
+.toast.show{opacity:1}
+.toast.err{background:var(--danger)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <span>S56OA</span>
+    <span class="arr">▶</span>
+    <span>EDI</span>
+    <span class="arr">✓</span>
+    <span class="fmt">Validator</span>
+  </div>
+  <span class="version">v1.13</span>
+  <div class="hdr-right">
+    <button class="theme-btn" onclick="toggleTheme()">☀</button>
+    <button class="lang-btn active" id="btnSL" onclick="setLang('sl')">SL</button>
+    <button class="lang-btn" id="btnEN" onclick="setLang('en')">EN</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileIn').click()">
+    <div class="icon">📋</div>
+    <div class="hint" data-i18n="dropHint">Povleci EDI datoteko sem ali</div>
+    <button class="btn btn-primary" onclick="event.stopPropagation();document.getElementById('fileIn').click()" data-i18n="btnBrowse">Izberi datoteko</button>
+    <input type="file" id="fileIn" accept=".edi,.txt" onchange="handleFile(this.files[0])">
+  </div>
+
+  <div id="resultsSection" class="hidden">
+    <div class="summary" id="summary"></div>
+    <div class="filter-bar" id="filterBar"></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th data-i18n="colLine">Vrstica</th>
+          <th data-i18n="colSev">Resnost</th>
+          <th data-i18n="colMsg">Opis</th>
+        </tr></thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+      <div id="allOk" class="all-ok hidden" data-i18n="allOk">Datoteka je veljavna — ni napak ali opozoril.</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ════════════════════════════════════════
+//  I18N
+// ════════════════════════════════════════
+const S = {
+sl:{
+  dropHint:'Povleci EDI datoteko sem ali',
+  btnBrowse:'Izberi datoteko',
+  btnExport:'⬇ Izvozi poročilo',
+  btnAll:'Vse',btnErrors:'Napake',btnWarns:'Opozorila',btnInfo:'Info',
+  colLine:'Vrstica',colSev:'Resnost',colMsg:'Opis',
+  sevError:'NAPAKA',sevWarn:'OPOZORILO',sevInfo:'INFO',
+  sumErrors:'${n} napak',sumWarns:'${n} opozoril',sumInfo:'${n} info',
+  sumQsos:'${n} QSO',sumOk:'✓ Veljavno',
+  allOk:'Datoteka je veljavna — ni napak ali opozoril.',
+  eNoReg1test:'[REG1TEST;1] mora biti prva neprazna vrstica',
+  eNoRemarks:'Manjka sekcija [Remarks]',
+  eNoQsoSection:'Manjka sekcija [QSORecords;N]',
+  eNonAscii:'Nedovoljen znak (decimalno ${code}): "${ctx}"',
+  eNonSpecKw:'Nespecifikacijski keyword "${kw}"${hint}',
+  eNonSpecKwHint:' — morda mišljeno "${sug}"?',
+  eBlankInHeader:'Prazna vrstica v glavi EDI (spec ne dovoli)',
+  eQsoCountMismatch:'Deklarirano ${decl} QSO, najdeno ${found}',
+  eQsoFieldCount:'QSO zapis ima ${n} polj (pričakovano 15)',
+  eQsoDate:'Napačen datum "${val}" (pričakovano YYMMDD, MM 01-12, DD 01-31)',
+  eQsoTime:'Napačen čas "${val}" (pričakovano HHMM, 0000-2359)',
+  eQsoMode:'Napačna koda načina "${val}" (pričakovano 0-9)',
+  eQsoDupe:'Napačna dupe oznaka "${val}" (mora biti D ali prazno)',
+  eTDateFormat:'TDate napačen format "${val}" (pričakovano YYYYMMDD;YYYYMMDD)',
+  wFieldEmpty:'ZRS obvezno polje ${field} je prazno',
+  wPwwloFormat:'PWWLo "${val}" ni veljaven 6-znakoven lokator Maidenhead',
+  wQsoCallLen:'Klicni znak "${val}" presega 14 znakov',
+  wQsoWwlFormat:'Napačen format WWL "${val}"',
+  wQsoQrbNum:'QRB ni numeričen: "${val}"',
+  wQrbDeviation:'${call}: deklarirano ${decl} km, izračunano ~${calc} km (${pct}% odst.)',
+  wLineTooLong:'Vrstica presega 75 znakov (${n} znakov)',
+  wPBandUnknown:'PBand "${val}" ni standardna vrednost po spec',
+  iNoEnd:'[END;...] manjka (ni obvezno po spec, a priporočljivo)',
+  iKwOrder:'Keyword "${kw}" je izven pričakovanega vrstnega reda',
+  iDupeNonZeroQrb:'Duplikat QSO: QRB = ${qrb} km (bi moralo biti 0)',
+  iBlankInRemarks:'Prazna vrstica v sekciji [Remarks] pred [QSORecords;N]',
+},
+en:{
+  dropHint:'Drop EDI file here or',
+  btnBrowse:'Browse file',
+  btnExport:'⬇ Export report',
+  btnAll:'All',btnErrors:'Errors',btnWarns:'Warnings',btnInfo:'Info',
+  colLine:'Line',colSev:'Severity',colMsg:'Description',
+  sevError:'ERROR',sevWarn:'WARNING',sevInfo:'INFO',
+  sumErrors:'${n} errors',sumWarns:'${n} warnings',sumInfo:'${n} info',
+  sumQsos:'${n} QSOs',sumOk:'✓ Valid',
+  allOk:'File is valid — no issues found.',
+  eNoReg1test:'[REG1TEST;1] must be the first non-empty line',
+  eNoRemarks:'Missing [Remarks] section',
+  eNoQsoSection:'Missing [QSORecords;N] section',
+  eNonAscii:'Illegal character (decimal ${code}): "${ctx}"',
+  eNonSpecKw:'Non-spec keyword "${kw}"${hint}',
+  eNonSpecKwHint:' — did you mean "${sug}"?',
+  eBlankInHeader:'Blank line in EDI header (spec disallows)',
+  eQsoCountMismatch:'Declared ${decl} QSOs, found ${found}',
+  eQsoFieldCount:'QSO record has ${n} fields (expected 15)',
+  eQsoDate:'Invalid date "${val}" (expected YYMMDD, MM 01-12, DD 01-31)',
+  eQsoTime:'Invalid time "${val}" (expected HHMM, 0000-2359)',
+  eQsoMode:'Invalid mode code "${val}" (expected 0-9)',
+  eQsoDupe:'Invalid dupe flag "${val}" (must be D or empty)',
+  eTDateFormat:'TDate invalid format "${val}" (expected YYYYMMDD;YYYYMMDD)',
+  wFieldEmpty:'ZRS mandatory field ${field} is empty',
+  wPwwloFormat:'PWWLo "${val}" is not a valid 6-char Maidenhead locator',
+  wQsoCallLen:'Callsign "${val}" exceeds 14 characters',
+  wQsoWwlFormat:'Invalid WWL format "${val}"',
+  wQsoQrbNum:'QRB is not numeric: "${val}"',
+  wQrbDeviation:'${call}: declared ${decl} km, calculated ~${calc} km (${pct}% diff)',
+  wLineTooLong:'Line exceeds 75 characters (${n} chars)',
+  wPBandUnknown:'PBand "${val}" is not a standard value per spec',
+  iNoEnd:'[END;...] missing (not mandatory per spec, but recommended)',
+  iKwOrder:'Keyword "${kw}" is out of expected order per spec',
+  iDupeNonZeroQrb:'Duplicate QSO: QRB = ${qrb} km (should be 0)',
+  iBlankInRemarks:'Blank line in [Remarks] section before [QSORecords;N]',
+},
+};
+
+let _lang = localStorage.getItem('edi-val-lang') || 'sl';
+let _filter = 'all';
+let _issues = [];
+let _filename = '';
+let _qsoCount = 0;
+let _toastT;
+
+function t(k, vars) {
+  let s = (S[_lang] || S.sl)[k] || (S.sl[k] || k);
+  if (vars) for (const [p, v] of Object.entries(vars)) s = s.replaceAll('${' + p + '}', v);
+  return s;
+}
+function setLang(l) {
+  _lang = l;
+  localStorage.setItem('edi-val-lang', l);
+  document.getElementById('btnSL').classList.toggle('active', l === 'sl');
+  document.getElementById('btnEN').classList.toggle('active', l === 'en');
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  if (_filename) renderResults();
+}
+function toggleTheme() {
+  const h = document.documentElement;
+  const t2 = h.dataset.theme === 'light' ? '' : 'light';
+  h.dataset.theme = t2;
+  localStorage.setItem('edi-val-theme', t2);
+}
+function showToast(msg, err = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast show' + (err ? ' err' : '');
+  clearTimeout(_toastT); _toastT = setTimeout(() => el.className = 'toast', 2800);
+}
+function dl(content, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], {type:'text/plain'}));
+  a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function htmlEsc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ════════════════════════════════════════
+//  CONSTANTS
+// ════════════════════════════════════════
+const SPEC_KW_ORDER = [
+  'TName','TDate','PCall','PWWLo','PExch','PAdr1','PAdr2','PSect','PBand','PClub',
+  'RName','RCall','RAdr1','RAdr2','RPoCo','RCity','RCoun','RPhon','RHBBS',
+  'MOpe1','MOpe2','STXEq','SPowe','SRXEq','SAnte','SAntH',
+  'CQSOs','CQSOP','CWWLs','CWWLB','CExcs','CExcB','CDXCs','CDXCB','CToSc','CODXC',
+];
+const SPEC_KW_SET = new Set(SPEC_KW_ORDER);
+
+const NON_SPEC_KW = {
+  TCall:'PCall', TLocator:'PWWLo', TTime:null, RAZ:null,
+  RBand:'PBand', RClub:null, PWWLr:null, OPEqu:'SRXEq',
+};
+
+const ZRS_MANDATORY = [
+  'TName','PCall','PWWLo','PAdr1','PSect','PBand','PClub',
+  'RName','RHBBS','MOpe1','SPowe','CQSOs','CQSOP','CToSc',
+  'STXEq','SRXEq','SAnte','CODXC',
+];
+
+const VALID_PBANDS = new Set([
+  '50 MHz','70 MHz','144 MHz','145 MHz','430 MHz','432 MHz','433 MHz','435 MHz',
+  '1,3 GHz','1296 MHz','2,3 GHz','3,4 GHz','5,7 GHz','10 GHz',
+  '24 GHz','47 GHz','76 GHz','122 GHz','134 GHz','248 GHz',
+]);
+
+// ════════════════════════════════════════
+//  GEOMETRY
+// ════════════════════════════════════════
+function locToLatLon(loc) {
+  const s = loc.toUpperCase();
+  if (!/^[A-R]{2}[0-9]{2}([A-X]{2})?$/.test(s)) return null;
+  const lon = (s.charCodeAt(0) - 65) * 20 - 180 + (s[2] - '0') * 2;
+  const lat = (s.charCodeAt(1) - 65) * 10 - 90 + (s[3] - '0');
+  if (s.length >= 6)
+    return [lat + (s.charCodeAt(5) - 65) / 24 + 1/48,
+            lon + (s.charCodeAt(4) - 65) / 12 + 1/24];
+  return [lat + 0.5, lon + 1];
+}
+
+function haversine(a, b) {
+  const R = 6371, toR = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * toR, dLon = (b[1] - a[1]) * toR;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a[0]*toR)*Math.cos(b[0]*toR)*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+// ════════════════════════════════════════
+//  VALIDATOR
+// ════════════════════════════════════════
+function validate(text) {
+  const issues = [];
+  const addIssue = (severity, lineIdx, code, vars) =>
+    issues.push({severity, lineIdx, code, msg: t(code, vars)});
+  const err  = (li, code, v) => addIssue('error', li, code, v);
+  const warn = (li, code, v) => addIssue('warn',  li, code, v);
+  const info = (li, code, v) => addIssue('info',  li, code, v);
+
+  const raw = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  if (raw.length && raw[raw.length - 1] === '') raw.pop();
+
+  // ── Non-ASCII characters ────────────────────────────────────────────────────
+  for (let i = 0; i < raw.length; i++) {
+    for (const ch of raw[i]) {
+      const code = ch.charCodeAt(0);
+      if (code < 32 || code > 127) {
+        err(i, 'eNonAscii', {code, ctx: raw[i].slice(0, 30)});
+        break;
+      }
+    }
+  }
+
+  // ── Parse structure ─────────────────────────────────────────────────────────
+  let phase = 'pre';
+  let reg1testLineIdx = -1;
+  let remarksLineIdx  = -1;
+  let qsoSectionIdx   = -1;
+  let endLineIdx      = -1;
+  let qsoDeclared     = null;
+
+  // header: ordered list of {key, val, lineIdx}
+  const hdrFields   = [];
+  const hdrMap      = new Map(); // key → {val, lineIdx} (first occurrence)
+  const qsoLines    = [];        // {fields, lineIdx}
+
+  for (let i = 0; i < raw.length; i++) {
+    const line    = raw[i];
+    const trimmed = line.trim();
+
+    if (phase === 'pre') {
+      if (trimmed === '') continue;
+      if (trimmed === '[REG1TEST;1]') { reg1testLineIdx = i; phase = 'header'; }
+      else { reg1testLineIdx = -2; phase = 'header'; i--; }
+      continue;
+    }
+
+    if (phase === 'header') {
+      if (trimmed === '') { err(i, 'eBlankInHeader'); continue; }
+      if (/^\[Remarks\]/i.test(trimmed)) { remarksLineIdx = i; phase = 'remarks'; continue; }
+      if (/^\[QSORecords;/i.test(trimmed)) {
+        qsoSectionIdx = i;
+        const m = trimmed.match(/\[QSORecords;(\d+)\]/i);
+        qsoDeclared = m ? parseInt(m[1]) : null;
+        phase = 'qso'; continue;
+      }
+      if (/^\[END;/i.test(trimmed)) { endLineIdx = i; phase = 'end'; continue; }
+      const eq = line.indexOf('=');
+      if (eq > 0) {
+        const key = line.slice(0, eq).trim();
+        const val = line.slice(eq + 1).trim();
+        hdrFields.push({key, val, lineIdx: i});
+        if (!hdrMap.has(key)) hdrMap.set(key, {val, lineIdx: i});
+      }
+      continue;
+    }
+
+    if (phase === 'remarks') {
+      if (trimmed === '') { info(i, 'iBlankInRemarks'); continue; }
+      if (/^\[QSORecords;/i.test(trimmed)) {
+        qsoSectionIdx = i;
+        const m = trimmed.match(/\[QSORecords;(\d+)\]/i);
+        qsoDeclared = m ? parseInt(m[1]) : null;
+        phase = 'qso'; continue;
+      }
+      if (/^\[END;/i.test(trimmed)) { endLineIdx = i; phase = 'end'; continue; }
+      continue;
+    }
+
+    if (phase === 'qso') {
+      if (trimmed === '') continue;
+      if (/^\[END;/i.test(trimmed)) { endLineIdx = i; phase = 'end'; continue; }
+      qsoLines.push({fields: line.split(';'), lineIdx: i});
+      continue;
+    }
+  }
+
+  // ── Missing sections ────────────────────────────────────────────────────────
+  if (reg1testLineIdx < 0) err(0, 'eNoReg1test');
+  if (remarksLineIdx  < 0) err(null, 'eNoRemarks');
+  if (qsoSectionIdx   < 0) err(null, 'eNoQsoSection');
+
+  // ── Non-spec keywords ───────────────────────────────────────────────────────
+  for (const {key, lineIdx} of hdrFields) {
+    if (Object.prototype.hasOwnProperty.call(NON_SPEC_KW, key)) {
+      const sug  = NON_SPEC_KW[key];
+      const hint = sug ? t('eNonSpecKwHint', {sug}) : '';
+      err(lineIdx, 'eNonSpecKw', {kw: key, hint});
+    } else if (!SPEC_KW_SET.has(key)) {
+      err(lineIdx, 'eNonSpecKw', {kw: key, hint: ''});
+    }
+  }
+
+  // ── Keyword order ───────────────────────────────────────────────────────────
+  {
+    const specKws = hdrFields.filter(f => SPEC_KW_SET.has(f.key));
+    let lastPos = -1;
+    for (const {key, lineIdx} of specKws) {
+      const pos = SPEC_KW_ORDER.indexOf(key);
+      if (pos < lastPos) info(lineIdx, 'iKwOrder', {kw: key});
+      else lastPos = pos;
+    }
+  }
+
+  // ── TDate format ────────────────────────────────────────────────────────────
+  if (hdrMap.has('TDate')) {
+    const {val, lineIdx} = hdrMap.get('TDate');
+    if (!/^\d{8};\d{8}$/.test(val)) err(lineIdx, 'eTDateFormat', {val});
+  }
+
+  // ── PWWLo format ────────────────────────────────────────────────────────────
+  let myLatLon = null;
+  if (hdrMap.has('PWWLo')) {
+    const {val, lineIdx} = hdrMap.get('PWWLo');
+    if (!/^[A-Ra-r]{2}[0-9]{2}[A-Xa-x]{2}$/.test(val))
+      warn(lineIdx, 'wPwwloFormat', {val});
+    else myLatLon = locToLatLon(val.toUpperCase());
+  }
+
+  // ── PBand validity ──────────────────────────────────────────────────────────
+  if (hdrMap.has('PBand')) {
+    const {val, lineIdx} = hdrMap.get('PBand');
+    if (val && !VALID_PBANDS.has(val)) warn(lineIdx, 'wPBandUnknown', {val});
+  }
+
+  // ── ZRS mandatory fields ────────────────────────────────────────────────────
+  for (const field of ZRS_MANDATORY) {
+    const entry = hdrMap.get(field);
+    if (!entry || !entry.val)
+      warn(entry ? entry.lineIdx : null, 'wFieldEmpty', {field});
+  }
+
+  // ── Line length ─────────────────────────────────────────────────────────────
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i].length > 75) warn(i, 'wLineTooLong', {n: raw[i].length});
+  }
+
+  // ── QSO count mismatch ──────────────────────────────────────────────────────
+  if (qsoDeclared !== null && qsoLines.length !== qsoDeclared)
+    err(qsoSectionIdx, 'eQsoCountMismatch', {decl: qsoDeclared, found: qsoLines.length});
+
+  // ── QSO records ─────────────────────────────────────────────────────────────
+  for (const {fields, lineIdx} of qsoLines) {
+    if (fields.length !== 15) { err(lineIdx, 'eQsoFieldCount', {n: fields.length}); continue; }
+
+    const [date, time, call, modeCode, , , , , , wwl, qrb, , , , dupe] = fields;
+
+    // Date YYMMDD
+    if (!/^\d{6}$/.test(date)) {
+      err(lineIdx, 'eQsoDate', {val: date});
+    } else {
+      const mm = parseInt(date.slice(2, 4)), dd = parseInt(date.slice(4, 6));
+      if (mm < 1 || mm > 12 || dd < 1 || dd > 31) err(lineIdx, 'eQsoDate', {val: date});
+    }
+
+    // Time HHMM
+    if (!/^\d{4}$/.test(time)) {
+      err(lineIdx, 'eQsoTime', {val: time});
+    } else {
+      const hh = parseInt(time.slice(0, 2)), mm = parseInt(time.slice(2));
+      if (hh > 23 || mm > 59) err(lineIdx, 'eQsoTime', {val: time});
+    }
+
+    // Mode code 0-9
+    if (modeCode !== '' && !/^[0-9]$/.test(modeCode))
+      err(lineIdx, 'eQsoMode', {val: modeCode});
+
+    // Callsign length
+    if (call.length > 14) warn(lineIdx, 'wQsoCallLen', {val: call});
+
+    // WWL format
+    if (wwl && !/^[A-Ra-r]{2}[0-9]{2}([A-Xa-x]{2})?$/.test(wwl))
+      warn(lineIdx, 'wQsoWwlFormat', {val: wwl});
+
+    // QRB numeric
+    const qrbNum = parseFloat(qrb);
+    if (qrb !== '' && isNaN(qrbNum)) warn(lineIdx, 'wQsoQrbNum', {val: qrb});
+
+    // Dupe flag
+    if (dupe !== '' && dupe !== 'D') err(lineIdx, 'eQsoDupe', {val: dupe});
+
+    // Dupe with non-zero QRB
+    if (dupe === 'D' && !isNaN(qrbNum) && qrbNum > 0)
+      info(lineIdx, 'iDupeNonZeroQrb', {qrb: qrbNum});
+
+    // QRB vs haversine (only if 6-char locators available)
+    if (myLatLon && wwl && /^[A-Ra-r]{2}[0-9]{2}[A-Xa-x]{2}$/.test(wwl) &&
+        qrb !== '' && !isNaN(qrbNum) && qrbNum > 0 && dupe !== 'D') {
+      const theirLL = locToLatLon(wwl.toUpperCase());
+      if (theirLL) {
+        const calcKm = Math.round(haversine(myLatLon, theirLL));
+        if (calcKm > 0) {
+          const pct = Math.round(Math.abs(calcKm - qrbNum) / calcKm * 100);
+          if (pct > 10)
+            warn(lineIdx, 'wQrbDeviation', {call, decl: qrbNum, calc: calcKm, pct});
+        }
+      }
+    }
+  }
+
+  // ── [END;...] ───────────────────────────────────────────────────────────────
+  if (endLineIdx < 0) info(null, 'iNoEnd');
+
+  return {issues, qsoCount: qsoLines.length};
+}
+
+// ════════════════════════════════════════
+//  UI
+// ════════════════════════════════════════
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const {issues, qsoCount} = validate(e.target.result);
+    _issues    = issues;
+    _filename  = file.name;
+    _qsoCount  = qsoCount;
+    _filter    = 'all';
+    renderResults();
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function renderResults() {
+  const errN  = _issues.filter(i => i.severity === 'error').length;
+  const warnN = _issues.filter(i => i.severity === 'warn').length;
+  const infoN = _issues.filter(i => i.severity === 'info').length;
+
+  // Summary
+  const sum = document.getElementById('summary');
+  let chips = `<span class="sum-file">${htmlEsc(_filename)}</span>`;
+  if (!errN && !warnN) chips += `<span class="chip chip-ok">${t('sumOk')}</span>`;
+  if (errN)  chips += `<span class="chip chip-err">${t('sumErrors',{n:errN})}</span>`;
+  if (warnN) chips += `<span class="chip chip-warn">${t('sumWarns',{n:warnN})}</span>`;
+  if (infoN) chips += `<span class="chip chip-info">${t('sumInfo',{n:infoN})}</span>`;
+  chips += `<span class="chip chip-qso">${t('sumQsos',{n:_qsoCount})}</span>`;
+  sum.innerHTML = chips;
+
+  // Filter bar
+  const counts = {all:_issues.length, error:errN, warn:warnN, info:infoN};
+  document.getElementById('filterBar').innerHTML = `
+    <button class="btn btn-sm${_filter==='all'?' active':''}" onclick="setFilter('all')">${t('btnAll')} (${counts.all})</button>
+    <button class="btn btn-sm${_filter==='error'?' active':''}" onclick="setFilter('error')">${t('btnErrors')} (${counts.error})</button>
+    <button class="btn btn-sm${_filter==='warn'?' active':''}" onclick="setFilter('warn')">${t('btnWarns')} (${counts.warn})</button>
+    <button class="btn btn-sm${_filter==='info'?' active':''}" onclick="setFilter('info')">${t('btnInfo')} (${counts.info})</button>
+    <span class="sp"></span>
+    <button class="btn btn-primary btn-sm" onclick="exportReport()">${t('btnExport')}</button>
+  `;
+
+  renderTable();
+  document.getElementById('resultsSection').classList.remove('hidden');
+}
+
+function renderTable() {
+  const visible = _filter === 'all' ? _issues : _issues.filter(i => i.severity === _filter);
+  const tbody   = document.getElementById('resultsBody');
+  const allOk   = document.getElementById('allOk');
+
+  if (!visible.length) {
+    tbody.innerHTML = '';
+    allOk.classList.remove('hidden');
+    allOk.textContent = _issues.length === 0 ? t('allOk') : '';
+    return;
+  }
+  allOk.classList.add('hidden');
+
+  const SEV_CLS   = {error:'sev-error', warn:'sev-warn', info:'sev-info'};
+  const SEV_LABEL = {error:t('sevError'), warn:t('sevWarn'), info:t('sevInfo')};
+
+  tbody.innerHTML = visible.map(iss => {
+    const ln = iss.lineIdx !== null ? String(iss.lineIdx + 1) : '—';
+    return `<tr>
+      <td class="lnum">${ln}</td>
+      <td><span class="sev ${SEV_CLS[iss.severity]}">${SEV_LABEL[iss.severity]}</span></td>
+      <td class="msg">${htmlEsc(iss.msg)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function setFilter(f) {
+  _filter = f;
+  renderResults();
+}
+
+function exportReport() {
+  if (!_filename) return;
+  const errN  = _issues.filter(i => i.severity === 'error').length;
+  const warnN = _issues.filter(i => i.severity === 'warn').length;
+  const infoN = _issues.filter(i => i.severity === 'info').length;
+  const lines = [
+    `EDI Validator — ${_filename}`,
+    new Date().toISOString(),
+    '─'.repeat(60),
+    '',
+    `${t('sumErrors',{n:errN})}   ${t('sumWarns',{n:warnN})}   ${t('sumInfo',{n:infoN})}   ${t('sumQsos',{n:_qsoCount})}`,
+    '',
+  ];
+  if (!_issues.length) {
+    lines.push(t('allOk'));
+  } else {
+    for (const iss of _issues) {
+      const ln  = iss.lineIdx !== null ? `L${String(iss.lineIdx + 1).padStart(4)}` : '    —';
+      const sev = {error:'ERROR', warn:'WARN ', info:'INFO '}[iss.severity];
+      lines.push(`${ln}  ${sev}  ${iss.msg}`);
+    }
+  }
+  dl(lines.join('\r\n'), _filename.replace(/\.edi$/i, '') + '_report.txt');
+}
+
+// ════════════════════════════════════════
+//  DRAG & DROP
+// ════════════════════════════════════════
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+
+// ════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════
+const savedTheme = localStorage.getItem('edi-val-theme');
+if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+setLang(_lang);
+</script>
+</body>
+</html>
