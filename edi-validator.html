@@ -110,7 +110,7 @@ td.msg{font-size:13px}
     <span class="arr">✓</span>
     <span class="fmt">Validator</span>
   </div>
-  <span class="version">v1.13</span>
+  <span class="version">v1.13.1</span>
   <div class="hdr-right">
     <button class="theme-btn" onclick="toggleTheme()">☀</button>
     <button class="lang-btn active" id="btnSL" onclick="setLang('sl')">SL</button>
@@ -163,22 +163,26 @@ sl:{
   eNoReg1test:'[REG1TEST;1] mora biti prva neprazna vrstica',
   eNoRemarks:'Manjka sekcija [Remarks]',
   eNoQsoSection:'Manjka sekcija [QSORecords;N]',
-  eNonAscii:'Nedovoljen znak (decimalno ${code}): "${ctx}"',
+  wNonAscii:'Nedovoljen znak (decimalno ${code}): "${ctx}"',
   eNonSpecKw:'Nespecifikacijski keyword "${kw}"${hint}',
   eNonSpecKwHint:' — morda mišljeno "${sug}"?',
   eBlankInHeader:'Prazna vrstica v glavi EDI (spec ne dovoli)',
   eQsoCountMismatch:'Deklarirano ${decl} QSO, najdeno ${found}',
   eQsoFieldCount:'QSO zapis ima ${n} polj (pričakovano 15)',
   eQsoDate:'Napačen datum "${val}" (pričakovano YYMMDD, MM 01-12, DD 01-31)',
+  wQsoDateDay:'Neveljaven dan "${val}" za ta mesec',
+  wQsoDateOutOfRange:'Datum QSO ${val} je izven razpona TDate (${tdate})',
   eQsoTime:'Napačen čas "${val}" (pričakovano HHMM, 0000-2359)',
   eQsoMode:'Napačna koda načina "${val}" (pričakovano 0-9)',
   eQsoDupe:'Napačna dupe oznaka "${val}" (mora biti D ali prazno)',
   eTDateFormat:'TDate napačen format "${val}" (pričakovano YYYYMMDD;YYYYMMDD)',
   wFieldEmpty:'ZRS obvezno polje ${field} je prazno',
+  wDuplicateKw:'Podvojen keyword "${key}"',
   wPwwloFormat:'PWWLo "${val}" ni veljaven 6-znakoven lokator Maidenhead',
   wQsoCallLen:'Klicni znak "${val}" presega 14 znakov',
   wQsoWwlFormat:'Napačen format WWL "${val}"',
   wQsoQrbNum:'QRB ni numeričen: "${val}"',
+  wQsoRstFormat:'RST "${val}" ne ustreza načinu ${mode} (pričakovano ${expected} znakov)',
   wQrbDeviation:'${call}: deklarirano ${decl} km, izračunano ~${calc} km (${pct}% odst.)',
   wLineTooLong:'Vrstica presega 75 znakov (${n} znakov)',
   wPBandUnknown:'PBand "${val}" ni standardna vrednost po spec',
@@ -200,22 +204,26 @@ en:{
   eNoReg1test:'[REG1TEST;1] must be the first non-empty line',
   eNoRemarks:'Missing [Remarks] section',
   eNoQsoSection:'Missing [QSORecords;N] section',
-  eNonAscii:'Illegal character (decimal ${code}): "${ctx}"',
+  wNonAscii:'Illegal character (decimal ${code}): "${ctx}"',
   eNonSpecKw:'Non-spec keyword "${kw}"${hint}',
   eNonSpecKwHint:' — did you mean "${sug}"?',
   eBlankInHeader:'Blank line in EDI header (spec disallows)',
   eQsoCountMismatch:'Declared ${decl} QSOs, found ${found}',
   eQsoFieldCount:'QSO record has ${n} fields (expected 15)',
   eQsoDate:'Invalid date "${val}" (expected YYMMDD, MM 01-12, DD 01-31)',
+  wQsoDateDay:'Invalid day "${val}" for the given month',
+  wQsoDateOutOfRange:'QSO date ${val} is outside TDate range (${tdate})',
   eQsoTime:'Invalid time "${val}" (expected HHMM, 0000-2359)',
   eQsoMode:'Invalid mode code "${val}" (expected 0-9)',
   eQsoDupe:'Invalid dupe flag "${val}" (must be D or empty)',
   eTDateFormat:'TDate invalid format "${val}" (expected YYYYMMDD;YYYYMMDD)',
   wFieldEmpty:'ZRS mandatory field ${field} is empty',
+  wDuplicateKw:'Duplicate keyword "${key}"',
   wPwwloFormat:'PWWLo "${val}" is not a valid 6-char Maidenhead locator',
   wQsoCallLen:'Callsign "${val}" exceeds 14 characters',
   wQsoWwlFormat:'Invalid WWL format "${val}"',
   wQsoQrbNum:'QRB is not numeric: "${val}"',
+  wQsoRstFormat:'RST "${val}" inconsistent with mode ${mode} (expected ${expected} chars)',
   wQrbDeviation:'${call}: declared ${decl} km, calculated ~${calc} km (${pct}% diff)',
   wLineTooLong:'Line exceeds 75 characters (${n} chars)',
   wPBandUnknown:'PBand "${val}" is not a standard value per spec',
@@ -334,7 +342,7 @@ function validate(text) {
     for (const ch of raw[i]) {
       const code = ch.charCodeAt(0);
       if (code < 32 || code > 127) {
-        err(i, 'eNonAscii', {code, ctx: raw[i].slice(0, 30)});
+        warn(i, 'wNonAscii', {code, ctx: raw[i].slice(0, 30)});
         break;
       }
     }
@@ -379,7 +387,8 @@ function validate(text) {
         const key = line.slice(0, eq).trim();
         const val = line.slice(eq + 1).trim();
         hdrFields.push({key, val, lineIdx: i});
-        if (!hdrMap.has(key)) hdrMap.set(key, {val, lineIdx: i});
+        if (hdrMap.has(key)) warn(i, 'wDuplicateKw', {key});
+        else hdrMap.set(key, {val, lineIdx: i});
       }
       continue;
     }
@@ -437,6 +446,14 @@ function validate(text) {
     if (!/^\d{8};\d{8}$/.test(val)) err(lineIdx, 'eTDateFormat', {val});
   }
 
+  // ── TDate range for QSO date bounds ─────────────────────────────────────────
+  let tdateRange = null;
+  if (hdrMap.has('TDate')) {
+    const {val} = hdrMap.get('TDate');
+    const m2 = val.match(/^(\d{8});(\d{8})$/);
+    if (m2) tdateRange = {start: m2[1], end: m2[2]};
+  }
+
   // ── PWWLo format ────────────────────────────────────────────────────────────
   let myLatLon = null;
   if (hdrMap.has('PWWLo')) {
@@ -469,17 +486,31 @@ function validate(text) {
     err(qsoSectionIdx, 'eQsoCountMismatch', {decl: qsoDeclared, found: qsoLines.length});
 
   // ── QSO records ─────────────────────────────────────────────────────────────
+  const RST2_MODES = new Set(['1','4','5','6']); // SSB/AM/FM → 2-digit RST
+  const RST3_MODES = new Set(['2','3','7']);       // CW/RTTY → 3-digit RST
   for (const {fields, lineIdx} of qsoLines) {
     if (fields.length !== 15) { err(lineIdx, 'eQsoFieldCount', {n: fields.length}); continue; }
 
-    const [date, time, call, modeCode, , , , , , wwl, qrb, , , , dupe] = fields;
+    const [date, time, call, modeCode, rstS, , rstR, , , wwl, qrb, , , , dupe] = fields;
 
     // Date YYMMDD
     if (!/^\d{6}$/.test(date)) {
       err(lineIdx, 'eQsoDate', {val: date});
     } else {
       const mm = parseInt(date.slice(2, 4)), dd = parseInt(date.slice(4, 6));
-      if (mm < 1 || mm > 12 || dd < 1 || dd > 31) err(lineIdx, 'eQsoDate', {val: date});
+      if (mm < 1 || mm > 12 || dd < 1 || dd > 31) {
+        err(lineIdx, 'eQsoDate', {val: date});
+      } else {
+        const yy2 = parseInt(date.slice(0, 2));
+        const fullYear = yy2 >= 80 ? 1900 + yy2 : 2000 + yy2;
+        const d = new Date(fullYear, mm - 1, dd);
+        if (d.getMonth() !== mm - 1) warn(lineIdx, 'wQsoDateDay', {val: date});
+        if (tdateRange) {
+          const qsoDate8 = String(fullYear) + date.slice(2);
+          if (qsoDate8 < tdateRange.start || qsoDate8 > tdateRange.end)
+            warn(lineIdx, 'wQsoDateOutOfRange', {val: date, tdate: tdateRange.start + ';' + tdateRange.end});
+        }
+      }
     }
 
     // Time HHMM
@@ -493,6 +524,15 @@ function validate(text) {
     // Mode code 0-9
     if (modeCode !== '' && !/^[0-9]$/.test(modeCode))
       err(lineIdx, 'eQsoMode', {val: modeCode});
+
+    // RST format vs mode
+    if (RST2_MODES.has(modeCode)) {
+      if (rstS !== '' && !/^\d{2}$/.test(rstS)) warn(lineIdx, 'wQsoRstFormat', {val: rstS, mode: modeCode, expected: 2});
+      if (rstR !== '' && !/^\d{2}$/.test(rstR)) warn(lineIdx, 'wQsoRstFormat', {val: rstR, mode: modeCode, expected: 2});
+    } else if (RST3_MODES.has(modeCode)) {
+      if (rstS !== '' && !/^\d{3}$/.test(rstS)) warn(lineIdx, 'wQsoRstFormat', {val: rstS, mode: modeCode, expected: 3});
+      if (rstR !== '' && !/^\d{3}$/.test(rstR)) warn(lineIdx, 'wQsoRstFormat', {val: rstR, mode: modeCode, expected: 3});
+    }
 
     // Callsign length
     if (call.length > 14) warn(lineIdx, 'wQsoCallLen', {val: call});

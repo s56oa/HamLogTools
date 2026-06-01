@@ -17,7 +17,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 191 | 17 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
 | `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
-| `edi-validator.test.js` | `edi-validator.html` | 77 | 17 |
+| `edi-validator.test.js` | `edi-validator.html` | 109 | 22 |
 
 The sections below document each test file in detail.
 
@@ -204,7 +204,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 191 | 17 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
 | `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
-| `edi-validator.test.js` | `edi-validator.html` | 77 | 17 |
+| `edi-validator.test.js` | `edi-validator.html` | 109 | 22 |
 
 Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 
@@ -1194,7 +1194,7 @@ Maps ADIF mode to CSS badge class for the preview table.
 
 ---
 
-## `edi-validator.test.js` — 77 tests · 17 groups
+## `edi-validator.test.js` — 109 tests · 22 groups
 
 Covers the pure logic of `edi-validator.html`: Maidenhead geo utilities, and the full `validate()` function across all spec checks and issue types.
 
@@ -1220,17 +1220,17 @@ Verifies great-circle distance calculation.
 - Same point → distance `0`.
 - `JN65VP` → `JN78DG` ≈ 294 km (±30).
 
-#### 3 · `validate — clean EDI` (3 tests)
+#### 3 · `validate — clean EDI` (4 tests)
 Baseline sanity check with a well-formed EDI fixture.
 
 - No errors returned for valid EDI.
-- No warnings returned for EDI with all ZRS fields populated.
+- No warnings returned for EDI with all ZRS fields populated and spec-compliant content.
 - `qsoCount` matches the number of `[QSORecords;N]` QSO lines.
+- No `[END;...]` → `iNoEnd` (info).
 
-#### 4 · `validate — structure` (7 tests)
+#### 4 · `validate — structure` (6 tests)
 Checks for required section markers and blank-line rules.
 
-- Missing `[END;...]` → `iNoEnd` (info).
 - Missing `[REG1TEST;1]` → `eNoReg1test` (error).
 - Missing `[Remarks]` → `eNoRemarks` (error).
 - Missing `[QSORecords;N]` → `eNoQsoSection` (error).
@@ -1276,7 +1276,7 @@ Checks each QSO record has exactly 15 semicolon-delimited fields.
 - 16 fields → `eQsoFieldCount`.
 - 15 fields → no `eQsoFieldCount`.
 
-#### 10 · `validate — QSO date` (5 tests)
+#### 10 · `validate — QSO date` (6 tests)
 Checks QSO date field (`YYMMDD` at col 0).
 
 - Valid date → no `eQsoDate`.
@@ -1284,6 +1284,7 @@ Checks QSO date field (`YYMMDD` at col 0).
 - Month `00` → `eQsoDate`.
 - Month `13` → `eQsoDate`.
 - Day `00` → `eQsoDate`.
+- Invalid month → `eQsoDate` but **not** `wQsoDateOutOfRange` (range check suppressed for structurally invalid dates).
 
 #### 11 · `validate — QSO time` (4 tests)
 Checks QSO time field (`HHMM` at col 1).
@@ -1293,9 +1294,10 @@ Checks QSO time field (`HHMM` at col 1).
 - Hour `24` → `eQsoTime`.
 - Minute `60` → `eQsoTime`.
 
-#### 12 · `validate — QSO mode` (4 tests)
-Checks QSO mode field (col 3, valid values 1–9).
+#### 12 · `validate — QSO mode` (5 tests)
+Checks QSO mode field (col 3, valid values 0–9; mode 0 = "none of below" per spec).
 
+- Mode `0` → valid, no error (spec-defined "none of below" value).
 - Mode `1` and `9` → valid, no error.
 - Mode `A` (non-numeric) → `eQsoMode` (error).
 - Mode `10` (out of range) → `eQsoMode`.
@@ -1333,7 +1335,58 @@ Checks each line does not exceed 75 characters.
 - Line ≤75 chars → no `wLineTooLong`.
 - Line 76 chars → `wLineTooLong` (warn).
 
-#### 17 · `I18N` (5 tests)
+#### 17 · `validate — non-ASCII characters` (3 tests)
+Checks for characters outside the 7-bit ASCII range (spec §15.3.4).
+
+- Pure ASCII content → no `wNonAscii`.
+- Non-ASCII character present → `wNonAscii` (not `eNonAscii`).
+- Non-ASCII → severity is `warn` (not `error`).
+
+#### 18 · `validate — duplicate keywords` (4 tests)
+Checks that each header keyword appears at most once.
+
+- No duplicate keywords → no `wDuplicateKw`.
+- Duplicate `TDate` → `wDuplicateKw` (warn).
+- Duplicate `PCall` → `wDuplicateKw`.
+- First occurrence wins: a valid first `TDate` means no `eTDateFormat` even when the keyword is duplicated.
+
+#### 19 · `validate — QSO date day` (5 tests)
+Checks that the day value is valid for the given month and year (leap year aware).
+
+- Valid day → no `wQsoDateDay`.
+- Feb 29 on a leap year → no `wQsoDateDay`.
+- Feb 29 on a non-leap year → `wQsoDateDay` (warn).
+- Feb 30 → `wQsoDateDay`.
+- April 31 → `wQsoDateDay`.
+
+#### 20 · `validate — QSO date range` (5 tests)
+Checks that QSO dates fall within the `TDate` header range (`YYYYMMDD;YYYYMMDD`).
+
+- QSO date within TDate range → no `wQsoDateOutOfRange`.
+- QSO date before TDate start → `wQsoDateOutOfRange` (warn).
+- QSO date after TDate end → `wQsoDateOutOfRange`.
+- No `TDate` in header → no `wQsoDateOutOfRange`.
+- Invalid `TDate` format (not parseable) → no `wQsoDateOutOfRange` (range not checked).
+
+#### 21 · `validate — QSO RST format` (13 tests)
+Checks RST fields (col 4 = RST sent, col 6 = RST received) match the expected digit count for the mode.
+Rules: SSB/AM/FM (modes 1/4/5/6) → 2 digits; CW/RTTY (modes 2/3/7) → 3 digits; modes 0/8/9 → check skipped. Empty RST is always allowed.
+
+- SSB mode 1 with `59` → no `wQsoRstFormat`.
+- CW mode 2 with `599` → no `wQsoRstFormat`.
+- SSB mode 1 with `599` (3 digits) → `wQsoRstFormat` (warn).
+- CW mode 2 with `59` (2 digits) → `wQsoRstFormat`.
+- FM mode 6 with `59` → no `wQsoRstFormat`.
+- RTTY mode 7 with `599` → no `wQsoRstFormat`.
+- Mode 0 (none) → no `wQsoRstFormat` (check skipped).
+- Empty RST → no `wQsoRstFormat` (allowed by spec).
+- SSB mode 4 with `59` → no `wQsoRstFormat`.
+- CW mode 3 with `599` → no `wQsoRstFormat`.
+- CW mode 3 with `59` (2 digits) → `wQsoRstFormat`.
+- AM mode 5 with `59` → no `wQsoRstFormat`.
+- AM mode 5 with `599` (3 digits) → `wQsoRstFormat`.
+
+#### 22 · `I18N` (5 tests)
 Verifies i18n key completeness and translation distinctness.
 
 - `sl.sevError` and `en.sevError` are non-empty strings.
@@ -2106,7 +2159,7 @@ Cabrillo v3 specifikacija določa `RY` za RTTY (ne splošnega `DG`).
 
 ---
 
-## `edi-validator.test.js` — 77 testov · 17 skupin
+## `edi-validator.test.js` — 109 testov · 22 skupin
 
 Pokriva čisto logiko `edi-validator.html`: Maidenhead geo pomočnike in celotno funkcijo `validate()` za vse preverbe specifikacije in tipe težav.
 
@@ -2132,17 +2185,17 @@ Preverja izračun razdalje po velikem krogu.
 - Ista točka → razdalja `0`.
 - `JN65VP` → `JN78DG` ≈ 294 km (±30).
 
-#### 3 · `validate — clean EDI` (3 testi)
+#### 3 · `validate — clean EDI` (4 testi)
 Osnovna preverba z dobro oblikovano EDI fikstura.
 
 - Brez napak za veljaven EDI.
-- Brez opozoril za EDI z vsemi polji ZRS.
+- Brez opozoril za EDI z vsemi polji ZRS in vsebino v skladu s specifikacijo.
 - `qsoCount` ustreza številu QSO vrstic v `[QSORecords;N]`.
+- Manjkajoč `[END;...]` → `iNoEnd` (info).
 
-#### 4 · `validate — structure` (7 testov)
+#### 4 · `validate — structure` (6 testov)
 Preverja obvezne razdelčne oznake in pravila za prazne vrstice.
 
-- Manjkajoč `[END;...]` → `iNoEnd` (info).
 - Manjkajoč `[REG1TEST;1]` → `eNoReg1test` (error).
 - Manjkajoč `[Remarks]` → `eNoRemarks` (error).
 - Manjkajoč `[QSORecords;N]` → `eNoQsoSection` (error).
@@ -2188,7 +2241,7 @@ Preverja, da ima vsak zapis QSO natanko 15 polj, ločenih s podpičji.
 - 16 polj → `eQsoFieldCount`.
 - 15 polj → brez `eQsoFieldCount`.
 
-#### 10 · `validate — QSO date` (5 testov)
+#### 10 · `validate — QSO date` (6 testov)
 Preverja polje datuma QSO (`YYMMDD` pri stolpcu 0).
 
 - Veljaven datum → brez `eQsoDate`.
@@ -2196,6 +2249,7 @@ Preverja polje datuma QSO (`YYMMDD` pri stolpcu 0).
 - Mesec `00` → `eQsoDate`.
 - Mesec `13` → `eQsoDate`.
 - Dan `00` → `eQsoDate`.
+- Neveljaven mesec → `eQsoDate`, a **ne** `wQsoDateOutOfRange` (preverba obsega je zatrta za strukturno neveljavne datume).
 
 #### 11 · `validate — QSO time` (4 testi)
 Preverja polje časa QSO (`HHMM` pri stolpcu 1).
@@ -2205,9 +2259,10 @@ Preverja polje časa QSO (`HHMM` pri stolpcu 1).
 - Ura `24` → `eQsoTime`.
 - Minuta `60` → `eQsoTime`.
 
-#### 12 · `validate — QSO mode` (4 testi)
-Preverja polje načina QSO (stolpec 3, veljavne vrednosti 1–9).
+#### 12 · `validate — QSO mode` (5 testov)
+Preverja polje načina QSO (stolpec 3, veljavne vrednosti 0–9; način 0 = "nobeden od spodaj" po spec).
 
+- Način `0` → veljaven, brez napake (vrednost po spec "nobeden od spodaj").
 - Način `1` in `9` → veljaven, brez napake.
 - Način `A` (neštevilčen) → `eQsoMode` (error).
 - Način `10` (izven obsega) → `eQsoMode`.
@@ -2245,7 +2300,58 @@ Preverja, da nobena vrstica ne presega 75 znakov.
 - Vrstica ≤75 znakov → brez `wLineTooLong`.
 - Vrstica 76 znakov → `wLineTooLong` (warn).
 
-#### 17 · `I18N` (5 testov)
+#### 17 · `validate — non-ASCII characters` (3 testi)
+Preverja znake izven 7-bitnega ASCII obsega (spec §15.3.4).
+
+- Vsebina samo z ASCII → brez `wNonAscii`.
+- Prisoten ne-ASCII znak → `wNonAscii` (ne `eNonAscii`).
+- Ne-ASCII → resnost je `warn` (ne `error`).
+
+#### 18 · `validate — duplicate keywords` (4 testi)
+Preverja, da se vsaka ključna beseda glave pojavi največ enkrat.
+
+- Brez podvojenih ključnih besed → brez `wDuplicateKw`.
+- Podvojen `TDate` → `wDuplicateKw` (warn).
+- Podvojen `PCall` → `wDuplicateKw`.
+- Zmaga prva pojavitev: veljaven prvi `TDate` pomeni brez `eTDateFormat`, čeprav je ključna beseda podvojena.
+
+#### 19 · `validate — QSO date day` (5 testov)
+Preverja, da je vrednost dneva veljavna za dani mesec in leto (z upoštevanjem prestopnih let).
+
+- Veljaven dan → brez `wQsoDateDay`.
+- 29. februar v prestopnem letu → brez `wQsoDateDay`.
+- 29. februar v neprestopnem letu → `wQsoDateDay` (warn).
+- 30. februar → `wQsoDateDay`.
+- 31. april → `wQsoDateDay`.
+
+#### 20 · `validate — QSO date range` (5 testov)
+Preverja, da datumi QSO padejo znotraj obsega `TDate` (`YYYYMMDD;YYYYMMDD`) iz glave.
+
+- Datum QSO znotraj obsega TDate → brez `wQsoDateOutOfRange`.
+- Datum QSO pred začetkom TDate → `wQsoDateOutOfRange` (warn).
+- Datum QSO po koncu TDate → `wQsoDateOutOfRange`.
+- Brez `TDate` v glavi → brez `wQsoDateOutOfRange`.
+- Neveljaven format `TDate` (ni razčlenljiv) → brez `wQsoDateOutOfRange` (obseg ni preverjen).
+
+#### 21 · `validate — QSO RST format` (13 testov)
+Preverja polji RST (stolpec 4 = oddani RST, stolpec 6 = sprejeti RST) glede na pričakovano število cifer za način.
+Pravila: SSB/AM/FM (načini 1/4/5/6) → 2 cifri; CW/RTTY (načini 2/3/7) → 3 cifre; načini 0/8/9 → preverba preskočena. Prazen RST je vedno dovoljen.
+
+- SSB način 1 z `59` → brez `wQsoRstFormat`.
+- CW način 2 z `599` → brez `wQsoRstFormat`.
+- SSB način 1 z `599` (3 cifre) → `wQsoRstFormat` (warn).
+- CW način 2 z `59` (2 cifri) → `wQsoRstFormat`.
+- FM način 6 z `59` → brez `wQsoRstFormat`.
+- RTTY način 7 z `599` → brez `wQsoRstFormat`.
+- Način 0 (nobeden) → brez `wQsoRstFormat` (preverba preskočena).
+- Prazen RST → brez `wQsoRstFormat` (dovoljeno po spec).
+- SSB način 4 z `59` → brez `wQsoRstFormat`.
+- CW način 3 z `599` → brez `wQsoRstFormat`.
+- CW način 3 z `59` (2 cifri) → `wQsoRstFormat`.
+- AM način 5 z `59` → brez `wQsoRstFormat`.
+- AM način 5 z `599` (3 cifre) → `wQsoRstFormat`.
+
+#### 22 · `I18N` (5 testov)
 Preverja celovitost i18n ključev in razlikovanje prevodov.
 
 - `sl.sevError` in `en.sevError` sta neprazna niza.

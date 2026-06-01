@@ -311,7 +311,10 @@ Open the file in any modern browser — no installation required.
 - **Keyword order validation** — checks that header fields follow the REG1TEST v1 spec order; flags non-standard keywords (`TCall`, `TLocator`, `RAZ`, `RClub`, etc.)
 - **Header field validation** — `TDate` format (`YYYYMMDD;YYYYMMDD`), `PWWLo` Maidenhead format and length, `PBand` known value
 - **ZRS mandatory fields** — warns if `PSect`, `PClub`, `RName`, `RHBBS`, or `SPowe` are empty
-- **QSO record validation** — field count (exactly 15), date `YYMMDD`, time `HHMM`, mode code 1–9, dupe flag (`D` or empty)
+- **QSO record validation** — field count (exactly 15), date `YYMMDD`, calendar day validity (leap year aware), time `HHMM`, mode code 0–9 (0 = "none of below"), RST format per mode (SSB/AM/FM → 2 digits; CW/RTTY → 3 digits), dupe flag (`D` or empty)
+- **Non-ASCII character check** — warns if any line contains characters outside 7-bit ASCII (spec §15.3.4)
+- **Duplicate keyword detection** — warns if any header keyword appears more than once
+- **QSO date range check** — warns if a QSO date falls outside the `TDate` header range
 - **WWL format check** — flags QSO locators that don't match the 6-character Maidenhead pattern
 - **QRB deviation check** — compares declared QRB (col 10) against haversine-calculated distance from `PWWLo` to QSO locator; warns if deviation exceeds 10%
 - **Line length check** — warns if any line exceeds 75 characters (spec limit)
@@ -516,7 +519,7 @@ node --test --test-reporter=spec edi-validator.test.js
 | `vhf-logger/vhf-logger.test.js` | 191 | 17 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`) |
 | `adif-stats.test.js` | 133 | 21 (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`) |
 | `adif2cab.test.js` | 191 | 31 (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×9, `formatCabDate`, `buildQSOLine` ×5, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` structure, `I18N`) |
-| `edi-validator.test.js` | 77 | 17 (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `I18N`) |
+| `edi-validator.test.js` | 109 | 22 (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `validate — non-ASCII characters`, `validate — duplicate keywords`, `validate — QSO date day`, `validate — QSO date range`, `validate — QSO RST format`, `I18N`) |
 
 See [TESTING.md](TESTING.md) for full test documentation.
 
@@ -854,7 +857,10 @@ Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
 - **Validacija vrstnega reda ključnih besed** — preverja zaporedje polj glave glede na specifikacijo REG1TEST v1; zaznava nestandardne ključne besede (`TCall`, `TLocator`, `RAZ`, `RClub` itd.)
 - **Validacija polj glave** — format `TDate` (`YYYYMMDD;YYYYMMDD`), format in dolžina Maidenhead `PWWLo`, znana vrednost `PBand`
 - **Obvezna polja ZRS** — opozori, če so `PSect`, `PClub`, `RName`, `RHBBS` ali `SPowe` prazni
-- **Validacija zapisov QSO** — število polj (natanko 15), datum `YYMMDD`, čas `HHMM`, koda načina 1–9, zastavica duplikata (`D` ali prazno)
+- **Validacija zapisov QSO** — število polj (natanko 15), datum `YYMMDD`, veljavnost dne (prestopna leta), čas `HHMM`, koda načina 0–9 (0 = "nobeden od spodaj"), format RST glede na način (SSB/AM/FM → 2 znaka; CW/RTTY → 3 znake), zastavica duplikata (`D` ali prazno)
+- **Preverjanje ne-ASCII znakov** — opozori, če katera koli vrstica vsebuje znake izven 7-bitnega ASCII (spec §15.3.4)
+- **Zaznavanje podvojenih ključnih besed** — opozori, če se katera koli ključna beseda glave pojavi več kot enkrat
+- **Preverjanje datumskega obsega QSO** — opozori, če datum QSO pade izven obsega `TDate` iz glave
 - **Preverjanje formata WWL** — zaznava lokatorje QSO, ki ne ustrezajo 6-znakovnemu vzorcu Maidenhead
 - **Preverjanje odmika QRB** — primerja deklarirani QRB (stolpec 10) z razdaljo, izračunano haversinom med `PWWLo` in lokatorjem QSO; opozori, če odmik presega 10 %
 - **Preverjanje dolžine vrstic** — opozori, če katera koli vrstica presega 75 znakov (meja specifikacije)
@@ -1059,7 +1065,7 @@ node --test --test-reporter=spec edi-validator.test.js
 | `vhf-logger/vhf-logger.test.js` | 191 | 17 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`) |
 | `adif-stats.test.js` | 133 | 21 (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`) |
 | `adif2cab.test.js` | 191 | 31 (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×9, `formatCabDate`, `buildQSOLine` ×5, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` struktura, `I18N`) |
-| `edi-validator.test.js` | 77 | 17 (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `I18N`) |
+| `edi-validator.test.js` | 109 | 22 (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `validate — non-ASCII characters`, `validate — duplicate keywords`, `validate — QSO date day`, `validate — QSO date range`, `validate — QSO RST format`, `I18N`) |
 
 Celotna dokumentacija je v [TESTING.md](TESTING.md).
 

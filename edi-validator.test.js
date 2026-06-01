@@ -391,6 +391,11 @@ describe('validate — QSO date', () => {
   it('day 00 → eQsoDate', () => {
     assert.ok(hasCode(validate(makeEdi([qsoWith('260500')])).issues, 'eQsoDate'));
   });
+  it('invalid month → eQsoDate but NOT wQsoDateOutOfRange', () => {
+    const {issues} = validate(makeEdi([qsoWith('261310')]));
+    assert.ok(hasCode(issues, 'eQsoDate'));
+    assert.ok(!hasCode(issues, 'wQsoDateOutOfRange'), 'should not range-check an already-invalid date');
+  });
 });
 
 describe('validate — QSO time', () => {
@@ -412,6 +417,7 @@ describe('validate — QSO time', () => {
 
 describe('validate — QSO mode', () => {
   const qsoMode = (m) => `260510;1030;S59DGO;${m};59;001;59;001;;JN65VP;50;;;;`;
+  it('mode 0 valid (none of below per spec)', () => assert.ok(!hasCode(validate(makeEdi([qsoMode('0')])).issues, 'eQsoMode')));
   it('mode 1 valid', () => assert.ok(!hasCode(validate(makeEdi([qsoMode('1')])).issues, 'eQsoMode')));
   it('mode 9 valid', () => assert.ok(!hasCode(validate(makeEdi([qsoMode('9')])).issues, 'eQsoMode')));
   it('mode A → eQsoMode', () => assert.ok(hasCode(validate(makeEdi([qsoMode('A')])).issues, 'eQsoMode')));
@@ -491,6 +497,175 @@ describe('validate — line length', () => {
     const text = makeEdi([GOOD_QSO]).replace('SAnte=9el Yagi', long);
     const {issues} = validate(text);
     assert.ok(hasCode(issues, 'wLineTooLong'));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  validate — non-ASCII characters
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('validate — non-ASCII characters', () => {
+  it('pure ASCII → no wNonAscii', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO]));
+    assert.ok(!hasCode(issues, 'wNonAscii'));
+  });
+  it('non-ASCII char → wNonAscii (not eNonAscii)', () => {
+    const text = makeEdi([GOOD_QSO], {TName: 'Testéation'});
+    const {issues} = validate(text);
+    assert.ok(hasCode(issues, 'wNonAscii'), 'wNonAscii expected');
+    assert.ok(!hasCode(issues, 'eNonAscii'), 'old eNonAscii must not exist');
+  });
+  it('non-ASCII → severity is warn', () => {
+    const text = makeEdi([GOOD_QSO], {TName: 'Testé'});
+    const {issues} = validate(text);
+    const issue = issues.find(i => i.code === 'wNonAscii');
+    assert.ok(issue && issue.severity === 'warn', `expected warn severity`);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  validate — duplicate keywords
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('validate — duplicate keywords', () => {
+  it('no duplicates → no wDuplicateKw', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO]));
+    assert.ok(!hasCode(issues, 'wDuplicateKw'));
+  });
+  it('duplicate TDate → wDuplicateKw', () => {
+    const text = makeEdi([GOOD_QSO]).replace('[Remarks]', 'TDate=20260510;20260510\r\n[Remarks]');
+    const {issues} = validate(text);
+    assert.ok(hasCode(issues, 'wDuplicateKw'));
+  });
+  it('duplicate PCall → wDuplicateKw', () => {
+    const text = makeEdi([GOOD_QSO]).replace('[Remarks]', 'PCall=S56OA\r\n[Remarks]');
+    const {issues} = validate(text);
+    assert.ok(hasCode(issues, 'wDuplicateKw'));
+  });
+  it('first occurrence wins — valid first TDate means no eTDateFormat despite duplicate', () => {
+    const text = makeEdi([GOOD_QSO]).replace('[Remarks]', 'TDate=bad\r\n[Remarks]');
+    const {issues} = validate(text);
+    assert.ok(hasCode(issues, 'wDuplicateKw'), 'wDuplicateKw expected');
+    assert.ok(!hasCode(issues, 'eTDateFormat'), 'first valid TDate should not produce eTDateFormat');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  validate — QSO date day
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('validate — QSO date day', () => {
+  const qsoWith = (date) => `${date};1030;S59DGO;1;59;001;59;001;;JN65VP;50;;;;`;
+  it('valid day → no wQsoDateDay', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO]));
+    assert.ok(!hasCode(issues, 'wQsoDateDay'));
+  });
+  it('Feb 29 on leap year → no wQsoDateDay', () => {
+    const text = makeEdi([qsoWith('240229')], {TDate: '20240229;20240229'});
+    const {issues} = validate(text);
+    assert.ok(!hasCode(issues, 'wQsoDateDay'), 'Feb 29 on 2024 (leap year) should be valid');
+  });
+  it('Feb 29 on non-leap year → wQsoDateDay', () => {
+    const text = makeEdi([qsoWith('260229')], {TDate: '20260228;20260301'});
+    const {issues} = validate(text);
+    assert.ok(hasCode(issues, 'wQsoDateDay'), 'Feb 29 on 2026 (non-leap) should warn');
+  });
+  it('Feb 30 → wQsoDateDay', () => {
+    const text = makeEdi([qsoWith('260230')], {TDate: '20260228;20260301'});
+    const {issues} = validate(text);
+    assert.ok(hasCode(issues, 'wQsoDateDay'));
+  });
+  it('April 31 → wQsoDateDay', () => {
+    const text = makeEdi([qsoWith('260431')], {TDate: '20260430;20260501'});
+    const {issues} = validate(text);
+    assert.ok(hasCode(issues, 'wQsoDateDay'));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  validate — QSO date range
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('validate — QSO date range', () => {
+  const qsoWith = (date) => `${date};1030;S59DGO;1;59;001;59;001;;JN65VP;50;;;;`;
+  it('QSO date within TDate range → no wQsoDateOutOfRange', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO]));
+    assert.ok(!hasCode(issues, 'wQsoDateOutOfRange'));
+  });
+  it('QSO date before TDate start → wQsoDateOutOfRange', () => {
+    const text = makeEdi([qsoWith('260509')], {TDate: '20260510;20260512'});
+    const {issues} = validate(text);
+    assert.ok(hasCode(issues, 'wQsoDateOutOfRange'));
+  });
+  it('QSO date after TDate end → wQsoDateOutOfRange', () => {
+    const text = makeEdi([qsoWith('260513')], {TDate: '20260510;20260512'});
+    const {issues} = validate(text);
+    assert.ok(hasCode(issues, 'wQsoDateOutOfRange'));
+  });
+  it('no TDate in header → no wQsoDateOutOfRange', () => {
+    const text = makeEdi([GOOD_QSO]).replace('TDate=20260510;20260510\r\n', '');
+    const {issues} = validate(text);
+    assert.ok(!hasCode(issues, 'wQsoDateOutOfRange'));
+  });
+  it('invalid TDate format → no wQsoDateOutOfRange (range not parsed)', () => {
+    const text = makeEdi([GOOD_QSO], {TDate: 'not-a-date'});
+    const {issues} = validate(text);
+    assert.ok(!hasCode(issues, 'wQsoDateOutOfRange'));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  validate — QSO RST format
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('validate — QSO RST format', () => {
+  const qsoRst = (mode, rstS, rstR) => `260510;1030;S59DGO;${mode};${rstS};001;${rstR};001;;JN65VP;50;;;;`;
+  it('SSB mode 1 with 59 → no wQsoRstFormat', () => {
+    const {issues} = validate(makeEdi([qsoRst('1', '59', '59')]));
+    assert.ok(!hasCode(issues, 'wQsoRstFormat'));
+  });
+  it('CW mode 2 with 599 → no wQsoRstFormat', () => {
+    const {issues} = validate(makeEdi([qsoRst('2', '599', '599')]));
+    assert.ok(!hasCode(issues, 'wQsoRstFormat'));
+  });
+  it('SSB mode 1 with 599 (3 digits) → wQsoRstFormat', () => {
+    const {issues} = validate(makeEdi([qsoRst('1', '599', '599')]));
+    assert.ok(hasCode(issues, 'wQsoRstFormat'));
+  });
+  it('CW mode 2 with 59 (2 digits) → wQsoRstFormat', () => {
+    const {issues} = validate(makeEdi([qsoRst('2', '59', '59')]));
+    assert.ok(hasCode(issues, 'wQsoRstFormat'));
+  });
+  it('FM mode 6 with 59 → no wQsoRstFormat', () => {
+    const {issues} = validate(makeEdi([qsoRst('6', '59', '59')]));
+    assert.ok(!hasCode(issues, 'wQsoRstFormat'));
+  });
+  it('RTTY mode 7 with 599 → no wQsoRstFormat', () => {
+    const {issues} = validate(makeEdi([qsoRst('7', '599', '599')]));
+    assert.ok(!hasCode(issues, 'wQsoRstFormat'));
+  });
+  it('mode 0 (none) → no wQsoRstFormat (check skipped)', () => {
+    const {issues} = validate(makeEdi([qsoRst('0', '99', '99')]));
+    assert.ok(!hasCode(issues, 'wQsoRstFormat'));
+  });
+  it('empty RST → no wQsoRstFormat (allowed by spec)', () => {
+    const {issues} = validate(makeEdi([qsoRst('1', '', '')]));
+    assert.ok(!hasCode(issues, 'wQsoRstFormat'));
+  });
+  it('SSB mode 4 with 59 → no wQsoRstFormat', () => {
+    const {issues} = validate(makeEdi([qsoRst('4', '59', '59')]));
+    assert.ok(!hasCode(issues, 'wQsoRstFormat'));
+  });
+  it('CW mode 3 with 599 → no wQsoRstFormat', () => {
+    const {issues} = validate(makeEdi([qsoRst('3', '599', '599')]));
+    assert.ok(!hasCode(issues, 'wQsoRstFormat'));
+  });
+  it('CW mode 3 with 59 (2 digits) → wQsoRstFormat', () => {
+    const {issues} = validate(makeEdi([qsoRst('3', '59', '59')]));
+    assert.ok(hasCode(issues, 'wQsoRstFormat'));
+  });
+  it('AM mode 5 with 59 → no wQsoRstFormat', () => {
+    const {issues} = validate(makeEdi([qsoRst('5', '59', '59')]));
+    assert.ok(!hasCode(issues, 'wQsoRstFormat'));
+  });
+  it('AM mode 5 with 599 (3 digits) → wQsoRstFormat', () => {
+    const {issues} = validate(makeEdi([qsoRst('5', '599', '599')]));
+    assert.ok(hasCode(issues, 'wQsoRstFormat'));
   });
 });
 

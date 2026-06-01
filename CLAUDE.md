@@ -179,15 +179,16 @@ Col 8 = exchange (empty), col 11–13 = reserved (empty), col 14 = `D` if dupe.
 
 **Validation checks:**
 - Structure: `[REG1TEST;1]` present, `[Remarks]` present, `[QSORecords;N]` present, `[END;...]` present (info if missing)
-- Header: non-spec keywords (`eNonSpecKw`), keyword order (`iKwOrder`), `TDate` format, `PWWLo` format/length, `PBand` known value
+- Non-ASCII characters in any line (`wNonAscii`) — warn (spec §15.3.4: only 7-bit ASCII allowed)
+- Header: non-spec keywords (`eNonSpecKw`), duplicate keywords (`wDuplicateKw`), keyword order (`iKwOrder`), `TDate` format, `PWWLo` format/length, `PBand` known value
 - ZRS mandatory fields: `PSect`, `PClub`, `RName`, `RHBBS`, `SPowe` — warn if empty (`wFieldEmpty`)
 - QSO count declared vs actual (`eQsoCountMismatch`)
-- Per QSO: field count=15 (`eQsoFieldCount`), date YYMMDD (`eQsoDate`), time HHMM (`eQsoTime`), mode 1–9 (`eQsoMode`), dupe flag empty or `D` (`eQsoDupe`), WWL format (`wQsoWwlFormat`), QRB numeric (`wQsoQrbNum`), QRB deviation >10% vs haversine (`wQrbDeviation`; skipped for dupes, skipped if `PWWLo` is 4-char)
+- Per QSO: field count=15 (`eQsoFieldCount`), date YYMMDD (`eQsoDate`), calendar day validity / leap year (`wQsoDateDay`), date within TDate range (`wQsoDateOutOfRange`; only fires if date is structurally valid), time HHMM (`eQsoTime`), mode 0–9 (`eQsoMode`; 0 = "none of below", valid per spec), RST format per mode (`wQsoRstFormat`; SSB/AM/FM → 2 digits, CW/RTTY → 3 digits), dupe flag empty or `D` (`eQsoDupe`), WWL format (`wQsoWwlFormat`), QRB numeric (`wQsoQrbNum`), QRB deviation >10% vs haversine (`wQrbDeviation`; skipped for dupes, skipped if `PWWLo` is 4-char)
 - Line length ≤75 chars (`wLineTooLong`)
 
 **i18n:** `const S = {sl:{...}, en:{...}}` — accessed in tests via second `vm.runInContext('globalThis._S = S;', ctx)`.
 
-**Tests:** `edi-validator.test.js` — 77 tests, 17 groups (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `I18N`).
+**Tests:** `edi-validator.test.js` — 109 tests, 22 groups (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `validate — non-ASCII characters`, `validate — duplicate keywords`, `validate — QSO date day`, `validate — QSO date range`, `validate — QSO RST format`, `I18N`).
 
 ---
 
