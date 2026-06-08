@@ -146,9 +146,11 @@ tr.sev-call-d2  td{background:rgba(99,126,150,.07)}
 tr.sev-unknown  td{background:rgba(99,126,150,.04)}
 tr.sev-loccall  td{background:rgba(77,157,224,.07)}
 tr.sev-loccall2 td{background:rgba(99,126,150,.05)}
+tr.sev-cw       td{background:rgba(77,157,224,.09)}
 tr.sev-loc-high:hover td,tr.sev-loc-med:hover td,
 tr.sev-call-d1:hover td,tr.sev-call-d2:hover td,
-tr.sev-unknown:hover td,tr.sev-loccall:hover td,tr.sev-loccall2:hover td{filter:brightness(1.12)}
+tr.sev-unknown:hover td,tr.sev-loccall:hover td,
+tr.sev-loccall2:hover td,tr.sev-cw:hover td{filter:brightness(1.12)}
 
 .badge{display:inline-block;font-size:9px;padding:1px 5px;border-radius:2px;
   font-family:'Space Mono',monospace;vertical-align:middle;margin-right:2px}
@@ -160,6 +162,7 @@ tr.sev-unknown:hover td,tr.sev-loccall:hover td,tr.sev-loccall2:hover td{filter:
 .badge-unk  {background:rgba(99,126,150,.15);color:var(--dim)}
 .badge-loccall {background:rgba(77,157,224,.22);color:var(--accent)}
 .badge-loccall2{background:rgba(99,126,150,.18);color:var(--muted)}
+.badge-cw      {background:rgba(77,157,224,.28);color:var(--accent);font-weight:700}
 
 .chip{
   display:inline-block;font-family:'Space Mono',monospace;font-size:10px;
@@ -192,7 +195,7 @@ tr.sev-unknown:hover td,tr.sev-loccall:hover td,tr.sev-loccall2:hover td{filter:
 
 <header>
   <div class="logo">S56OA EDI<span class="icon">⟨×⟩</span>Crosscheck<span class="fmt"> tool</span></div>
-  <span class="version">v1.13</span>
+  <span class="version">v1.14</span>
   <div class="lang-wrap">
     <button class="theme-btn" id="btnTheme" onclick="toggleTheme()">☀</button>
     <button class="lang-btn active" id="btnSL" onclick="setLang('sl')">SL</button>
@@ -347,6 +350,9 @@ sl:{
   expSimilarCall:'Podoben klicni znak:',
   expCallByLoc:'Klicni znak iz lokatorja:',
   expUnknownCall:'Neznan klicni znak — ni podobnih v zgodovini',
+  sumCwConf:'CW zamenjave',
+  cwConf:'CW zamenjava (Morse):',
+  expCwConf:'CW zamenjava (Morse):',
 },
 en:{
   stepTitle1:'Load historical logs',
@@ -388,6 +394,9 @@ en:{
   expSimilarCall:'Similar callsign:',
   expCallByLoc:'Callsign from locator:',
   expUnknownCall:'Unknown callsign — no similar found in history',
+  sumCwConf:'CW confusions',
+  cwConf:'CW confusion (Morse):',
+  expCwConf:'CW confusion (Morse):',
 }};
 let _lang = 'sl';
 function t(k){ return (S[_lang]||S.sl)[k] || (S.sl[k]||k); }
@@ -500,6 +509,34 @@ function levenshtein(a, b, maxDist){
 
 function htmlEsc(s){
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ════════════════════════════════════════
+//  CW CONFUSION PAIRS
+//  Normalized: lexicographically smaller char first → Set of 2-char strings.
+//  Cat 1: single dit/dah add-or-remove  Cat 2: mirror/reversal  Cat 3: numbers↔letters
+// ════════════════════════════════════════
+const _CW_PAIRS = new Set([
+  // Cat 1 — one element difference
+  'EI','ET','IS','MO','HS','DN','AW','JW','UV','LR','GO','CK','FU','MT',
+  // Cat 2 — mirror (reversal) pairs
+  'AN','BV','DU','GW','KR',
+  // Cat 3 — number ↔ letter
+  '5H','6B','1J','4V',
+]);
+
+function cwConfusionOf(a, b){
+  if(a.length !== b.length) return null;
+  let dA=null, dB=null;
+  for(let i=0; i<a.length; i++){
+    if(a[i] !== b[i]){
+      if(dA !== null) return null; // more than 1 difference
+      dA = a[i]; dB = b[i];
+    }
+  }
+  if(dA === null) return null;
+  const key = dA < dB ? dA+dB : dB+dA;
+  return _CW_PAIRS.has(key) ? `${dA}↔${dB}` : null;
 }
 
 // ════════════════════════════════════════
@@ -704,6 +741,7 @@ function runCrosscheck(qsos){
     const base = baseCall(qso.call);
     const histEntry = _histDB.get(base);
     const issues = [];
+    const isCW = qso.mode === 'CW';
 
     // Locator check
     // Decisions use weighted counts (entry.total / entry.locators);
@@ -747,11 +785,18 @@ function runCrosscheck(qsos){
 
     // Callsign check: only if not in history at all
     if(!histEntry){
-      const globalSimilar = similarCache.get(base) || [];
-      issues.push(globalSimilar.length > 0
-        ? { type: 'CALL_SIMILAR', similar: globalSimilar }
-        : { type: 'CALL_UNKNOWN' }
-      );
+      const rawSimilar = similarCache.get(base) || [];
+      // For CW QSOs: annotate each similar entry with cwPair if it's a single-char CW confusion.
+      const globalSimilar = isCW
+        ? rawSimilar.map(s => { const p=cwConfusionOf(base,s.call); return p ? {...s,cwPair:p} : {...s}; })
+        : rawSimilar;
+      if(globalSimilar.length > 0){
+        // CW_CONFUSION fires when any dist=1 hit is a CW-pair; plain CALL_SIMILAR otherwise.
+        const hasCWHit = isCW && globalSimilar.some(s => s.cwPair);
+        issues.push({ type: hasCWHit ? 'CW_CONFUSION' : 'CALL_SIMILAR', similar: globalSimilar });
+      } else {
+        issues.push({ type: 'CALL_UNKNOWN' });
+      }
 
       // Locator-filtered callsign suggestion (composite heuristic).
       // Algorithm iterates over weighted _locToCalls (presence is the signal,
@@ -771,7 +816,10 @@ function runCrosscheck(qsos){
             }
             if(d > 0 && d <= 2){
               const rawCount = (locCallsRaw && locCallsRaw.get(hcall)) || 0;
-              candidates.push({ call: hcall, dist: d, count: rawCount });
+              const cand = { call: hcall, dist: d, count: rawCount };
+              const cp = isCW ? cwConfusionOf(base, hcall) : null;
+              if(cp) cand.cwPair = cp;
+              candidates.push(cand);
             }
           }
           if(candidates.length > 0){
@@ -792,14 +840,15 @@ function runCrosscheck(qsos){
 // ════════════════════════════════════════
 function renderSummaryBar(){
   if(!_results.length){ document.getElementById('summaryBar').innerHTML=''; return; }
-  let nClean=0, nLocH=0, nLocM=0, nLocMiss=0, nCall=0, nCallLoc=0, nUnk=0;
+  let nClean=0, nLocH=0, nLocM=0, nLocMiss=0, nCall=0, nCallLoc=0, nUnk=0, nCwConf=0;
   for(const r of _results){
     if(!r.issues.length){ nClean++; continue; }
     for(const iss of r.issues){
-      if(iss.type==='LOC_MISMATCH')  iss.severity==='high' ? nLocH++ : nLocM++;
-      else if(iss.type==='LOC_MISSING') nLocMiss++;
+      if(iss.type==='LOC_MISMATCH')      iss.severity==='high' ? nLocH++ : nLocM++;
+      else if(iss.type==='LOC_MISSING')  nLocMiss++;
+      else if(iss.type==='CW_CONFUSION') nCwConf++;
       else if(iss.type==='CALL_SIMILAR') nCall++;
-      else if(iss.type==='CALL_BY_LOC') nCallLoc++;
+      else if(iss.type==='CALL_BY_LOC')  nCallLoc++;
       else nUnk++;
     }
   }
@@ -814,6 +863,7 @@ function renderSummaryBar(){
     (nLocH ? stat(nLocH, 'err',  t('sumLocH')) : '') +
     (nLocM ? stat(nLocM, 'warn', t('sumLocM')) : '') +
     (nLocMiss ? stat(nLocMiss, 'warn', t('sumLocM')) : '') +
+    (nCwConf ? stat(nCwConf, 'warn', t('sumCwConf')) : '') +
     (nCall ? stat(nCall, 'warn', t('sumCall'))  : '') +
     (nCallLoc ? stat(nCallLoc, 'warn', t('sumCallLoc')) : '') +
     (nUnk  ? stat(nUnk,  'dim',  t('sumUnk'))   : '');
@@ -826,6 +876,7 @@ function rowSevClass(issues){
   for(const iss of issues){
     if(iss.type==='LOC_MISMATCH') return 'sev-loc-med';
     if(iss.type==='LOC_MISSING') return 'sev-loc-med';
+    if(iss.type==='CW_CONFUSION') return 'sev-cw';
     if(iss.type==='CALL_SIMILAR' && iss.similar[0]?.dist===1) return 'sev-call-d1';
     if(iss.type==='CALL_SIMILAR') return 'sev-call-d2';
     if(iss.type==='CALL_BY_LOC'  && iss.similar[0]?.dist===1) return 'sev-loccall';
@@ -842,6 +893,8 @@ function renderBadges(issues){
       return `<span class="badge ${iss.severity==='high'?'badge-loc-h':'badge-loc-m'}">LOC?</span>`;
     if(iss.type==='LOC_MISSING')
       return `<span class="badge badge-loc-m">LOC?</span>`;
+    if(iss.type==='CW_CONFUSION')
+      return `<span class="badge badge-cw">CW?</span>`;
     if(iss.type==='CALL_SIMILAR'){
       const minD = iss.similar[0]?.dist || 2;
       return `<span class="badge ${minD===1?'badge-call':'badge-call2'}">CALL?</span>`;
@@ -864,16 +917,23 @@ function renderDetail(issues){
       }).join('');
       return `<span style="color:var(--muted)">${htmlEsc(t('histMode'))}</span> ${chips}`;
     }
-    if(iss.type === 'CALL_SIMILAR'){
-      const chips = iss.similar.map(s =>
-        `<span class="chip ${s.dist===1?'d1':''}">${htmlEsc(s.call)}<span class="cnt">d=${s.dist} · ${s.count}×</span></span>`
-      ).join('');
-      return `<span style="color:var(--muted)">${htmlEsc(t('similar'))}</span> ${chips}`;
+    if(iss.type === 'CW_CONFUSION' || iss.type === 'CALL_SIMILAR'){
+      const chips = iss.similar.map(s => {
+        const cw = s.cwPair
+          ? `<span style="color:var(--accent3);font-size:8px;margin-left:3px">⚡${htmlEsc(s.cwPair)}</span>`
+          : '';
+        return `<span class="chip ${s.dist===1?'d1':''}">${htmlEsc(s.call)}<span class="cnt">d=${s.dist} · ${s.count}×</span>${cw}</span>`;
+      }).join('');
+      const lbl = iss.type==='CW_CONFUSION' ? t('cwConf') : t('similar');
+      return `<span style="color:var(--muted)">${htmlEsc(lbl)}</span> ${chips}`;
     }
     if(iss.type === 'CALL_BY_LOC'){
-      const chips = iss.similar.map(s =>
-        `<span class="chip ${s.dist===1?'d1':''}">${htmlEsc(s.call)}<span class="cnt">d=${s.dist} · ${s.count}×</span></span>`
-      ).join('');
+      const chips = iss.similar.map(s => {
+        const cw = s.cwPair
+          ? `<span style="color:var(--accent3);font-size:8px;margin-left:3px">⚡${htmlEsc(s.cwPair)}</span>`
+          : '';
+        return `<span class="chip ${s.dist===1?'d1':''}">${htmlEsc(s.call)}<span class="cnt">d=${s.dist} · ${s.count}×</span>${cw}</span>`;
+      }).join('');
       return `<span style="color:var(--muted)">${htmlEsc(t('fromLocator'))}</span> ${chips}`;
     }
     return `<span style="color:var(--dim);font-size:10px">${htmlEsc(t('noSimilar'))}</span>`;
@@ -948,12 +1008,25 @@ function exportIssues(){
       if(iss.type === 'LOC_MISSING'){
         return `${t('expMissingLoc')} ${t('expSuggest')} <b>${htmlEsc(iss.historicalMode)}</b> (mode ${iss.historicalModeCount}/${iss.total} = ${Math.round(iss.historicalModeCount/iss.total*100)}%)`;
       }
+      if(iss.type === 'CW_CONFUSION'){
+        const sug = iss.similar.slice(0,3).map(s => {
+          const cw = s.cwPair ? ` ⚡${htmlEsc(s.cwPair)}` : '';
+          return `${htmlEsc(s.call)} (d=${s.dist}${cw})`;
+        }).join(', ');
+        return `${t('expCwConf')} ${sug}`;
+      }
       if(iss.type === 'CALL_SIMILAR'){
-        const sug = iss.similar.slice(0,3).map(s => `${htmlEsc(s.call)} (d=${s.dist})`).join(', ');
+        const sug = iss.similar.slice(0,3).map(s => {
+          const cw = s.cwPair ? ` ⚡${htmlEsc(s.cwPair)}` : '';
+          return `${htmlEsc(s.call)} (d=${s.dist}${cw})`;
+        }).join(', ');
         return `${t('expSimilarCall')} ${sug}`;
       }
       if(iss.type === 'CALL_BY_LOC'){
-        const sug = iss.similar.slice(0,3).map(s => `${htmlEsc(s.call)} (d=${s.dist})`).join(', ');
+        const sug = iss.similar.slice(0,3).map(s => {
+          const cw = s.cwPair ? ` ⚡${htmlEsc(s.cwPair)}` : '';
+          return `${htmlEsc(s.call)} (d=${s.dist}${cw})`;
+        }).join(', ');
         return `${t('expCallByLoc')} ${sug}`;
       }
       return t('expUnknownCall');

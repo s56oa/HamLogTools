@@ -11,7 +11,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | Test file | Tool | Tests | Groups |
 |---|---|---|---|
 | `edi2adif.test.js` | `edi2adif.html` | 122 | 9 |
-| `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
+| `edi-crosscheck.test.js` | `edi-crosscheck.html` | 87 | 10 |
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 191 | 17 |
@@ -198,7 +198,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | Testna datoteka | Orodje | Testov | Skupin |
 |---|---|---|---|
 | `edi2adif.test.js` | `edi2adif.html` | 122 | 9 |
-| `edi-crosscheck.test.js` | `edi-crosscheck.html` | 56 | 8 |
+| `edi-crosscheck.test.js` | `edi-crosscheck.html` | 87 | 10 |
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
 | `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 191 | 17 |
@@ -363,9 +363,9 @@ je reimplementirana neposredno in testirana v izolaciji.
 
 ---
 
-## `edi-crosscheck.test.js` — 56 tests · 8 groups
+## `edi-crosscheck.test.js` — 87 tests · 10 groups
 
-Covers the pure logic of `edi-crosscheck.html`: suffix stripping, edit distance, EDI parsing, and all crosscheck algorithms including configurable thresholds and missing-locator suggestions.
+Covers the pure logic of `edi-crosscheck.html`: suffix stripping, edit distance, EDI parsing, all crosscheck algorithms including configurable thresholds and missing-locator suggestions, and CW confusion detection.
 
 ### How the tests work
 
@@ -455,6 +455,34 @@ Verifies QSO extraction from an EDI file fragment.
 | No match | No `CALL_BY_LOC` when no historical calls from that locator are within distance 2 |
 | Separate from CALL_SIMILAR | `CALL_BY_LOC` and `CALL_SIMILAR` appear as distinct issues in the result |
 | Redundant coexistence | `CALL_BY_LOC` is raised even when its candidates overlap with `CALL_SIMILAR` — both signals are shown as corroborating evidence |
+
+#### 9 · `cwConfusionOf` (21 tests)
+
+Verifies the CW confusion pair lookup function across all three confusion categories.
+
+| Sub-group | What is checked |
+|---|---|
+| Category 1 — single element difference | `E↔I` (·/··), `T↔E` (–/·), `D↔N` (–··/–·), `U↔V` (··–/···–), `M↔O` (––/–––), `G↔O` (––·/–––), `K↔C` (–·–/–·–·), `S↔H` (···/····) — confirmed in both directions |
+| Category 2 — mirror/reversal pairs | `A↔N` (·–/–·), `B↔V` (–···/···–), `K↔R` (–·–/·–·) |
+| Category 3 — number ↔ letter | `H↔5` (····/·····), `B↔6` (–···/–····), `J↔1` (·–––/·––––), `V↔4` (···–/····–) |
+| Null cases | Identical strings → `null`; different lengths → `null`; 2+ differences → `null`; non-pair substitution → `null`; `0↔O` (not in CW pair set) → `null` |
+
+#### 10 · `runCrosscheck — CW confusion` (10 tests)
+
+Verifies that `CW_CONFUSION` is raised for CW QSOs with confusable callsign substitutions, and that non-CW QSOs are unaffected.
+
+| Test | What is verified |
+|---|---|
+| CW_CONFUSION type raised | CW QSO with unknown call that has a distance-1 CW-pair match → issue type `CW_CONFUSION` |
+| SSB isolation | Same scenario on SSB mode → issue type `CALL_SIMILAR` (not `CW_CONFUSION`) |
+| Non-CW-pair → CALL_SIMILAR | CW QSO with distance-1 match that is *not* a CW confusion pair → `CALL_SIMILAR` |
+| cwPair annotation value | `iss.similar[0].cwPair` equals the expected pair string (e.g. `'H↔S'`) |
+| Number↔letter pair | CW QSO with `H↔5` substitution → `CW_CONFUSION` with `cwPair='5↔H'` or `'H↔5'` |
+| Mirror pair | CW QSO with `A↔N` substitution → `CW_CONFUSION`, `cwPair='A↔N'` |
+| T↔E pair | CW QSO with `T↔E` substitution → `CW_CONFUSION`, `cwPair='E↔T'` |
+| Distance 2 → CALL_SIMILAR | CW QSO with distance-2 match (even if each substitution is a CW pair) → `CALL_SIMILAR` |
+| CALL_BY_LOC cwPair annotation | `CALL_BY_LOC` candidates are annotated with `cwPair` for CW QSOs |
+| State isolation | `clearHist()` between tests; CW confusion does not bleed across test cases |
 
 ---
 
@@ -1396,9 +1424,9 @@ Verifies i18n key completeness and translation distinctness.
 
 ---
 
-## `edi-crosscheck.test.js` — 56 testov · 8 skupin
+## `edi-crosscheck.test.js` — 87 testov · 10 skupin
 
-Pokriva čisto logiko `edi-crosscheck.html`: odstranjevanje pripon, razdalja urejanja, razčlenjevanje EDI in vse algoritme crosschecka, vključno z nastavljivimi pragovi in predlogi za manjkajoče lokatorje.
+Pokriva čisto logiko `edi-crosscheck.html`: odstranjevanje pripon, razdalja urejanja, razčlenjevanje EDI, vse algoritme crosschecka vključno z nastavljivimi pragovi in predlogi za manjkajoče lokatorje, ter zaznavanje CW zamenjav.
 
 ### Kako testi delujejo
 
@@ -1488,6 +1516,34 @@ Preverja ekstrakcijo QSO iz fragmenta EDI datoteke.
 | Brez ujemanja | Ni `CALL_BY_LOC`, ko noben zgodovinski klicni znak z istega lokatorja ni v razdalji 2 |
 | Ločeno od CALL_SIMILAR | `CALL_BY_LOC` in `CALL_SIMILAR` se pojavita kot ločeni težavi v rezultatu |
 | Redundantno soobstajanje | `CALL_BY_LOC` se sproži tudi, ko se kandidati prekrivajo s `CALL_SIMILAR` — oba signala se prikažeta kot potrjevalni dokaz |
+
+#### 9 · `cwConfusionOf` (21 testov)
+
+Preverja funkcijo za iskanje CW zamenjav v vseh treh kategorijah.
+
+| Podskupina | Kaj se preverja |
+|---|---|
+| Kategorija 1 — razlika v enem elementu | `E↔I` (·/··), `T↔E` (–/·), `D↔N` (–··/–·), `U↔V` (··–/···–), `M↔O` (––/–––), `G↔O` (––·/–––), `K↔C` (–·–/–·–·), `S↔H` (···/····) — potrjeno v obeh smereh |
+| Kategorija 2 — zrcalni/reverz pari | `A↔N` (·–/–·), `B↔V` (–···/···–), `K↔R` (–·–/·–·) |
+| Kategorija 3 — številka ↔ črka | `H↔5` (····/·····), `B↔6` (–···/–····), `J↔1` (·–––/·––––), `V↔4` (···–/····–) |
+| Ničelni primeri | Enaka niza → `null`; različni dolžini → `null`; 2+ razlik → `null`; ne-par zamenjava → `null`; `0↔O` (ni v naboru CW parov) → `null` |
+
+#### 10 · `runCrosscheck — CW zamenjave` (10 testov)
+
+Preverja, da se `CW_CONFUSION` sproži za CW zveze z zamenljivimi klicnimi znaki, in da ne-CW zveze niso prizadete.
+
+| Test | Kaj se preverja |
+|---|---|
+| Tip CW_CONFUSION | CW QSO z neznanim klicnim znakom, ki ima ujemanje z razdaljo 1 in CW parom → tip težave `CW_CONFUSION` |
+| Izolacija SSB | Enak primer na načinu SSB → tip `CALL_SIMILAR` (ne `CW_CONFUSION`) |
+| Ne-CW-par → CALL_SIMILAR | CW QSO z ujemanjem razdalje 1, ki *ni* CW par → `CALL_SIMILAR` |
+| Vrednost anotacije cwPair | `iss.similar[0].cwPair` ustreza pričakovanemu nizu para (npr. `'H↔S'`) |
+| Par številka↔črka | CW QSO z zamenjavo `H↔5` → `CW_CONFUSION` z `cwPair='5↔H'` ali `'H↔5'` |
+| Zrcalni par | CW QSO z zamenjavo `A↔N` → `CW_CONFUSION`, `cwPair='A↔N'` |
+| Par T↔E | CW QSO z zamenjavo `T↔E` → `CW_CONFUSION`, `cwPair='E↔T'` |
+| Razdalja 2 → CALL_SIMILAR | CW QSO z ujemanjem razdalje 2 (tudi če sta obe zamenjavi CW par) → `CALL_SIMILAR` |
+| Anotacija cwPair za CALL_BY_LOC | Kandidati `CALL_BY_LOC` so anotirani s `cwPair` za CW zveze |
+| Izolacija stanja | `clearHist()` med testi; CW zamenjave se ne prenašajo med testnimi primeri |
 
 ---
 

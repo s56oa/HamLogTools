@@ -99,6 +99,7 @@ Open the file in any modern browser — no installation required.
 | `LOC?` | Amber | Locator differs from historical mode; lower confidence or new locator appeared before (operator moved) |
 | `LOC?` | Amber | QSO has no locator but the callsign exists in history — suggests the historical mode locator |
 | `CALL?` | Amber | Callsign not in history; similar callsign found globally (Levenshtein distance 1–2) |
+| `CW?` | Blue | CW QSO; callsign not in history; similar callsign found that differs by a CW-confusable character pair (e.g. H↔S, E↔T) |
 | `LOC-CALL?` | Blue | Callsign not in history; similar callsign found *from the same locator* (composite heuristic) |
 | `?` | Grey | Callsign not in history; no similar callsign found |
 | `✓` | Green | Callsign in history, locator matches historical mode |
@@ -113,6 +114,7 @@ The locator check requires at least **3** historical appearances by default, but
 - **Configurable thresholds** — adjust minimum historical appearances (1–10) and mode-confidence cutoff (10–100%) via toolbar sliders; re-run crosscheck without reloading the file
 - **Missing-locator suggestion** — flags QSOs that have no locator but whose callsign exists in history, suggesting the most common historical locator
 - **Composite callsign check** — when a callsign is unknown globally, also checks callsigns that have historically operated from the *same locator* (catches typos like `IK3GOY` → `IW3GOA` when both are from `JN65DM`)
+- **CW confusion detection** (v1.14) — for CW-mode QSOs, flags similar callsigns that differ by a CW-confusable character pair (`H↔S`, `E↔I`, `T↔E`, etc.); annotates `CALL_SIMILAR` and `CALL_BY_LOC` chips with the specific pair (`⚡H↔S`)
 - **HTML export** — download a self-contained HTML report of all flagged QSOs with correction suggestions
 - **Persistent baseline** — the "Clear history" button clears only your dropped EDI logs; the baseline remains in place.
 
@@ -513,7 +515,7 @@ node --test --test-reporter=spec edi-validator.test.js
 | Test file | Tests | Groups |
 |---|---|---|
 | `edi2adif.test.js` | 122 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit) |
-| `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` locator mismatch ×6, `runCrosscheck` callsign ×8, missing locator ×4, thresholds ×3, callsign by locator ×4) |
+| `edi-crosscheck.test.js` | 87 | 10 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` locator mismatch ×6, `runCrosscheck` callsign ×8, missing locator ×4, thresholds ×3, callsign by locator ×4, `cwConfusionOf` ×21, CW confusion ×10) |
 | `adif-merge.test.js` | 112 | 21 (`parseADIF`, `updateKey`, `recomputeDupes`, `adifField`, `htmlEsc`, `csvEsc`, `modeBadge`, `buildFilename`, ADIF export, I18N, re-merge safety, and more) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 | `vhf-logger/vhf-logger.test.js` | 191 | 17 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`) |
@@ -645,6 +647,7 @@ Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
 | `LOC?` | Rumena | Lokator se razlikuje od zgodovinskega modusa; nižje zaupanje ali nov lokator je bil že viden (prenosna postaja) |
 | `LOC?` | Rumena | Zveza nima lokatorja, a klicni znak obstaja v zgodovini — predlaga zgodovinski modus lokator |
 | `CALL?` | Rumena | Klicni znak ni v zgodovini; najden je podoben klicni znak globalno (Levenshteinova razdalja 1–2) |
+| `CW?` | Modra | CW zveza; klicni znak ni v zgodovini; najden je podoben klicni znak, ki se razlikuje po CW-zamenljivem paru znakov (npr. H↔S, E↔T) |
 | `LOC-CALL?` | Modra | Klicni znak ni v zgodovini; najden je podoben klicni znak *z istega lokatorja* (kompozitna hevristika) |
 | `?` | Siva | Klicni znak ni v zgodovini; ni podobnega klicnega znaka |
 | `✓` | Zelena | Klicni znak je v zgodovini, lokator ustreza modusu |
@@ -659,6 +662,7 @@ Preverjanje lokatorja zahteva privzeto vsaj **3** zgodovinske pojavitve, a je to
 - **Nastavljivi pragovi** — nastavi najmanjše zgodovinske pojavitve (1–10) in prag zaupanja v modus (10–100%) prek drsnikov v orodni vrstici; ponovi crosscheck brez ponovnega nalaganja datoteke
 - **Predlog za manjkajoč lokator** — označi zveze brez lokatorja, če klicni znak obstaja v zgodovini, in predlaga najpogostejši zgodovinski lokator
 - **Kompozitno preverjanje klicnega znaka** — ko je klicni znak neznan globalno, orodje preveri tudi klicne znake, ki so zgodovinsko delovali z *istega lokatorja* (uje napake kot `IK3GOY` → `IW3GOA`, ko sta oba iz `JN65DM`)
+- **Zaznavanje CW zamenjav** (v1.14) — za CW zveze zaznava podobne klicne znake, ki se razlikujejo po CW-zamenljivem paru znakov (`H↔S`, `E↔I`, `T↔E` itd.); označi chip-e `CALL_SIMILAR` in `CALL_BY_LOC` z navedbo para (`⚡H↔S`)
 - **HTML izvoz** — prenesi samostojno HTML poročilo vseh označenih zvez s predlogi popravkov
 - **Trajni baseline** — gumb "Počisti zgodovino" počisti samo tvoje spuščene EDI dnevnike; baseline ostane.
 
@@ -1059,7 +1063,7 @@ node --test --test-reporter=spec edi-validator.test.js
 | Testna datoteka | Testov | Skupin |
 |---|---|---|
 | `edi2adif.test.js` | 122 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplikati, CSV izvoz, urejanje v živo) |
-| `edi-crosscheck.test.js` | 56 | 8 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` lokator ×6, `runCrosscheck` klicni znak ×8, manjkajoč lokator ×4, pragovi ×3, klicni znak po lokatorju ×4) |
+| `edi-crosscheck.test.js` | 87 | 10 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` lokator ×6, `runCrosscheck` klicni znak ×8, manjkajoč lokator ×4, pragovi ×3, klicni znak po lokatorju ×4, `cwConfusionOf` ×21, CW zamenjave ×10) |
 | `adif-merge.test.js` | 112 | 21 (`parseADIF`, `updateKey`, `recomputeDupes`, `adifField`, `htmlEsc`, `csvEsc`, `modeBadge`, `buildFilename`, ADIF izvoz, I18N, varnost ponovnega mergea in več) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
 | `vhf-logger/vhf-logger.test.js` | 191 | 17 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`) |

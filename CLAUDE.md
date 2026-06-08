@@ -116,11 +116,13 @@ rstS, rstR, cabMode, freqKHz, exchR, exchS, src, fields (all ADIF tags uppercase
 
 **Weighting model:** `_histDB[call]` has parallel `locators` (weighted, for algorithm) and `locatorsRaw` (raw, for display), plus `total` / `totalRaw`. EDI QSO: +1 both. Baseline entry: +3 weighted, +rawCount raw. `modeConf = weightedCount/total` — invariant under uniform weighting so threshold semantics stay stable.
 
-**Issue types:** `LOC_MISMATCH` (high/med), `LOC_MISSING` (high/med), `CALL_SIMILAR`, `CALL_BY_LOC`, `CALL_UNKNOWN`.
+**Issue types:** `LOC_MISMATCH` (high/med), `LOC_MISSING` (high/med), `CALL_SIMILAR`, `CALL_BY_LOC`, `CALL_UNKNOWN`, `CW_CONFUSION`.
+
+**CW confusion detection:** `_CW_PAIRS` — `Set` of 2-char keys (lexicographically smaller char first) for known CW confusion pairs (single-element difference, mirror/reversal, number↔letter). `cwConfusionOf(a, b)` — returns `dA↔dB` string if same-length strings differ in exactly 1 character that is a known CW pair, else `null`. For CW QSOs (`mode==='CW'`), similar-call candidates are annotated with `cwPair`; if any candidate has a CW pair hit, issue type becomes `CW_CONFUSION` instead of `CALL_SIMILAR`. `CALL_SIMILAR` and `CALL_BY_LOC` chips are annotated with `⚡pair` when applicable.
 
 **Baseline lifecycle:** page load → `loadBaseline()` → `fetch('./crosscheck-baseline.json')` → `applyBaseline()`; CORS failure from `file://` → silent fallback to EDI-only mode.
 
-**Tests:** `edi-crosscheck.test.js` — 56 tests, 8 groups (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` ×4 scenarios, thresholds, callsign-by-locator).
+**Tests:** `edi-crosscheck.test.js` — 87 tests, 10 groups (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` ×4 scenarios, thresholds, callsign-by-locator, `cwConfusionOf`, CW confusion runCrosscheck).
 
 ---
 

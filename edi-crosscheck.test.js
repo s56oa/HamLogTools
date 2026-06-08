@@ -55,6 +55,7 @@ vm.runInContext(jsSrc, ctx);
 const {
   baseCall, levenshtein, parseEDI,
   addToHistDB, runCrosscheck, clearHist,
+  cwConfusionOf,
 } = ctx;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -411,5 +412,134 @@ describe('runCrosscheck — callsign by locator', () => {
     assert.ok(sim, 'expected CALL_SIMILAR');
     assert.ok(byLoc, 'expected CALL_BY_LOC even when top candidate matches global');
     assert.equal(byLoc.similar[0].call, 'IW3GOA');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  cwConfusionOf
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('cwConfusionOf', () => {
+  // Category 1: single dit/dah element difference
+  it('S↔H (···/····): S→H direction',   () => assert.equal(cwConfusionOf('S59DGO','H59DGO'), 'S↔H'));
+  it('S↔H (···/····): H→S direction',   () => assert.equal(cwConfusionOf('H59DGO','S59DGO'), 'H↔S'));
+  it('D↔N (–··/–·)',                     () => assert.equal(cwConfusionOf('S59DGD','S59DGN'), 'D↔N'));
+  it('U↔V (··–/···–)',                   () => assert.equal(cwConfusionOf('EW5U','EW5V'),     'U↔V'));
+  it('M↔O (––/–––)',                     () => assert.equal(cwConfusionOf('GM0M','GM0O'),     'M↔O'));
+  it('G↔O (––·/–––)',                    () => assert.equal(cwConfusionOf('DF9GX','DF9OX'),   'G↔O'));
+  it('E↔I (·/··)',                       () => assert.equal(cwConfusionOf('DL1EA','DL1IA'),   'E↔I'));
+  it('K↔C (–·–/–·–·)',                   () => assert.equal(cwConfusionOf('DK3AB','DC3AB'),   'K↔C'));
+  it('T↔E (–/·): dah vs dit',            () => assert.equal(cwConfusionOf('OE3TA','OE3EA'),   'T↔E'));
+
+  // Category 2: mirror/reversal pairs
+  it('A↔N (·–/–·): mirror pair',         () => assert.equal(cwConfusionOf('OE3AA','OE3NA'),   'A↔N'));
+  it('B↔V (–···/···–): mirror pair',     () => assert.equal(cwConfusionOf('S57BA','S57VA'),   'B↔V'));
+  it('K↔R (–·–/·–·): mirror pair',       () => assert.equal(cwConfusionOf('DK3KA','DR3KA'),   'K↔R'));
+
+  // Category 3: numbers ↔ letters
+  it('H↔5 (····/·····)',                  () => assert.equal(cwConfusionOf('S5H','S55'),       'H↔5'));
+  it('B↔6 (–···/–····)',                  () => assert.equal(cwConfusionOf('DL6B','DL66'),     'B↔6'));
+  it('J↔1 (·–––/·––––)',                  () => assert.equal(cwConfusionOf('DL1J','DL11'),     'J↔1'));
+  it('V↔4 (···–/····–)',                  () => assert.equal(cwConfusionOf('OE4V','OE44'),     'V↔4'));
+
+  // Null cases
+  it('returns null for identical strings',         () => assert.equal(cwConfusionOf('S59DGO','S59DGO'), null));
+  it('returns null for different lengths',          () => assert.equal(cwConfusionOf('S59DGO','S59DG'),  null));
+  it('returns null for 2+ char differences',        () => assert.equal(cwConfusionOf('S59DGO','H59DGX'), null));
+  it('returns null for non-CW-pair substitution',  () => assert.equal(cwConfusionOf('S59DGO','S59DGX'), null));
+  it('returns null for 0↔O (not a CW pair)',       () => assert.equal(cwConfusionOf('S59DG0','S59DGO'), null));
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  runCrosscheck — CW confusion
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('runCrosscheck — CW confusion', () => {
+  before(() => clearHist());
+  function hist(call, wwl, n=1){ return Array.from({length:n}, ()=>({call, wwl})); }
+  function cwQso(call, wwl='') { return { call, wwl, dateDisp:'', mode:'CW',  band:'2m' }; }
+  function ssbQso(call, wwl='') { return { call, wwl, dateDisp:'', mode:'SSB', band:'2m' }; }
+
+  it('CW QSO with CW-pair dist=1 match → CW_CONFUSION', () => {
+    clearHist(); addToHistDB(hist('S59DGO','JN65vp',5));
+    // H59DGO vs S59DGO → H↔S at pos 0, CW pair
+    const res = runCrosscheck([cwQso('H59DGO')]);
+    assert.equal(res[0].issues[0].type, 'CW_CONFUSION');
+  });
+
+  it('SSB QSO with same CW-pair dist=1 → CALL_SIMILAR, not CW_CONFUSION', () => {
+    clearHist(); addToHistDB(hist('S59DGO','JN65vp',5));
+    const res = runCrosscheck([ssbQso('H59DGO')]);
+    assert.equal(res[0].issues[0].type, 'CALL_SIMILAR');
+  });
+
+  it('CW QSO with dist=1 but non-CW-pair substitution → CALL_SIMILAR', () => {
+    clearHist(); addToHistDB(hist('S59DGO','JN65vp',5));
+    // S59DGX vs S59DGO → X↔O is not a CW pair
+    const res = runCrosscheck([cwQso('S59DGX')]);
+    assert.equal(res[0].issues[0].type, 'CALL_SIMILAR');
+  });
+
+  it('CW_CONFUSION: similar[0] has cwPair annotation with correct value', () => {
+    clearHist(); addToHistDB(hist('S59DGO','JN65vp',5));
+    const res = runCrosscheck([cwQso('H59DGO')]);
+    const iss = res[0].issues[0];
+    assert.equal(iss.type, 'CW_CONFUSION');
+    assert.equal(iss.similar[0].call,   'S59DGO');
+    assert.equal(iss.similar[0].cwPair, 'H↔S');
+  });
+
+  it('CALL_SIMILAR on SSB QSO has no cwPair on similar entries', () => {
+    clearHist(); addToHistDB(hist('S59DGO','JN65vp',5));
+    const res = runCrosscheck([ssbQso('H59DGO')]);
+    const iss = res[0].issues[0];
+    assert.equal(iss.type, 'CALL_SIMILAR');
+    assert.equal(iss.similar[0].cwPair, undefined);
+  });
+
+  it('number↔letter pair (H↔5) triggers CW_CONFUSION', () => {
+    clearHist(); addToHistDB(hist('S5H','JN65vp',5));
+    // S55 logged, S5H in DB → pos 2: 5 vs H → pair '5H'
+    const res = runCrosscheck([cwQso('S55')]);
+    const iss = res[0].issues[0];
+    assert.equal(iss.type, 'CW_CONFUSION');
+    assert.equal(iss.similar[0].cwPair, '5↔H');
+  });
+
+  it('mirror pair (A↔N) triggers CW_CONFUSION', () => {
+    clearHist(); addToHistDB(hist('OE3NA','JN78ab',5));
+    // OE3AA logged, OE3NA in DB → pos 3: A vs N → pair 'AN'
+    const res = runCrosscheck([cwQso('OE3AA')]);
+    const iss = res[0].issues[0];
+    assert.equal(iss.type, 'CW_CONFUSION');
+    assert.equal(iss.similar[0].cwPair, 'A↔N');
+  });
+
+  it('CW QSO with only dist=2 similar calls → CALL_SIMILAR (cwConfusionOf needs exact 1-char diff)', () => {
+    clearHist(); addToHistDB(hist('S59DGO','JN65vp',5));
+    // S59DXY → 2 chars differ from S59DGO → dist=2, cwConfusionOf returns null
+    const res = runCrosscheck([cwQso('S59DXY')]);
+    assert.equal(res[0].issues[0].type, 'CALL_SIMILAR');
+    assert.equal(res[0].issues[0].similar[0].cwPair, undefined);
+  });
+
+  it('T↔E pair triggers CW_CONFUSION', () => {
+    clearHist(); addToHistDB(hist('OE3TA','JN78ab',5));
+    // OE3EA logged, OE3TA in DB → pos 3: E vs T → pair 'ET'
+    const res = runCrosscheck([cwQso('OE3EA')]);
+    const iss = res[0].issues[0];
+    assert.equal(iss.type, 'CW_CONFUSION');
+    assert.equal(iss.similar[0].cwPair, 'E↔T');
+  });
+
+  it('CALL_BY_LOC for CW QSO has cwPair annotation when entry qualifies', () => {
+    clearHist(); addToHistDB(hist('S59DGO','JN65vp',5));
+    // H59DGO logged with locator JN65vp → CALL_BY_LOC should annotate S59DGO with H↔S
+    const res = runCrosscheck([cwQso('H59DGO','JN65vp')]);
+    const byLoc = res[0].issues.find(i => i.type === 'CALL_BY_LOC');
+    assert.ok(byLoc, 'expected CALL_BY_LOC');
+    const s = byLoc.similar.find(s => s.call === 'S59DGO');
+    assert.ok(s, 'expected S59DGO in CALL_BY_LOC candidates');
+    assert.equal(s.cwPair, 'H↔S');
   });
 });
