@@ -336,6 +336,23 @@ describe('recalcDupes', () => {
     assert.equal(q[0].dupe, false);
     assert.equal(q[1].dupe, false);
   });
+
+  it('lower nrS is original after sort-by-nrS (importEdi contract)', () => {
+    _setCurrentForTest({
+      activeBand: '2m', myLoc: 'JN65VP',
+      qsos: [
+        { _id:'b', band:'2m', nrS:5, call:'S59DGO', dupe:false },
+        { _id:'a', band:'2m', nrS:1, call:'S59DGO', dupe:false },
+      ],
+    });
+    _getCurrentForTest().qsos.sort((a,b)=>a.nrS!==b.nrS?a.nrS-b.nrS:(a.utcDate+a.utcTime)<(b.utcDate+b.utcTime)?-1:1);
+    recalcDupes();
+    const q = _getCurrentForTest().qsos;
+    assert.equal(q[0].nrS, 1,     'nrS=1 must be first after sort');
+    assert.equal(q[0].dupe, false, 'nrS=1 is original');
+    assert.equal(q[1].nrS, 5,     'nrS=5 must be second after sort');
+    assert.equal(q[1].dupe, true,  'nrS=5 is dupe');
+  });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════

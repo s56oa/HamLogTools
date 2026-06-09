@@ -645,7 +645,7 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 ---
 
-## `vhf-logger/vhf-logger.test.js` — 221 tests · 17 groups
+## `vhf-logger/vhf-logger.test.js` — 222 tests · 17 groups
 
 Covers the pure logic of `vhf-logger/vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, crosscheck lookup, EDI import parsing, ZIP generation, band colors, manual time state, and backup/restore validation.
 
@@ -719,13 +719,14 @@ Verifies dupe detection using `baseCall()` normalization and `excludeId`.
 - `excludeId` param prevents false-dupe when checking the QSO being edited.
 - No session (`_current = null`) → always returns `false`.
 
-#### 8 · `recalcDupes` (4 tests)
+#### 8 · `recalcDupes` (5 tests)
 Verifies full dupe-flag recalculation across a session.
 
 - First occurrence of a base call per band → `dupe=false`; subsequent → `dupe=true`.
 - `/P` portable call normalizes to base call — counted as dupe of plain base call.
 - Per-band isolation: same call on different bands both get `dupe=false`.
 - After `recalcDupes`, the `_current.qsos` array is mutated in place.
+- After sort-by-nrS the lower nrS is the original (not dupe) — `importEdi` contract.
 
 #### 9 · `buildEdi` (59 tests)
 Verifies REG1TEST EDI v1 output format.
@@ -1723,7 +1724,7 @@ CLI orodje se izvede znotraj konteksta `node:vm`, ki nadomesti `fs`, `https`, `p
 
 ---
 
-## `vhf-logger/vhf-logger.test.js` — 221 testov · 17 skupin
+## `vhf-logger/vhf-logger.test.js` — 222 testov · 17 skupin
 
 Pokriva čisto logiko `vhf-logger/vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI, crosscheck poizvedbe, razčlenjevanje uvoza EDI, generiranje ZIP, barve pasov, stanje ročnega časa in validacijo backup/obnovi.
 
@@ -1797,15 +1798,16 @@ Preverja zaznavanje duplikatov z normalizacijo `baseCall()` in parametrom `exclu
 - Parameter `excludeId` preprečuje lažni duplikat pri preverjanju QSO, ki se ureja.
 - Brez seje (`_current = null`) → vedno vrne `false`.
 
-#### 8 · `recalcDupes` (4 testi)
+#### 8 · `recalcDupes` (5 testov)
 Preverja popolni preračun zastavic duplikatov v seji.
 
 - Prva pojavitev baznega klicnega znaka per pas → `dupe=false`; kasnejše → `dupe=true`.
 - Prenosni klicni znak s `/P` se normalizira v bazni — šteje kot duplikat navadnega baznega klicnega znaka.
 - Izolacija po pasovih: enak klicni znak na različnih pasovih oba dobita `dupe=false`.
 - Po `recalcDupes` je polje `_current.qsos` mutirano na mestu.
+- Po razvrstitvi po nrS je tisti z nižjim nrS original (ne duplikat) — pogodba `importEdi`.
 
-#### 9 · `buildEdi` (57 testov)
+#### 9 · `buildEdi` (59 testov)
 Preverja izhodni format REG1TEST EDI v1.
 
 - Datoteka se začne z glavo `[REG1TEST;1]`.
