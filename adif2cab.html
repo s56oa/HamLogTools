@@ -192,7 +192,7 @@ td.editing{background:rgba(77,157,224,.1)!important;outline:1px solid var(--acce
 
 <header>
   <div class="logo">S56OA ADIF<span class="arr">→</span>CAB<span class="fmt"> converter</span></div>
-  <span class="version">v1.14</span>
+  <span class="version">v1.15</span>
   <div class="stats-bar" id="statsBar" style="display:none">
     <div class="stat"><span class="stat-val" id="sSrc">0</span><span data-i18n="statFiles">datotek</span></div>
     <div class="stat"><span class="stat-val" id="sQso">0</span>QSO</div>
@@ -983,7 +983,7 @@ function exportCAB(){
   if(email) lines.push(`EMAIL: ${email}`);
   const soapbox = document.getElementById('hfSoapbox').value.trim();
   if(soapbox) lines.push(`SOAPBOX: ${soapbox}`);
-  lines.push('CREATED-BY: ADIF-Cabrillo Converter v1.13');
+  lines.push('CREATED-BY: ADIF-Cabrillo Converter v1.15');
   lines.push('');
 
   pool.forEach(q => lines.push(buildQSOLine(q, contest, myCall, exchSentDefault)));

@@ -10,14 +10,14 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 
 | Test file | Tool | Tests | Groups |
 |---|---|---|---|
-| `edi2adif.test.js` | `edi2adif.html` | 122 | 9 |
+| `edi2adif.test.js` | `edi2adif.html` | 131 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 87 | 10 |
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 191 | 17 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 219 | 17 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
 | `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
-| `edi-validator.test.js` | `edi-validator.html` | 109 | 22 |
+| `edi-validator.test.js` | `edi-validator.html` | 124 | 23 |
 
 The sections below document each test file in detail.
 
@@ -70,7 +70,7 @@ etc. — enough for the script to initialise without a real browser.
 
 ## Test groups
 
-### 1 · `normBand` (27 tests)
+### 1 · `normBand` (34 tests)
 Verifies the regex table that maps EDI `PBand` values to canonical ADIF
 band names and nominal frequencies.
 
@@ -78,7 +78,7 @@ band names and nominal frequencies.
 |---|---|
 | Empty / unknown input | Falsy input returns `{band:'', freq:''}`. Unrecognised strings pass through with no frequency. Whitespace is trimmed before matching. |
 | 6 m – 23 cm | Each band matched by frequency (MHz), wavelength (e.g. `2m`), and GHz strings with both dot and comma decimal separators. |
-| Microwave bands | 13 cm through 6 mm — band name verified for all eight entries. |
+| Microwave bands | 13 cm through 1 mm — band name verified for all ten entries. Anchored patterns prevent false matches (e.g. `147000` does not match as `6mm`). |
 
 ### 2 · `parseEDI` (36 tests)
 Exercises the EDI-to-QSO parser across header fields, record parsing, edge
@@ -197,14 +197,14 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 
 | Testna datoteka | Orodje | Testov | Skupin |
 |---|---|---|---|
-| `edi2adif.test.js` | `edi2adif.html` | 122 | 9 |
+| `edi2adif.test.js` | `edi2adif.html` | 131 | 9 |
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 87 | 10 |
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 191 | 17 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 219 | 17 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
 | `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
-| `edi-validator.test.js` | `edi-validator.html` | 109 | 22 |
+| `edi-validator.test.js` | `edi-validator.html` | 124 | 23 |
 
 Spodnji razdelki dokumentirajo vsako testno datoteko podrobno.
 
@@ -256,7 +256,7 @@ itd. — dovolj, da se skripta inicializira brez pravega brskalnika.
 
 ## Skupine testov
 
-### 1 · `normBand` (27 testov)
+### 1 · `normBand` (34 testov)
 Preverja tabelo regularnih izrazov, ki preslika vrednosti EDI `PBand` v
 kanonična imena pasov ADIF in nominalne frekvence.
 
@@ -264,7 +264,7 @@ kanonična imena pasov ADIF in nominalne frekvence.
 |---|---|
 | Prazen / neznan vnos | Lažni vnos vrne `{band:'', freq:''}`. Neprepoznani nizi se prenesejo brez frekvence. Beli prostor se obreže pred ujemanjem. |
 | 6 m – 23 cm | Vsak pas se ujema po frekvenci (MHz), valovni dolžini (npr. `2m`) in nizih GHz z decimalno piko in vejico. |
-| Mikrovalovni pasovi | 13 cm do 6 mm — ime pasu preverjeno za vseh osem vnosov. |
+| Mikrovalovni pasovi | 13 cm do 1 mm — ime pasu preverjeno za vseh deset vnosov. Zasidrani vzorci preprečijo lažna ujemanja (npr. `147000` se ne ujema kot `6mm`). |
 
 ### 2 · `parseEDI` (36 testov)
 Preverja razčlenjevalnik EDI v QSO prek polj glave, razčlenjevanja zapisov,
@@ -645,7 +645,7 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 ---
 
-## `vhf-logger/vhf-logger.test.js` — 191 tests · 17 groups
+## `vhf-logger/vhf-logger.test.js` — 219 tests · 17 groups
 
 Covers the pure logic of `vhf-logger/vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, crosscheck lookup, EDI import parsing, ZIP generation, band colors, manual time state, and backup/restore validation.
 
@@ -670,10 +670,11 @@ Verifies suffix stripping used for dupe detection and crosscheck lookup.
 - Prefix-slash callsigns (`OE/S59DGO`) kept unchanged (heuristic: slash before digit-containing part = suffix, otherwise = prefix).
 - Plain callsigns unchanged; result always uppercased.
 
-#### 2 · `normBand` (10 tests)
+#### 2 · `normBand` (23 tests)
 Verifies the band mapping table.
 
-- Canonical band names returned for MHz strings (`144 MHz`, `432 MHz`), wavelength strings (`2m`, `70cm`), and GHz strings (`1.3 GHz`).
+- Canonical band names returned for all bands 6m through 1mm: MHz strings (`144 MHz`, `432 MHz`), wavelength strings (`2m`, `70cm`), and GHz strings (`1.3 GHz`, `47 GHz`).
+- `47000` (legacy kHz notation for 6mm) matched; `147000` not matched as 6mm (anchor regression).
 - Empty/unknown input returns `{band:'', freq:''}`.
 - Whitespace trimmed before matching.
 
@@ -1222,7 +1223,7 @@ Maps ADIF mode to CSS badge class for the preview table.
 
 ---
 
-## `edi-validator.test.js` — 109 tests · 22 groups
+## `edi-validator.test.js` — 124 tests · 23 groups
 
 Covers the pure logic of `edi-validator.html`: Maidenhead geo utilities, and the full `validate()` function across all spec checks and issue types.
 
@@ -1272,7 +1273,7 @@ Checks for keywords not defined in the REG1TEST v1 spec.
 - `TCall`, `TLocator`, `RAZ`, `RClub`, `RBand` → `eNonSpecKw` (error).
 - Completely unknown keyword → `eNonSpecKw`.
 
-#### 6 · `validate — header formats` (8 tests)
+#### 6 · `validate — header formats` (13 tests)
 Checks header field syntax.
 
 - `TDate=YYYYMMDD;YYYYMMDD` valid format → no error.
@@ -1282,6 +1283,11 @@ Checks header field syntax.
 - `PWWLo` invalid characters → `wPwwloFormat`.
 - `PBand` unknown value → `wPBandUnknown` (warn).
 - `PBand` `145 MHz` (known value) → no `wPBandUnknown`.
+- `PBand` `1,3 GHz` (23cm canonical) → no `wPBandUnknown`.
+- `PBand` `76 GHz` (4mm) → no `wPBandUnknown`.
+- `PBand` `248 GHz` (1mm) → no `wPBandUnknown`.
+- `PBand` `47000 MHz` (old vhf-logger kHz string) → `wPBandUnknown`.
+- `PBand` `1296 MHz` (legacy MHz notation for 23cm) → `wPBandUnknown`.
 - Keyword out of spec order → `iKwOrder` (info).
 
 #### 7 · `validate — ZRS mandatory fields` (6 tests)
@@ -1414,7 +1420,21 @@ Rules: SSB/AM/FM (modes 1/4/5/6) → 2 digits; CW/RTTY (modes 2/3/7) → 3 digit
 - AM mode 5 with `59` → no `wQsoRstFormat`.
 - AM mode 5 with `599` (3 digits) → `wQsoRstFormat`.
 
-#### 22 · `I18N` (5 tests)
+#### 22 · `validate — SAntH format` (10 tests)
+Checks the antenna height field `SAntH=ground;asl` — expects exactly two semicolon-separated parts where each non-empty part is numeric.
+
+- `SAntH=5;1796` (both heights set) → no `wSAntHFormat`.
+- `SAntH=0;0` → no `wSAntHFormat`.
+- Empty `SAntH=` value → no `wSAntHFormat` (field absent is valid).
+- `SAntH` without semicolon (single value) → `wSAntHFormat` (warn).
+- Non-numeric ground height (`abc;1796`) → `wSAntHFormat`.
+- Non-numeric ASL height (`5;xyz`) → `wSAntHFormat`.
+- Three values (`5;1796;extra`) → `wSAntHFormat`.
+- `SAntH=;1796` (ASL height only, empty ground) → no `wSAntHFormat`.
+- `SAntH=;` (both parts empty — vhf-logger default when no heights configured) → no `wSAntHFormat`.
+- `SAntH=5;` (ground height only) → no `wSAntHFormat`.
+
+#### 23 · `I18N` (5 tests)
 Verifies i18n key completeness and translation distinctness.
 
 - `sl.sevError` and `en.sevError` are non-empty strings.
@@ -1703,7 +1723,7 @@ CLI orodje se izvede znotraj konteksta `node:vm`, ki nadomesti `fs`, `https`, `p
 
 ---
 
-## `vhf-logger/vhf-logger.test.js` — 191 testov · 17 skupin
+## `vhf-logger/vhf-logger.test.js` — 219 testov · 17 skupin
 
 Pokriva čisto logiko `vhf-logger/vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI, crosscheck poizvedbe, razčlenjevanje uvoza EDI, generiranje ZIP, barve pasov, stanje ročnega časa in validacijo backup/obnovi.
 
@@ -1728,10 +1748,11 @@ Preverja odstranjevanje pripon, ki se uporablja pri zaznavanju duplikatov in cro
 - Klicni znaki s predponsko poševnico (`OE/S59DGO`) ostanejo nespremenjeni (hevristika: poševnica pred delom s številko = sufiks, sicer = predpona).
 - Navadni klicni znaki nespremenjeni; rezultat je vedno z velikimi črkami.
 
-#### 2 · `normBand` (10 testov)
+#### 2 · `normBand` (23 testov)
 Preverja tabelo za mapiranje pasov.
 
-- Kanonska imena pasov se vrnejo za nize MHz (`144 MHz`, `432 MHz`), nize valovnih dolžin (`2m`, `70cm`) in nize GHz (`1.3 GHz`).
+- Kanonska imena pasov se vrnejo za vse pasove od 6m do 1mm: nizi MHz (`144 MHz`, `432 MHz`), nizi valovnih dolžin (`2m`, `70cm`) in nizi GHz (`1,3 GHz`, `47 GHz`).
+- `47000` (zastareli zapis kHz za 6mm) se ujema; `147000` se ne ujema kot 6mm (sidrna regresija).
 - Prazen/neznan vnos vrne `{band:'', freq:''}`.
 - Beli prostor se obreže pred ujemanjem.
 
@@ -2215,7 +2236,7 @@ Cabrillo v3 specifikacija določa `RY` za RTTY (ne splošnega `DG`).
 
 ---
 
-## `edi-validator.test.js` — 109 testov · 22 skupin
+## `edi-validator.test.js` — 124 testov · 23 skupin
 
 Pokriva čisto logiko `edi-validator.html`: Maidenhead geo pomočnike in celotno funkcijo `validate()` za vse preverbe specifikacije in tipe težav.
 
@@ -2265,7 +2286,7 @@ Preverja ključne besede, ki niso definirane v specifikaciji REG1TEST v1.
 - `TCall`, `TLocator`, `RAZ`, `RClub`, `RBand` → `eNonSpecKw` (error).
 - Popolnoma neznana ključna beseda → `eNonSpecKw`.
 
-#### 6 · `validate — header formats` (8 testov)
+#### 6 · `validate — header formats` (13 testov)
 Preverja sintakso polj glave.
 
 - `TDate=YYYYMMDD;YYYYMMDD` — veljaven format, brez napake.
@@ -2275,6 +2296,11 @@ Preverja sintakso polj glave.
 - `PWWLo` neveljavni znaki → `wPwwloFormat`.
 - Neznana vrednost `PBand` → `wPBandUnknown` (warn).
 - `PBand` `145 MHz` (znana vrednost) → brez `wPBandUnknown`.
+- `PBand` `1,3 GHz` (kanonska 23cm) → brez `wPBandUnknown`.
+- `PBand` `76 GHz` (4mm) → brez `wPBandUnknown`.
+- `PBand` `248 GHz` (1mm) → brez `wPBandUnknown`.
+- `PBand` `47000 MHz` (stari kHz niz vhf-logger) → `wPBandUnknown`.
+- `PBand` `1296 MHz` (zastareli MHz zapis za 23cm) → `wPBandUnknown`.
 - Ključna beseda izven specifikacijskega vrstnega reda → `iKwOrder` (info).
 
 #### 7 · `validate — ZRS mandatory fields` (6 testov)
@@ -2407,7 +2433,21 @@ Pravila: SSB/AM/FM (načini 1/4/5/6) → 2 cifri; CW/RTTY (načini 2/3/7) → 3 
 - AM način 5 z `59` → brez `wQsoRstFormat`.
 - AM način 5 z `599` (3 cifre) → `wQsoRstFormat`.
 
-#### 22 · `I18N` (5 testov)
+#### 22 · `validate — SAntH format` (10 testov)
+Preverja polje višine antene `SAntH=nad_tlemi;nad_morjem` — pričakuje natanko dve podpičju ločeni vrednosti, pri čemer je vsaka neprazna vrednost numerična.
+
+- `SAntH=5;1796` (obe višini nastavljeni) → brez `wSAntHFormat`.
+- `SAntH=0;0` → brez `wSAntHFormat`.
+- Prazna vrednost `SAntH=` → brez `wSAntHFormat` (odsotno polje je veljavno).
+- `SAntH` brez podpičja (ena vrednost) → `wSAntHFormat` (warn).
+- Nenumerična višina nad tlemi (`abc;1796`) → `wSAntHFormat`.
+- Nenumerična višina nad morjem (`5;xyz`) → `wSAntHFormat`.
+- Tri vrednosti (`5;1796;extra`) → `wSAntHFormat`.
+- `SAntH=;1796` (samo višina nad morjem, prazno nad tlemi) → brez `wSAntHFormat`.
+- `SAntH=;` (obe vrednosti prazni — privzeto v vhf-logger, ko višina ni nastavljena) → brez `wSAntHFormat`.
+- `SAntH=5;` (samo višina nad tlemi) → brez `wSAntHFormat`.
+
+#### 23 · `I18N` (5 testov)
 Preverja celovitost i18n ključev in razlikovanje prevodov.
 
 - `sl.sevError` in `en.sevError` sta neprazna niza.

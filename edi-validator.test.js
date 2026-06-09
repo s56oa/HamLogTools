@@ -280,6 +280,26 @@ describe('validate — header formats', () => {
     const {issues} = validate(makeEdi([GOOD_QSO]));
     assert.ok(!hasCode(issues, 'wPBandUnknown'));
   });
+  it('PBand 1,3 GHz → no wPBandUnknown', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {PBand: '1,3 GHz'}));
+    assert.ok(!hasCode(issues, 'wPBandUnknown'));
+  });
+  it('PBand 76 GHz → no wPBandUnknown', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {PBand: '76 GHz'}));
+    assert.ok(!hasCode(issues, 'wPBandUnknown'));
+  });
+  it('PBand 248 GHz → no wPBandUnknown', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {PBand: '248 GHz'}));
+    assert.ok(!hasCode(issues, 'wPBandUnknown'));
+  });
+  it('PBand 47000 MHz (old vhf-logger value) → wPBandUnknown', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {PBand: '47000 MHz'}));
+    assert.ok(hasCode(issues, 'wPBandUnknown'));
+  });
+  it('PBand 1296 MHz (legacy 23cm) → wPBandUnknown', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {PBand: '1296 MHz'}));
+    assert.ok(hasCode(issues, 'wPBandUnknown'));
+  });
   it('keyword out of order → iKwOrder', () => {
     // Put CODXC before CToSc by swapping them in the template
     const text = makeEdi([GOOD_QSO])
@@ -666,6 +686,52 @@ describe('validate — QSO RST format', () => {
   it('AM mode 5 with 599 (3 digits) → wQsoRstFormat', () => {
     const {issues} = validate(makeEdi([qsoRst('5', '599', '599')]));
     assert.ok(hasCode(issues, 'wQsoRstFormat'));
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  validate — SAntH format
+// ═══════════════════════════════════════════════════════════════════════════════
+describe('validate — SAntH format', () => {
+  it('valid SAntH 5;1796 → no wSAntHFormat', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {SAntH: '5;1796'}));
+    assert.ok(!hasCode(issues, 'wSAntHFormat'));
+  });
+  it('valid SAntH 0;0 → no wSAntHFormat', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {SAntH: '0;0'}));
+    assert.ok(!hasCode(issues, 'wSAntHFormat'));
+  });
+  it('empty SAntH → no wSAntHFormat', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {SAntH: ''}));
+    assert.ok(!hasCode(issues, 'wSAntHFormat'));
+  });
+  it('SAntH without semicolon → wSAntHFormat', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {SAntH: '1200'}));
+    assert.ok(hasCode(issues, 'wSAntHFormat'));
+  });
+  it('SAntH with non-numeric first value → wSAntHFormat', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {SAntH: 'abc;1200'}));
+    assert.ok(hasCode(issues, 'wSAntHFormat'));
+  });
+  it('SAntH with non-numeric second value → wSAntHFormat', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {SAntH: '5;xyz'}));
+    assert.ok(hasCode(issues, 'wSAntHFormat'));
+  });
+  it('SAntH with three values → wSAntHFormat', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {SAntH: '5;1796;extra'}));
+    assert.ok(hasCode(issues, 'wSAntHFormat'));
+  });
+  it('SAntH with empty first part (ASL only) → no wSAntHFormat', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {SAntH: ';1796'}));
+    assert.ok(!hasCode(issues, 'wSAntHFormat'));
+  });
+  it('SAntH=; (both empty, no heights set) → no wSAntHFormat', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {SAntH: ';'}));
+    assert.ok(!hasCode(issues, 'wSAntHFormat'));
+  });
+  it('SAntH=5; (ground height only) → no wSAntHFormat', () => {
+    const {issues} = validate(makeEdi([GOOD_QSO], {SAntH: '5;'}));
+    assert.ok(!hasCode(issues, 'wSAntHFormat'));
   });
 });
 

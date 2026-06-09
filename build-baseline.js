@@ -75,7 +75,7 @@ const BAND_MAP = [
   [/^76\s*GHz$|^4\s*mm$/i,                                  '4mm'  ],
   [/^122\s*GHz$/i,                                          '2.5mm'],
   [/^134\s*GHz$/i,                                          '2mm'  ],
-  [/^(241|245|248)\s*GHz$/i,                                '1.2mm'],
+  [/^(241|245|248)\s*GHz$/i,                                '1mm'  ],
   [/^300\s*GHz$/i,                                          '1mm'  ],
 ];
 function normBand(s){

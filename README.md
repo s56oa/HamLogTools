@@ -49,6 +49,7 @@ Open the file in any modern browser — no installation required.
 | EDI `PBand` value | ADIF band |
 |---|---|
 | 50 MHz, 6m | `6m` |
+| 70 MHz, 4m | `4m` |
 | 144 / 145 MHz, 2m | `2m` |
 | 430 / 432 MHz, 70 cm | `70cm` |
 | 1.2 / 1.3 GHz, 1296 MHz, 23 cm | `23cm` |
@@ -58,6 +59,10 @@ Open the file in any modern browser — no installation required.
 | 10 GHz, 10368 MHz, 3 cm | `3cm` |
 | 24 GHz, 24048 MHz, 1.25 cm | `1.25cm` |
 | 47 GHz, 6 mm | `6mm` |
+| 76 GHz, 4 mm | `4mm` |
+| 122 GHz, 2.5 mm | `2.5mm` |
+| 134 GHz, 2 mm | `2mm` |
+| 248 GHz, 1 mm | `1mm` |
 
 **Supported modes:** SSB · CW · FM · AM · RTTY · SSTV · ATV
 
@@ -147,7 +152,7 @@ Open the file in any modern browser (for baseline support, serve over HTTP).
 
 ### Features
 
-- **Multi-band session** — configure up to 11 bands (6m through 6mm) with independent QSO tables, serial numbers, and statistics
+- **Multi-band session** — configure up to 15 bands (6m through 1mm) with independent QSO tables, serial numbers, and statistics
 - **Live crosscheck** — callsign autocomplete and mismatch hints powered by `crosscheck-baseline.json` (same database as `edi-crosscheck.html`); baseline loaded automatically on startup over HTTP
 - **QRB + bearing** — great-circle distance and azimuth calculated from Maidenhead locators and displayed per QSO
 - **Dupe detection** — real-time warning with `baseCall()` normalization so `S59DGO/P` is correctly matched against `S59DGO`; per-band, excludes the QSO currently being edited
@@ -514,14 +519,14 @@ node --test --test-reporter=spec edi-validator.test.js
 
 | Test file | Tests | Groups |
 |---|---|---|
-| `edi2adif.test.js` | 122 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit) |
+| `edi2adif.test.js` | 131 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit) |
 | `edi-crosscheck.test.js` | 87 | 10 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` locator mismatch ×6, `runCrosscheck` callsign ×8, missing locator ×4, thresholds ×3, callsign by locator ×4, `cwConfusionOf` ×21, CW confusion ×10) |
 | `adif-merge.test.js` | 112 | 21 (`parseADIF`, `updateKey`, `recomputeDupes`, `adifField`, `htmlEsc`, `csvEsc`, `modeBadge`, `buildFilename`, ADIF export, I18N, re-merge safety, and more) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
-| `vhf-logger/vhf-logger.test.js` | 191 | 17 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`) |
+| `vhf-logger/vhf-logger.test.js` | 219 | 17 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`) |
 | `adif-stats.test.js` | 133 | 21 (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`) |
 | `adif2cab.test.js` | 191 | 31 (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×9, `formatCabDate`, `buildQSOLine` ×5, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` structure, `I18N`) |
-| `edi-validator.test.js` | 109 | 22 (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `validate — non-ASCII characters`, `validate — duplicate keywords`, `validate — QSO date day`, `validate — QSO date range`, `validate — QSO RST format`, `I18N`) |
+| `edi-validator.test.js` | 124 | 23 (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `validate — non-ASCII characters`, `validate — duplicate keywords`, `validate — QSO date day`, `validate — QSO date range`, `validate — QSO RST format`, `validate — SAntH format`, `I18N`) |
 
 See [TESTING.md](TESTING.md) for full test documentation.
 
@@ -597,6 +602,7 @@ Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
 | Vrednost EDI `PBand` | Pas ADIF |
 |---|---|
 | 50 MHz, 6m | `6m` |
+| 70 MHz, 4m | `4m` |
 | 144 / 145 MHz, 2m | `2m` |
 | 430 / 432 MHz, 70 cm | `70cm` |
 | 1,2 / 1,3 GHz, 1296 MHz, 23 cm | `23cm` |
@@ -606,6 +612,10 @@ Datoteko odpri v katerem koli sodobnem brskalniku — namestitev ni potrebna.
 | 10 GHz, 10368 MHz, 3 cm | `3cm` |
 | 24 GHz, 24048 MHz, 1,25 cm | `1.25cm` |
 | 47 GHz, 6 mm | `6mm` |
+| 76 GHz, 4 mm | `4mm` |
+| 122 GHz, 2,5 mm | `2.5mm` |
+| 134 GHz, 2 mm | `2mm` |
+| 248 GHz, 1 mm | `1mm` |
 
 **Podprti načini:** SSB · CW · FM · AM · RTTY · SSTV · ATV
 
@@ -695,7 +705,7 @@ Datoteko odpri v katerem koli sodobnem brskalniku (za baseline podporo postreža
 
 ### Funkcionalnosti
 
-- **Večpasovna seja** — nastavi do 11 pasov (6m do 6mm) z neodvisnimi tabelami QSO, serijskimi številkami in statistiko
+- **Večpasovna seja** — nastavi do 15 pasov (6m do 1mm) z neodvisnimi tabelami QSO, serijskimi številkami in statistiko
 - **Live crosscheck** — avtodokončanje klicnih znakov in namigi o neskladjih, ki jih poganja `crosscheck-baseline.json` (enaka baza kot `edi-crosscheck.html`); baseline se ob zagonu samodejno naloži preko HTTP
 - **QRB + azimut** — razdalja po velikem krogu in azimut izračunana iz Maidenhead lokatorjev in prikazana per QSO
 - **Zaznavanje duplikatov** — opozorilo v realnem času z normalizacijo `baseCall()`, tako da se `S59DGO/P` pravilno ujame z `S59DGO`; per-pas, izključuje QSO, ki se trenutno ureja
@@ -1062,14 +1072,14 @@ node --test --test-reporter=spec edi-validator.test.js
 
 | Testna datoteka | Testov | Skupin |
 |---|---|---|
-| `edi2adif.test.js` | 122 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplikati, CSV izvoz, urejanje v živo) |
+| `edi2adif.test.js` | 131 | 9 (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplikati, CSV izvoz, urejanje v živo) |
 | `edi-crosscheck.test.js` | 87 | 10 (`baseCall`, `levenshtein`, `parseEDI`, `runCrosscheck` lokator ×6, `runCrosscheck` klicni znak ×8, manjkajoč lokator ×4, pragovi ×3, klicni znak po lokatorju ×4, `cwConfusionOf` ×21, CW zamenjave ×10) |
 | `adif-merge.test.js` | 112 | 21 (`parseADIF`, `updateKey`, `recomputeDupes`, `adifField`, `htmlEsc`, `csvEsc`, `modeBadge`, `buildFilename`, ADIF izvoz, I18N, varnost ponovnega mergea in več) |
 | `adif-qrz-filter.test.js` | 48 | 4 (`parseAdif`, `extractField`, `usesQslBuro` ×3, `cache`) |
-| `vhf-logger/vhf-logger.test.js` | 191 | 17 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`) |
+| `vhf-logger/vhf-logger.test.js` | 219 | 17 (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`) |
 | `adif-stats.test.js` | 133 | 21 (`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF` ×3, `computeStats` ×6, `applyFilters`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `I18N`) |
 | `adif2cab.test.js` | 191 | 31 (`modeToCAB` ×5, `dfltRST`, `freqToKHz` ×2, `parseADIF` ×3, `extractExchR` ×9, `formatCabDate`, `buildQSOLine` ×5, `htmlEsc`, `cabModeBadge`, `modeBadge`, `CONTESTS` struktura, `I18N`) |
-| `edi-validator.test.js` | 109 | 22 (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `validate — non-ASCII characters`, `validate — duplicate keywords`, `validate — QSO date day`, `validate — QSO date range`, `validate — QSO RST format`, `I18N`) |
+| `edi-validator.test.js` | 124 | 23 (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `validate — non-ASCII characters`, `validate — duplicate keywords`, `validate — QSO date day`, `validate — QSO date range`, `validate — QSO RST format`, `validate — SAntH format`, `I18N`) |
 
 Celotna dokumentacija je v [TESTING.md](TESTING.md).
 

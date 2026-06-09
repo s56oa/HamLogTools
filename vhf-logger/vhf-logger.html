@@ -128,7 +128,7 @@ header{
 .band-rows{display:flex;flex-direction:column;gap:.45rem}
 .brow{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:.45rem .65rem;display:flex;flex-direction:column;gap:.35rem}
 .brow-main{display:grid;gap:.45rem;align-items:center;grid-template-columns:18px 110px 100px 70px 1fr 28px}
-.brow-eq{display:grid;gap:.45rem;grid-template-columns:1fr 1fr 120px;padding-left:22px}
+.brow-eq{display:grid;gap:.45rem;grid-template-columns:1fr 1fr 90px 90px;padding-left:22px}
 .brow-idx{font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);text-align:center}
 .bsel{background:var(--bg4);border:1px solid var(--border2);border-radius:4px;
   color:var(--text);padding:.3rem .4rem;font-size:.8rem;cursor:pointer;font-family:'Space Mono',monospace;width:100%}
@@ -298,7 +298,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
   .qf-wwl{flex-basis:40%;min-width:100px}
   .stats-bar{gap:.75rem}
   .brow-main{grid-template-columns:14px 90px 90px 60px 1fr 24px;gap:.3rem}
-  .brow-eq{grid-template-columns:1fr 1fr 80px}
+  .brow-eq{grid-template-columns:1fr 1fr 70px 70px}
 }
 @media(max-width:360px){
   .qf-mode{width:64px}
@@ -339,7 +339,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
 
 <header>
   <div class="logo">S56OA VHF<span class="icon">◉</span>Logger</div>
-  <span class="version">v1.14</span>
+  <span class="version">v1.15</span>
   <div class="hdr-info" id="hdrInfo"></div>
   <div class="lang-wrap">
     <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" aria-label="Preklopi temo / Toggle theme">☀</button>
@@ -644,7 +644,7 @@ sl:{
   dupeWarn:'⚠ DUPLIKAT na tem pasu!',
   fAllBands:'— vsi pasovi —',
   bandFreqPh:'Freq. (MHz)',bandPwrPh:'Moč (W)',bandAntPh:'Antena',
-  bandTxPh:'TX ojačevalec',bandRxPh:'RX predojačevalec',bandAntHPh:'Višina ant. (m)',
+  bandTxPh:'TX ojačevalec',bandRxPh:'RX predojačevalec',bandAntHPh:'Višina nad tlemi (m)',bandAntHASLPh:'Nadmorska višina (m)',
   errNoCall:'Vnesi klicni znak',
   errNoMyCall:'Vnesi moj klicni znak',
   errNoMyLoc:'Neveljavni lokator (6 znakov, npr. JN65WP)',
@@ -743,7 +743,7 @@ en:{
   dupeWarn:'⚠ DUPLICATE on this band!',
   fAllBands:'— all bands —',
   bandFreqPh:'Freq. (MHz)',bandPwrPh:'Power (W)',bandAntPh:'Antenna',
-  bandTxPh:'TX amplifier',bandRxPh:'RX preamp',bandAntHPh:'Ant. height (m)',
+  bandTxPh:'TX amplifier',bandRxPh:'RX preamp',bandAntHPh:'Ant. ht above gnd (m)',bandAntHASLPh:'Ant. ht above sea (m)',
   errNoCall:'Enter callsign',
   errNoMyCall:'Enter my callsign',
   errNoMyLoc:'Invalid locator (6 chars, e.g. JN65WP)',
@@ -842,7 +842,11 @@ const BAND_MAP = [
   [/5[,.]7[0-9]*\s*GHz|5760|^6\s*cm$/i,                  '6cm'   ],
   [/^10\s*GHz|10[,.]3[0-9]*\s*GHz|10368|^3\s*cm$/i,     '3cm'   ],
   [/24\s*GHz|24048|1[,.]25?\s*cm/i,                       '1.25cm'],
-  [/47\s*GHz/i,                                            '6mm'  ],
+  [/^47\s*GHz$|^47000(\s*MHz)?$|^6\s*mm$/i,              '6mm'  ],
+  [/^76\s*GHz$|^4\s*mm$/i,                                '4mm'  ],
+  [/^122\s*GHz$|^2\.5\s*mm$/i,                            '2.5mm'],
+  [/^134\s*GHz$|^2\s*mm$/i,                               '2mm'  ],
+  [/^248\s*GHz$|^1\s*mm$/i,                               '1mm'  ],
 ];
 function normBand(s){ if(!s) return ''; for(const[re,b] of BAND_MAP) if(re.test(s.trim())) return b; return s.trim(); }
 
@@ -850,20 +854,25 @@ const BAND_COLORS={
   '6m':'#f0a500','4m':'#d4c000','2m':'#4d9de0','70cm':'#2ecc8a',
   '23cm':'#50d8e0','13cm':'#c880f8','9cm':'#ff8080',
   '6cm':'#ff70c0','3cm':'#80ff80','1.25cm':'#ffb040','6mm':'#a0a0ff',
+  '4mm':'#d0d0ff','2.5mm':'#e8b0ff','2mm':'#ffd0e0','1mm':'#c0ffc0',
 };
 
 const BAND_OPTS = [
-  {band:'6m',  freq:'50.150',   edi:'50 MHz'    },
-  {band:'4m',  freq:'70.200',   edi:'70 MHz'    },
-  {band:'2m',  freq:'144.300',  edi:'145 MHz'   },
-  {band:'70cm',freq:'432.200',  edi:'435 MHz'   },
-  {band:'23cm',freq:'1296.200', edi:'1296 MHz'  },
-  {band:'13cm',freq:'2320.100', edi:'2320 MHz'  },
-  {band:'9cm', freq:'3400.100', edi:'3400 MHz'  },
-  {band:'6cm', freq:'5760.100', edi:'5760 MHz'  },
-  {band:'3cm', freq:'10368.100',edi:'10368 MHz' },
-  {band:'1.25cm',freq:'24048.100',edi:'24048 MHz'},
-  {band:'6mm', freq:'47000.100',edi:'47000 MHz' },
+  {band:'6m',    freq:'50.150',    edi:'50 MHz'  },
+  {band:'4m',    freq:'70.200',    edi:'70 MHz'  },
+  {band:'2m',    freq:'144.300',   edi:'145 MHz' },
+  {band:'70cm',  freq:'432.200',   edi:'435 MHz' },
+  {band:'23cm',  freq:'1296.200',  edi:'1,3 GHz' },
+  {band:'13cm',  freq:'2320.100',  edi:'2,3 GHz' },
+  {band:'9cm',   freq:'3400.100',  edi:'3,4 GHz' },
+  {band:'6cm',   freq:'5760.100',  edi:'5,7 GHz' },
+  {band:'3cm',   freq:'10368.100', edi:'10 GHz'  },
+  {band:'1.25cm',freq:'24048.100', edi:'24 GHz'  },
+  {band:'6mm',   freq:'47000.100', edi:'47 GHz'  },
+  {band:'4mm',   freq:'76032.100', edi:'76 GHz'  },
+  {band:'2.5mm', freq:'122250.100',edi:'122 GHz' },
+  {band:'2mm',   freq:'134928.100',edi:'134 GHz' },
+  {band:'1mm',   freq:'248000.100',edi:'248 GHz' },
 ];
 
 // ════════════════════════════════════════
@@ -1289,6 +1298,7 @@ function addBandRow(def={}){
       `<input class="inp-sm" placeholder="${t('bandTxPh')}" value="${htmlEsc(def.txEq||'')}">`+
       `<input class="inp-sm" placeholder="${t('bandRxPh')}" value="${htmlEsc(def.rxEq||'')}">`+
       `<input class="inp-sm" type="number" placeholder="${t('bandAntHPh')}" value="${def.antH||''}" min="0" max="9999">`+
+      `<input class="inp-sm" type="number" placeholder="${t('bandAntHASLPh')}" value="${def.antHASL||''}" min="0" max="9999">`+
     `</div>`;
   document.getElementById('bandRows').appendChild(row);
 }
@@ -1334,10 +1344,10 @@ function collectSetup(){
   for(const row of document.querySelectorAll('.brow')){
     const sel=row.querySelector('select');
     const [fInp,pInp,aInp]=row.querySelector('.brow-main').querySelectorAll('input');
-    const [txInp,rxInp,hInp]=row.querySelector('.brow-eq').querySelectorAll('input');
+    const [txInp,rxInp,hInp,hASLInp]=row.querySelector('.brow-eq').querySelectorAll('input');
     if(sel&&sel.value) bands.push({
       band:sel.value,freq:fInp.value.trim(),power:parseInt(pInp.value)||100,antenna:aInp.value.trim(),
-      txEq:txInp.value.trim(),rxEq:rxInp.value.trim(),antH:hInp.value.trim(),
+      txEq:txInp.value.trim(),rxEq:rxInp.value.trim(),antH:hInp.value.trim(),antHASL:hASLInp.value.trim(),
     });
   }
   if(bands.length===0){ showToast(t('errNoBand'),true); return null; }
@@ -1911,6 +1921,7 @@ function buildEdi(session,band){
   const odx=valid.reduce((best,q)=>(!best||(q.qrb||0)>(best.qrb||0))?q:best,null);
   const cODXC=odx?`${odx.call};${(odx.wwl||'').toUpperCase()};${Math.round(odx.qrb||0)}`:';;0';
   const antH=bc.antH||'';
+  const antHASL=bc.antHASL||'';
 
   let out='[REG1TEST;1]\r\n';
   out+=`TName=${session.contest}\r\n`;
@@ -1938,7 +1949,7 @@ function buildEdi(session,band){
   out+=`SPowe=${bc.power||100}\r\n`;
   out+=`SRXEq=${bc.rxEq||''}\r\n`;
   out+=`SAnte=${bc.antenna||''}\r\n`;
-  out+=`SAntH=${antH};${antH}\r\n`;
+  out+=`SAntH=${antH};${antHASL}\r\n`;
   out+=`CQSOs=${cQSOs};${cWWLs+cDXCs}\r\n`;
   out+=`CQSOP=${cQSOP}\r\n`;
   out+=`CWWLs=${cWWLs};0;${cWWLs}\r\n`;
@@ -2284,6 +2295,15 @@ function importEdi(text){
     showToast(t('errImportBand',{band}),true); return;
   }
   if(!confirm(t('confirmImport',{n:qsos.length,band}))) return;
+  const sAntH=header['SAntH']||'';
+  if(sAntH){
+    const [h,asl]=sAntH.split(';');
+    const bc=_current.bands.find(b=>b.band===band);
+    if(bc){
+      if((h||'').trim()) bc.antH=(h||'').trim();
+      if((asl||'').trim()) bc.antHASL=(asl||'').trim();
+    }
+  }
   const myPos=locToLatLon(_current.myLoc);
   let added=0;
   for(const q of qsos){

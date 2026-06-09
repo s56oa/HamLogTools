@@ -136,6 +136,12 @@ describe('normBand', () => {
     it('6m',     () => { assert.equal(normBand('6m').band, '6m');       assert.equal(normBand('6m').freq, 50.2); });
   });
 
+  describe('4 m (70 MHz)', () => {
+    it('70 MHz', () => { assert.equal(normBand('70 MHz').band, '4m');   assert.equal(normBand('70 MHz').freq, 70.2); });
+    it('70MHz',  () => { assert.equal(normBand('70MHz').band, '4m');    assert.equal(normBand('70MHz').freq, 70.2); });
+    it('4m',     () => { assert.equal(normBand('4m').band, '4m');       assert.equal(normBand('4m').freq, 70.2); });
+  });
+
   describe('2 m (144 MHz)', () => {
     it('144 MHz', () => { assert.equal(normBand('144 MHz').band, '2m'); assert.equal(normBand('144 MHz').freq, 144.3); });
     it('145',     () => { assert.equal(normBand('145').band, '2m');     assert.equal(normBand('145').freq, 144.3); });
@@ -156,14 +162,20 @@ describe('normBand', () => {
   });
 
   describe('microwave bands (band name only)', () => {
-    it('2320  → 13cm',    () => assert.equal(normBand('2320').band,   '13cm'));
-    it('3400  → 9cm',     () => assert.equal(normBand('3400').band,   '9cm'));
-    it('5760  → 6cm',     () => assert.equal(normBand('5760').band,   '6cm'));
-    it('10 GHz → 3cm',    () => assert.equal(normBand('10 GHz').band, '3cm'));
-    it('10368 → 3cm',     () => assert.equal(normBand('10368').band,  '3cm'));
-    it('24 GHz → 1.25cm', () => assert.equal(normBand('24 GHz').band, '1.25cm'));
-    it('24048 → 1.25cm',  () => assert.equal(normBand('24048').band,  '1.25cm'));
-    it('47 GHz → 6mm',    () => assert.equal(normBand('47 GHz').band, '6mm'));
+    it('2320  → 13cm',       () => assert.equal(normBand('2320').band,    '13cm'));
+    it('3400  → 9cm',        () => assert.equal(normBand('3400').band,    '9cm'));
+    it('5760  → 6cm',        () => assert.equal(normBand('5760').band,    '6cm'));
+    it('10 GHz → 3cm',       () => assert.equal(normBand('10 GHz').band,  '3cm'));
+    it('10368 → 3cm',        () => assert.equal(normBand('10368').band,   '3cm'));
+    it('24 GHz → 1.25cm',    () => assert.equal(normBand('24 GHz').band,  '1.25cm'));
+    it('24048 → 1.25cm',     () => assert.equal(normBand('24048').band,   '1.25cm'));
+    it('47 GHz → 6mm',       () => assert.equal(normBand('47 GHz').band,  '6mm'));
+    it('47000 (legacy) → 6mm',() => assert.equal(normBand('47000').band,  '6mm'));
+    it('147000 not matched as 6mm (anchored)', () => assert.notEqual(normBand('147000').band, '6mm'));
+    it('76 GHz → 4mm',       () => { assert.equal(normBand('76 GHz').band, '4mm');    assert.equal(normBand('76 GHz').freq,  76032.1); });
+    it('122 GHz → 2.5mm',    () => { assert.equal(normBand('122 GHz').band,'2.5mm');  assert.equal(normBand('122 GHz').freq, 122250.1); });
+    it('134 GHz → 2mm',      () => { assert.equal(normBand('134 GHz').band,'2mm');    assert.equal(normBand('134 GHz').freq, 134928.1); });
+    it('248 GHz → 1mm',      () => { assert.equal(normBand('248 GHz').band,'1mm');    assert.equal(normBand('248 GHz').freq, 241000.1); });
   });
 });
 

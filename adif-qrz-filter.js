@@ -43,7 +43,7 @@ function parseArgs(argv) {
 
 function printHelp() {
   console.log(`
-ADIF QRZ BURO Filter  —  v1.13 (HamLogTools)
+ADIF QRZ BURO Filter  —  v1.15 (HamLogTools)
 
 Usage:
   node adif-qrz-filter.js <input.adi> [options]

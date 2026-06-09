@@ -42,7 +42,7 @@ src, band, freq, myCall, myLoc, contest, pwr, ant, txeq, rxeq, ops,
 _idx, _key (call|date|time), _bandKey (call|date|time|band)
 ```
 
-**Tests:** `edi2adif.test.js` — 122 tests, 9 groups (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit).
+**Tests:** `edi2adif.test.js` — 131 tests, 9 groups (`normBand`, `parseEDI`, `adifField`, `csvEsc`, `modeBadge`, i18n, duplicates, CSV export, inline edit).
 
 ---
 
@@ -144,7 +144,7 @@ Mirrors output to `vhf-logger/crosscheck-baseline.json`. Rebuild quarterly or af
 
 **Key functions:** `isDupe(call, band, excludeId)` — `baseCall()` both sides, `excludeId` prevents false-dupe on edited QSO; `recalcDupes()` full rebuild per-band from `_current.qsos`; `buildEdi()` — REG1TEST v1 spec-compliant; `validateBackup()` — security + data checks: `_SAFE_ID=/^[a-z0-9]+$/` on `id`/`_id`, 6-char Maidenhead regex on `myLoc`, non-empty `contest`.
 
-**Session shape:** `{ id, contest, myCall, myLoc, operator, club, sect, qthName, padr2, pExch, rCall, rName, rCity, rCoun, rEmail, rPoCo, rPhon, created, modified, activeBand, bands:[{band,freq,power,antenna,txEq,rxEq,antH}], qsos:[] }`
+**Session shape:** `{ id, contest, myCall, myLoc, operator, club, sect, qthName, padr2, pExch, rCall, rName, rCity, rCoun, rEmail, rPoCo, rPhon, created, modified, activeBand, bands:[{band,freq,power,antenna,txEq,rxEq,antH,antHASL}], qsos:[] }`
 
 **QSO shape:** `{ _id, band, mode, call, wwl, rstS, rstR, nrS, nrR, utcDate, utcTime, qrb, brg, dupe, xFlags }`
 
@@ -167,7 +167,7 @@ Col 8 = exchange (empty), col 11–13 = reserved (empty), col 14 = `D` if dupe.
 - `_manualTime = {date:'YYYYMMDD', time:'HHMM'} | null` — read by `logQso()`.
 - `_exportingSession` — set by `_showExportFor()` so `exportAllZip()` targets the correct session from home screen.
 
-**Tests:** `vhf-logger/vhf-logger.test.js` — 191 tests, 17 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`).
+**Tests:** `vhf-logger/vhf-logger.test.js` — 219 tests, 17 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`).
 
 ---
 
@@ -190,7 +190,7 @@ Col 8 = exchange (empty), col 11–13 = reserved (empty), col 14 = `D` if dupe.
 
 **i18n:** `const S = {sl:{...}, en:{...}}` — accessed in tests via second `vm.runInContext('globalThis._S = S;', ctx)`.
 
-**Tests:** `edi-validator.test.js` — 109 tests, 22 groups (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `validate — non-ASCII characters`, `validate — duplicate keywords`, `validate — QSO date day`, `validate — QSO date range`, `validate — QSO RST format`, `I18N`).
+**Tests:** `edi-validator.test.js` — 124 tests, 23 groups (`locToLatLon`, `haversine`, `validate — clean EDI`, `validate — structure`, `validate — non-spec keywords`, `validate — header formats`, `validate — ZRS mandatory fields`, `validate — QSO count`, `validate — QSO field count`, `validate — QSO date`, `validate — QSO time`, `validate — QSO mode`, `validate — QSO dupe flag`, `validate — QSO WWL format`, `validate — QRB deviation`, `validate — line length`, `validate — non-ASCII characters`, `validate — duplicate keywords`, `validate — QSO date day`, `validate — QSO date range`, `validate — QSO RST format`, `validate — SAntH format`, `I18N`).
 
 ---
 

@@ -105,16 +105,29 @@ describe('baseCall', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('normBand', () => {
-  it('144 MHz → 2m',    () => assert.equal(normBand('144 MHz'), '2m'));
-  it('432 MHz → 70cm',  () => assert.equal(normBand('432 MHz'), '70cm'));
-  it('1296 MHz → 23cm', () => assert.equal(normBand('1296 MHz'),'23cm'));
-  it('50 MHz → 6m',     () => assert.equal(normBand('50 MHz'),  '6m'));
-  it('70 MHz → 4m',     () => assert.equal(normBand('70 MHz'),  '4m'));
-  it('2320 MHz → 13cm', () => assert.equal(normBand('2320 MHz'),'13cm'));
-  it('10368 MHz → 3cm', () => assert.equal(normBand('10368 MHz'),'3cm'));
-  it('bare "2m" → 2m',  () => assert.equal(normBand('2m'),      '2m'));
+  it('144 MHz → 2m',       () => assert.equal(normBand('144 MHz'),  '2m'));
+  it('432 MHz → 70cm',     () => assert.equal(normBand('432 MHz'),  '70cm'));
+  it('1296 MHz → 23cm',    () => assert.equal(normBand('1296 MHz'), '23cm'));
+  it('1,3 GHz → 23cm',     () => assert.equal(normBand('1,3 GHz'), '23cm'));
+  it('50 MHz → 6m',        () => assert.equal(normBand('50 MHz'),   '6m'));
+  it('70 MHz → 4m',        () => assert.equal(normBand('70 MHz'),   '4m'));
+  it('2320 MHz → 13cm',    () => assert.equal(normBand('2320 MHz'), '13cm'));
+  it('2,3 GHz → 13cm',     () => assert.equal(normBand('2,3 GHz'), '13cm'));
+  it('3,4 GHz → 9cm',      () => assert.equal(normBand('3,4 GHz'), '9cm'));
+  it('5,7 GHz → 6cm',      () => assert.equal(normBand('5,7 GHz'), '6cm'));
+  it('10368 MHz → 3cm',    () => assert.equal(normBand('10368 MHz'),'3cm'));
+  it('10 GHz → 3cm',       () => assert.equal(normBand('10 GHz'),  '3cm'));
+  it('24 GHz → 1.25cm',    () => assert.equal(normBand('24 GHz'),  '1.25cm'));
+  it('47 GHz → 6mm',       () => assert.equal(normBand('47 GHz'),  '6mm'));
+  it('47000 (legacy) → 6mm',() => assert.equal(normBand('47000'),  '6mm'));
+  it('147000 not matched as 6mm (anchored)', () => assert.notEqual(normBand('147000'), '6mm'));
+  it('76 GHz → 4mm',       () => assert.equal(normBand('76 GHz'),  '4mm'));
+  it('122 GHz → 2.5mm',    () => assert.equal(normBand('122 GHz'), '2.5mm'));
+  it('134 GHz → 2mm',      () => assert.equal(normBand('134 GHz'), '2mm'));
+  it('248 GHz → 1mm',      () => assert.equal(normBand('248 GHz'), '1mm'));
+  it('bare "2m" → 2m',     () => assert.equal(normBand('2m'),      '2m'));
   it('unknown passthrough', () => assert.equal(normBand('999 MHz'),'999 MHz'));
-  it('empty → empty',   () => assert.equal(normBand(''),         ''));
+  it('empty → empty',      () => assert.equal(normBand(''),        ''));
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -338,7 +351,7 @@ describe('buildEdi', () => {
     operator: 'S56OA',
     club: 'S59DGO',
     sect: 'MO', qthName: 'Krvavec', rCall: 'S56OA', rName: 'Test User', rCity: 'Ljubljana', rCoun: 'SI', rEmail: '',
-    bands: [{ band:'2m', freq:'144.300', power:100, antenna:'9el Yagi', txEq:'SSPA 300W', rxEq:'LNA', antH:'1200' }],
+    bands: [{ band:'2m', freq:'144.300', power:100, antenna:'9el Yagi', txEq:'SSPA 300W', rxEq:'LNA', antH:'5', antHASL:'1200' }],
     qsos: [
       { _id:'q1', band:'2m', mode:'SSB', call:'S59DGO', wwl:'JN65vp',
         rstS:'59', rstR:'59', nrS:1, nrR:1, utcDate:'20260510', utcTime:'1030', qrb:50, brg:45, dupe:false, xFlags:[] },
@@ -553,21 +566,53 @@ describe('buildEdi', () => {
     assert.equal(fields.length, 15, `expected 15 fields, got ${fields.length}: ${qsoLine}`);
   });
 
-  it('SAntH uses height;height format for ground and sea level', () => {
+  it('SAntH uses antH;antHASL format (ground;sea-level)', () => {
     const out = buildEdi(session, '2m');
-    assert.ok(out.includes('SAntH=1200;1200'), `SAntH should be 1200;1200; got: ${out.match(/SAntH=.*/)?.[0]}`);
+    assert.ok(out.includes('SAntH=5;1200'), `SAntH should be 5;1200; got: ${out.match(/SAntH=.*/)?.[0]}`);
   });
 
-  it('SAntH is empty;empty when antH not set', () => {
+  it('SAntH=; when neither antH nor antHASL set', () => {
     const s = { ...session, bands: [{ band:'2m', freq:'144.300', power:100, antenna:'Yagi' }] };
     const out = buildEdi(s, '2m');
-    assert.ok(out.includes('SAntH=;\r\n'), `SAntH should be ;  when antH missing; got: ${out.match(/SAntH=.*/)?.[0]}`);
+    assert.ok(out.includes('SAntH=;\r\n'), `SAntH should be ; when neither height set; got: ${out.match(/SAntH=.*/)?.[0]}`);
   });
 
   it('PBand uses 145 MHz for 2m band', () => {
     const out = buildEdi(session, '2m');
     assert.ok(out.includes('PBand=145 MHz'), `PBand should be 145 MHz; got: ${out.match(/PBand=.*/)?.[0]}`);
   });
+
+  // PBand per-band mapping (spec table)
+  const mkBandSession = (band, freq) => ({
+    ...session,
+    bands: [{ band, freq, power:100, antenna:'Yagi' }],
+    qsos: [{ _id:'x1', band, mode:'SSB', call:'S59DGO', wwl:'JN65vp',
+      rstS:'59', rstR:'59', nrS:1, nrR:1, utcDate:'20260510', utcTime:'1030',
+      qrb:50, brg:45, dupe:false, xFlags:[] }],
+  });
+  const pbandCases = [
+    ['6m',    '50.150',    '50 MHz' ],
+    ['4m',    '70.200',    '70 MHz' ],
+    ['70cm',  '432.200',   '435 MHz'],
+    ['23cm',  '1296.200',  '1,3 GHz'],
+    ['13cm',  '2320.100',  '2,3 GHz'],
+    ['9cm',   '3400.100',  '3,4 GHz'],
+    ['6cm',   '5760.100',  '5,7 GHz'],
+    ['3cm',   '10368.100', '10 GHz' ],
+    ['1.25cm','24048.100', '24 GHz' ],
+    ['6mm',   '47000.100', '47 GHz' ],
+    ['4mm',   '76032.100', '76 GHz' ],
+    ['2.5mm', '122250.100','122 GHz'],
+    ['2mm',   '134928.100','134 GHz'],
+    ['1mm',   '241000.100','248 GHz'],
+  ];
+  for (const [band, freq, expected] of pbandCases) {
+    it(`PBand=${expected} for ${band} band`, () => {
+      const out = buildEdi(mkBandSession(band, freq), band);
+      assert.ok(out && out.includes(`PBand=${expected}`),
+        `PBand should be ${expected} for ${band}; got: ${out?.match(/PBand=.*/)?.[0]}`);
+    });
+  }
 
   // Header keyword correctness (spec 15.3.1 compliance)
   it('TName contains contest name (not operator)', () => {
@@ -838,6 +883,13 @@ describe('parseEdiForImport', () => {
     const {header} = parseEdiForImport(ediText);
     assert.equal(header['PBand'], '145 MHz');
     assert.equal(header['PCall'], 'S56OA');
+  });
+
+  it('reads SAntH header field', () => {
+    const edi = '[REG1TEST;1]\r\nPBand=145 MHz\r\nSAntH=5;1796\r\n[QSORecords;1]\r\n' +
+                '260510;1030;S59DGO;1;59;001;59;001;;JN65vp;50;;;;\r\n';
+    const {header} = parseEdiForImport(edi);
+    assert.equal(header['SAntH'], '5;1796');
   });
 
   it('parses UTC time correctly', () => {
