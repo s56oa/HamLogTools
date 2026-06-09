@@ -14,7 +14,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 87 | 10 |
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 219 | 17 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 221 | 17 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
 | `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
 | `edi-validator.test.js` | `edi-validator.html` | 124 | 23 |
@@ -201,7 +201,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 87 | 10 |
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 219 | 17 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 221 | 17 |
 | `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
 | `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
 | `edi-validator.test.js` | `edi-validator.html` | 124 | 23 |
@@ -645,7 +645,7 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 ---
 
-## `vhf-logger/vhf-logger.test.js` — 219 tests · 17 groups
+## `vhf-logger/vhf-logger.test.js` — 221 tests · 17 groups
 
 Covers the pure logic of `vhf-logger/vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, crosscheck lookup, EDI import parsing, ZIP generation, band colors, manual time state, and backup/restore validation.
 
@@ -727,7 +727,7 @@ Verifies full dupe-flag recalculation across a session.
 - Per-band isolation: same call on different bands both get `dupe=false`.
 - After `recalcDupes`, the `_current.qsos` array is mutated in place.
 
-#### 9 · `buildEdi` (57 tests)
+#### 9 · `buildEdi` (59 tests)
 Verifies REG1TEST EDI v1 output format.
 
 - File starts with `[REG1TEST;1]` header.
@@ -1723,7 +1723,7 @@ CLI orodje se izvede znotraj konteksta `node:vm`, ki nadomesti `fs`, `https`, `p
 
 ---
 
-## `vhf-logger/vhf-logger.test.js` — 219 testov · 17 skupin
+## `vhf-logger/vhf-logger.test.js` — 221 testov · 17 skupin
 
 Pokriva čisto logiko `vhf-logger/vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI, crosscheck poizvedbe, razčlenjevanje uvoza EDI, generiranje ZIP, barve pasov, stanje ročnega časa in validacijo backup/obnovi.
 

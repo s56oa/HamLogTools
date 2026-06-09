@@ -407,7 +407,7 @@ describe('buildEdi', () => {
     assert.ok(out.includes('PWWLo=JN65VP'));
   });
 
-  it('QSOs sorted chronologically', () => {
+  it('QSOs sorted by nrS (storage order irrelevant)', () => {
     const sessionRev = {
       ...session,
       qsos: [...session.qsos].reverse(),
@@ -415,7 +415,39 @@ describe('buildEdi', () => {
     const out = buildEdi(sessionRev, '2m');
     const i1 = out.indexOf('S59DGO');
     const i2 = out.indexOf('OE5VRL');
-    assert.ok(i1 < i2, 'QSOs not sorted chronologically');
+    assert.ok(i1 < i2, 'QSOs not sorted by nrS');
+  });
+
+  it('QSOs sorted by nrS even when time is out of order (import scenario)', () => {
+    const s = { ...session, qsos: [
+      { _id:'q1', band:'2m', mode:'SSB', call:'S59DGO', wwl:'JN65vp',
+        rstS:'59', rstR:'59', nrS:1, nrR:1, utcDate:'20260510', utcTime:'1030', qrb:50, brg:45, dupe:false, xFlags:[] },
+      { _id:'q2', band:'2m', mode:'CW',  call:'OE5VRL', wwl:'JN78dk',
+        rstS:'599', rstR:'599', nrS:2, nrR:7, utcDate:'20260510', utcTime:'1045', qrb:180, brg:340, dupe:false, xFlags:[] },
+      { _id:'q3', band:'2m', mode:'SSB', call:'DL3XYZ', wwl:'JO42ab',
+        rstS:'59', rstR:'59', nrS:3, nrR:4, utcDate:'20260510', utcTime:'1020', qrb:300, brg:0, dupe:false, xFlags:[] },
+    ]};
+    const out = buildEdi(s, '2m');
+    // Search within QSO records section only (calls may also appear in CODXC= header)
+    const qsoSection = out.slice(out.indexOf('[QSORecords'));
+    const iS59 = qsoSection.indexOf('S59DGO');
+    const iOE5 = qsoSection.indexOf('OE5VRL');
+    const iDL3 = qsoSection.indexOf('DL3XYZ');
+    assert.ok(iS59 < iOE5, 'nrS=1 (S59DGO) must precede nrS=2 (OE5VRL)');
+    assert.ok(iOE5 < iDL3, 'nrS=2 (OE5VRL) must precede nrS=3 (DL3XYZ) despite earlier timestamp');
+  });
+
+  it('TDate uses min/max date across all QSOs regardless of nrS order', () => {
+    const s = { ...session, qsos: [
+      { _id:'q1', band:'2m', mode:'SSB', call:'S59DGO', wwl:'JN65vp',
+        rstS:'59', rstR:'59', nrS:1, nrR:1, utcDate:'20260510', utcTime:'1030', qrb:50, brg:45, dupe:false, xFlags:[] },
+      { _id:'q2', band:'2m', mode:'SSB', call:'OE5VRL', wwl:'JN78dk',
+        rstS:'59', rstR:'59', nrS:2, nrR:2, utcDate:'20260512', utcTime:'0900', qrb:180, brg:340, dupe:false, xFlags:[] },
+      { _id:'q3', band:'2m', mode:'SSB', call:'DL3XYZ', wwl:'JO42ab',
+        rstS:'59', rstR:'59', nrS:3, nrR:3, utcDate:'20260511', utcTime:'1400', qrb:300, brg:0, dupe:false, xFlags:[] },
+    ]};
+    const out = buildEdi(s, '2m');
+    assert.ok(out.includes('TDate=20260510;20260512'), `TDate should span 10–12; got: ${out.match(/TDate=.*/)?.[0]}`);
   });
 
   it('uses CRLF line endings', () => {

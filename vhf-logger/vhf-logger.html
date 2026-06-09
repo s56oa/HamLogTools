@@ -1899,12 +1899,12 @@ const MODE_NUM={SSB:1,CW:2,FM:6,AM:5,RTTY:7};
 function buildEdi(session,band){
   const bc=session.bands.find(b=>b.band===band)||{};
   const qsos=session.qsos.filter(q=>q.band===band)
-    .sort((a,b)=>(a.utcDate+a.utcTime)<(b.utcDate+b.utcTime)?-1:1);
+    .sort((a,b)=>a.nrS!==b.nrS?a.nrS-b.nrS:(a.utcDate+a.utcTime)<(b.utcDate+b.utcTime)?-1:1);
   if(!qsos.length) return null;
   const opt=BAND_OPTS.find(o=>o.band===band);
   const ediBand=opt?opt.edi:(bc.freq?bc.freq+' MHz':band);
-  const first=qsos[0];
-  const last=qsos[qsos.length-1];
+  const minDate=qsos.reduce((m,q)=>q.utcDate<m?q.utcDate:m,qsos[0].utcDate);
+  const maxDate=qsos.reduce((m,q)=>q.utcDate>m?q.utcDate:m,qsos[0].utcDate);
 
   // C* summary — computed from non-dupe QSOs
   const valid=qsos.filter(q=>!q.dupe);
@@ -1925,7 +1925,7 @@ function buildEdi(session,band){
 
   let out='[REG1TEST;1]\r\n';
   out+=`TName=${session.contest}\r\n`;
-  out+=`TDate=${first.utcDate};${last.utcDate}\r\n`;
+  out+=`TDate=${minDate};${maxDate}\r\n`;
   out+=`PCall=${session.myCall}\r\n`;
   out+=`PWWLo=${session.myLoc}\r\n`;
   out+=`PExch=${session.pExch||''}\r\n`;

@@ -167,7 +167,7 @@ Col 8 = exchange (empty), col 11–13 = reserved (empty), col 14 = `D` if dupe.
 - `_manualTime = {date:'YYYYMMDD', time:'HHMM'} | null` — read by `logQso()`.
 - `_exportingSession` — set by `_showExportFor()` so `exportAllZip()` targets the correct session from home screen.
 
-**Tests:** `vhf-logger/vhf-logger.test.js` — 219 tests, 17 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`).
+**Tests:** `vhf-logger/vhf-logger.test.js` — 221 tests, 17 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`).
 
 ---
 
