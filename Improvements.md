@@ -1,6 +1,6 @@
 # Izboljšave — HamLogTools
 
-*Datum pregleda: 2026-06-09 · Različica: v1.15*
+*Datum pregleda: 2026-06-10 · Različica: v1.16*
 
 Dokument zajema odprte predloge izboljšav za vsa orodja projekta. Gre samo naprej — brez zgodovine opravljenih popravkov.
 

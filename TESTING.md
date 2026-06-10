@@ -14,8 +14,8 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 87 | 10 |
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 221 | 17 |
-| `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 222 | 17 |
+| `adif-stats.test.js` | `adif-stats.html` | 168 | 27 |
 | `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
 | `edi-validator.test.js` | `edi-validator.html` | 124 | 23 |
 
@@ -201,8 +201,8 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 87 | 10 |
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 221 | 17 |
-| `adif-stats.test.js` | `adif-stats.html` | 133 | 21 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 222 | 17 |
+| `adif-stats.test.js` | `adif-stats.html` | 168 | 27 |
 | `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
 | `edi-validator.test.js` | `edi-validator.html` | 124 | 23 |
 
@@ -826,16 +826,18 @@ Verifies i18n key symmetry between SL and EN translations.
 
 ---
 
-## `adif-stats.test.js` — 133 tests · 21 groups
+## `adif-stats.test.js` — 168 tests · 27 groups
 
-Covers the pure logic of `adif-stats.html`: DXCC prefix lookup, band/mode normalisation, locator conversion, QRB calculation, ADIF parsing, statistics aggregation, filter logic, date/month formatting, XSS escaping, SVG chart helpers, and i18n key completeness.
+Covers the pure logic of `adif-stats.html`: DXCC prefix lookup, band/mode normalisation, locator conversion, QRB calculation, ADIF parsing, statistics aggregation, filter logic, date/month formatting, XSS escaping, SVG chart helpers, grid-map color helpers, and i18n key completeness.
 
 ### How the tests work
 
 `adif-stats.html` is evaluated inside a `node:vm` context using the same mock setup as the other HTML tools. Only the `<script>` block is extracted; the minimal mock provides `localStorage`, `document.getElementById`, `URL`, `Blob`, `setTimeout`, and `console`.
 
 Pure functions are accessed directly as context properties:
-`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF`, `computeStats`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `t`.
+`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF`, `computeStats`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `t`, `_qrbColor`, `_qsoGradColor`, `_modeColor`, `_dominantMode`.
+
+A second `vm.runInContext` call exposes `_getFiltered`/`_setQsos` accessor helpers for the `applyFilters` tests, and a `runApplyFilters` wrapper in the test file patches `document.getElementById` temporarily to inject filter values, then calls the real `applyFilters()` from the vm.
 
 An `adif()` helper builds minimal ADIF fixture strings with correct `<TAG:length>value` encoding.
 
@@ -923,12 +925,14 @@ Verifies DXCC entity lookup by callsign prefix using the built-in `PREFIX_DB` ta
 - `topCalls` Map sorted descending by count.
 - Unknown continent (`'?'`) not added to `byCont`.
 
-#### 11 · `applyFilters — date filter` (6 tests)
+#### 11 · `applyFilters` (10 tests)
 
-Replicates the date-range filtering logic in isolation:
-- QSO with empty date excluded when `from` or `to` is set.
-- QSO within range passes; before `from` or after `to` excluded.
-- No filter (both empty) passes all QSOs including those with empty dates.
+Calls the real `applyFilters()` function in the vm via `runApplyFilters()`, which patches `document.getElementById` to inject filter values and reads `_filtered` back.
+
+- **Date range** — QSO with empty date excluded when `from` or `to` is set; QSO within range passes; before `from` or after `to` excluded; no filter passes all QSOs including those with empty dates.
+- **Band filter** — exact band match; empty band passes all bands.
+- **Mode filter** — exact mode match.
+- **Combined** — band + mode filters applied simultaneously.
 
 #### 12 · `fmtDate` (4 tests)
 
@@ -955,7 +959,7 @@ Replicates the date-range filtering logic in isolation:
 - Zero-value item produces no `<rect>` (skipped by `bw>0` guard).
 - `colorFn` callback applied to bar fill.
 
-#### 16 · `svgVBar` (6 tests)
+#### 16 · `svgVBar` (7 tests)
 
 - Empty items → no `<svg>` tag.
 - Non-empty items → `<svg>` and `<rect>` present.
@@ -963,8 +967,40 @@ Replicates the date-range filtering logic in isolation:
 - 24-item hour chart renders correctly with width 580.
 - Short bar (height < 14 px) places the value label *above* the bar in `var(--muted)` colour.
 - Zero-value bar has no value label; non-zero bar has its label.
+- **`null` color trap** — `svgVBar(items, null, w)` produces `fill="null"` (invisible bars); documented in CLAUDE.md as a known footgun.
 
-#### 17 · `I18N` (8 tests)
+#### 17 · `color helpers` (14 tests · 4 sub-groups)
+
+Tests the four pure grid-map color helper functions exposed by `adif-stats.html`.
+
+##### `_qrbColor` (4 tests)
+
+- Distance ≤ 100 km falls in the first band (same color as exactly 100 km).
+- Boundary at 100 km: 100 and 101 return different colors.
+- Returns a `#rrggbb` hex string.
+- All 8 `_QRB_BANDS` thresholds produce distinct colors.
+
+##### `_qsoGradColor` (3 tests)
+
+- Returns a CSS `hsl(...)` string.
+- `maxQso === 1` → full-saturation color (ratio = 1 → 80% saturation).
+- Lower QSO count produces a lighter color than higher count (higher lightness value).
+
+##### `_modeColor` (7 tests)
+
+- `SSB` → blue (`#4d9de0`), `CW` → green (`#2ecc8a`), `FM` → orange (`#f0a500`), `FT8` → purple (`#a855f7`).
+- Unknown mode → fallback color (not equal to SSB color).
+- Lowercase input normalised (result equals uppercase form).
+- Empty string returns the fallback color.
+
+##### `_dominantMode` (4 tests)
+
+- Returns the mode with the highest count.
+- Single-entry Map → that mode.
+- Empty Map → `''`.
+- `null` input → `''`.
+
+#### 18 · `I18N` (8 tests)
 
 - `t('secOver')` returns a non-empty translated string (not the key itself).
 - Unknown key returns the key string (safe fallback).
@@ -975,20 +1011,20 @@ Replicates the date-range filtering logic in isolation:
 - `hmapMon` has 12 `|`-separated month abbreviations; first = `Jan`, last = `Dec`.
 - `hmapMore` non-empty and differs from its key name.
 
-#### 18 · `computeStats — byDay` (3 tests)
+#### 19 · `computeStats — byDay` (3 tests)
 
 - `byDay` Map counts QSOs per `YYYYMMDD` key.
 - QSOs with empty date are not added to `byDay`.
 - Three distinct dates → `byDay.size === 3`.
 
-#### 19 · `computeStats — byBandHour` (4 tests)
+#### 20 · `computeStats — byBandHour` (4 tests)
 
 - A band entry in `byBandHour` is a 24-element array.
 - Correct hour slot incremented per `time` field (`'1430'` → index 14).
 - Separate arrays per band (no cross-band contamination).
 - QSO with empty `time` → no band entry created in `byBandHour`.
 
-#### 20 · `computeStats — byDxcc / byBandDxcc` (5 tests)
+#### 21 · `computeStats — byDxcc / byBandDxcc` (5 tests)
 
 - `byDxcc` counts unique DXCC entity names; each entry has `.qso` count and `.bands` Set.
 - Two QSOs from Germany → `byDxcc.get('Germany').qso === 2`.
@@ -996,7 +1032,7 @@ Replicates the date-range filtering logic in isolation:
 - `byBandDxcc` Map: per-band Set of countries; correct size per band.
 - `'Unknown'` country excluded from both `byDxcc` and `byBandDxcc`.
 
-#### 21 · `computeStats — qrbBuckets` (8 tests)
+#### 22 · `computeStats — qrbBuckets` (8 tests)
 
 - `qrbBuckets` is a 6-element array (bucket indices 0–5).
 - Bucket 0 (`< 500 km`): qrb 200 and 499 both land here.
@@ -1006,6 +1042,20 @@ Replicates the date-range filtering logic in isolation:
 - Bucket 4 (`5 000–10 000 km`): qrb 5 000 and 9 999.
 - Bucket 5 (`≥ 10 000 km`): qrb 10 000 and 15 000.
 - `qrb === 0` not bucketed (represents unknown distance).
+
+#### 23 · `computeStats — byGrid4` (12 tests)
+
+- `byGrid4` empty when QSOs have no grid data.
+- Counts QSOs per 4-character Maidenhead field.
+- Unique calls per field (same call twice = 1).
+- 6-character squares tracked within the 4-character entry via `sq6` Map.
+- 4-character-only grid counted but `sq6` is empty.
+- Grid shorter than 4 characters not counted.
+- `myGrid` captured from first QSO that has `MY_GRIDSQUARE`; empty when none present.
+- Multiple fields accumulated independently.
+- `modes` Map initialised on first QSO (has a `.get` method).
+- Modes counted per field (two SSB + one CW → `modes.get('SSB') === 2`, `modes.get('CW') === 1`).
+- Modes independent across 4-char fields (no cross-field contamination).
 
 ---
 
@@ -1868,16 +1918,18 @@ Preverja simetričnost i18n ključev med SL in EN prevodi.
 
 ---
 
-## `adif-stats.test.js` — 133 testov · 21 skupin
+## `adif-stats.test.js` — 168 testov · 27 skupin
 
-Pokriva čisto logiko `adif-stats.html`: iskanje DXCC predpon, normalizacijo pasu/načina, pretvorbo lokatorjev, izračun QRB, razčlenjevanje ADIF, agregacijo statistik, logiko filtrov, formatiranje datumov/mesecev, XSS ubežanje, pomočnike SVG grafikonov in popolnost i18n ključev.
+Pokriva čisto logiko `adif-stats.html`: iskanje DXCC predpon, normalizacijo pasu/načina, pretvorbo lokatorjev, izračun QRB, razčlenjevanje ADIF, agregacijo statistik, logiko filtrov, formatiranje datumov/mesecev, XSS ubežanje, pomočnike SVG grafikonov, barvne pomočnike grid mape in popolnost i18n ključev.
 
 ### Kako testi delujejo
 
 `adif-stats.html` se izvede znotraj konteksta `node:vm` z enakim nadomestkom DOM kot ostala HTML orodja. Izvleče se samo blok `<script>`; minimalni nadomestek zagotavlja `localStorage`, `document.getElementById`, `URL`, `Blob`, `setTimeout` in `console`.
 
 Čiste funkcije so dostopne neposredno kot lastnosti konteksta:
-`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF`, `computeStats`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `t`.
+`lookupCall`, `normBand`, `normMode`, `locToLatLon`, `haversine`, `parseADIF`, `computeStats`, `fmtDate`, `fmtMonth`, `htmlEsc`, `svgHBar`, `svgVBar`, `t`, `_qrbColor`, `_qsoGradColor`, `_modeColor`, `_dominantMode`.
+
+Drugi klic `vm.runInContext` razkrije pomočnika `_getFiltered`/`_setQsos` za teste `applyFilters`, ovoj `runApplyFilters` pa začasno popravi `document.getElementById` za vnos vrednosti filtrov in pokliče pravi `applyFilters()` iz vm.
 
 Pomočnik `adif()` gradi minimalne ADIF fiksture z izračunom dolžin `<TAG:dolžina>vrednost`.
 
@@ -1964,12 +2016,14 @@ Preverja iskanje DXCC entitete po predponi klicnega znaka v vgrajeni bazi `PREFI
 - `topCalls` Map razvrščen padajoče po številu.
 - Neznan kontinent (`'?'`) ni dodan v `byCont`.
 
-#### 11 · `applyFilters — date filter` (6 testov)
+#### 11 · `applyFilters` (10 testov)
 
-Replicira logiko filtriranja datumskega obsega v izolaciji:
-- QSO s praznim datumom je izključen, ko je nastavljen `from` ali `to`.
-- QSO v obsegu prestane filter; pred `from` ali po `to` izključen.
-- Brez filtra (oba prazna) prepusti vse QSO-je vključno s tistimi brez datuma.
+Kliče pravi `applyFilters()` v vm prek `runApplyFilters()`, ki popravi `document.getElementById` za vnos vrednosti filtrov in prebere `_filtered` nazaj.
+
+- **Datumski obseg** — QSO s praznim datumom izključen ko je nastavljen `from` ali `to`; QSO v obsegu prestane; pred `from` ali po `to` izključen; brez filtra prepusti vse QSO-je.
+- **Filter pasu** — ujemanje po točnem pasu; prazen pas prepusti vse pasove.
+- **Filter načina** — ujemanje po točnem načinu.
+- **Kombinirano** — filter pasu + načina se aplicira hkrati.
 
 #### 12 · `fmtDate` (4 testi)
 
@@ -1996,7 +2050,7 @@ Replicira logiko filtriranja datumskega obsega v izolaciji:
 - Nič-vrednostni element ne ustvari `<rect>` (preskočen z varovalko `bw>0`).
 - Povratni klic `colorFn` apliciran na polnilo palice.
 
-#### 16 · `svgVBar` (6 testov)
+#### 16 · `svgVBar` (7 testov)
 
 - Prazni elementi → ni oznake `<svg>`.
 - Neprazni elementi → prisotna `<svg>` in `<rect>`.
@@ -2004,8 +2058,40 @@ Replicira logiko filtriranja datumskega obsega v izolaciji:
 - 24-elementni urni grafikon se pravilno izriše s širino 580.
 - Kratka palica (višina < 14 px) postavi vrednostno oznako *nad* palico v barvi `var(--muted)`.
 - Nič-vrednostna palica nima oznake vrednosti; palica brez nič ima svojo oznako.
+- **Past `null` barve** — `svgVBar(items, null, w)` ustvari `fill="null"` (nevidne palice); dokumentirano v CLAUDE.md kot znana past.
 
-#### 17 · `I18N` (8 testov)
+#### 17 · `color helpers` (14 testov · 4 podskupine)
+
+Testira štiri čiste barvne pomočnike grid mape razkrije `adif-stats.html`.
+
+##### `_qrbColor` (4 testi)
+
+- Razdalja ≤ 100 km spada v prvi razred (enaka barva kot natanko 100 km).
+- Meja pri 100 km: 100 in 101 vrneta različni barvi.
+- Vrne niz `#rrggbb`.
+- Vseh 8 pragov `_QRB_BANDS` ustvari različne barve.
+
+##### `_qsoGradColor` (3 testi)
+
+- Vrne CSS niz `hsl(...)`.
+- `maxQso === 1` → barva polne nasičenosti (razmerje = 1 → 80% nasičenosti).
+- Manjše število QSO ustvari svetlejšo barvo kot večje (višja vrednost svetlosti).
+
+##### `_modeColor` (7 testov)
+
+- `SSB` → modra (`#4d9de0`), `CW` → zelena (`#2ecc8a`), `FM` → oranžna (`#f0a500`), `FT8` → vijolična (`#a855f7`).
+- Neznan način → barva rezervne vrednosti (ne enaka barvi SSB).
+- Mali vnos normaliziran (rezultat enak obliki z velikimi črkami).
+- Prazen niz vrne barvo rezervne vrednosti.
+
+##### `_dominantMode` (4 testi)
+
+- Vrne način z najvišjim številom.
+- Enozapis Map → tisti način.
+- Prazna Map → `''`.
+- Vnos `null` → `''`.
+
+#### 18 · `I18N` (8 testov)
 
 - `t('secOver')` vrne nepraznen prevedeni niz (ne sam ključ).
 - Neznan ključ vrne sam niz ključa (varna rezervna vrednost).
@@ -2016,20 +2102,20 @@ Replicira logiko filtriranja datumskega obsega v izolaciji:
 - `hmapMon` ima 12 `|`-ločenih krajšav mesecev; prvi = `Jan`, zadnji = `Dec`.
 - `hmapMore` je neprazen in se razlikuje od imen ključev.
 
-#### 18 · `computeStats — byDay` (3 testi)
+#### 19 · `computeStats — byDay` (3 testi)
 
 - `byDay` Map šteje QSO-je per ključ `YYYYMMDD`.
 - QSO-ji s praznim datumom se ne dodajo v `byDay`.
 - Trije različni datumi → `byDay.size === 3`.
 
-#### 19 · `computeStats — byBandHour` (4 testi)
+#### 20 · `computeStats — byBandHour` (4 testi)
 
 - Vnos pasu v `byBandHour` je 24-elementno polje.
 - Pravilna urna reža naraščena per polje `time` (`'1430'` → indeks 14).
 - Ločena polja per pas (ni medpasovnega onesnaževanja).
 - QSO s praznim `time` → ni vnosa pasu ustvarjenega v `byBandHour`.
 
-#### 20 · `computeStats — byDxcc / byBandDxcc` (5 testov)
+#### 21 · `computeStats — byDxcc / byBandDxcc` (5 testov)
 
 - `byDxcc` šteje unikatna DXCC imena entitet; vsak vnos ima `.qso` in množico `.bands`.
 - Dva QSO-ja iz Nemčije → `byDxcc.get('Germany').qso === 2`.
@@ -2037,7 +2123,7 @@ Replicira logiko filtriranja datumskega obsega v izolaciji:
 - `byBandDxcc` Map: množica držav per pas; pravilna velikost per pas.
 - Država `'Unknown'` izključena iz obeh `byDxcc` in `byBandDxcc`.
 
-#### 21 · `computeStats — qrbBuckets` (8 testov)
+#### 22 · `computeStats — qrbBuckets` (8 testov)
 
 - `qrbBuckets` je 6-elementno polje (razredi 0–5).
 - Razred 0 (`< 500 km`): qrb 200 in 499 oba sem.
@@ -2047,6 +2133,20 @@ Replicira logiko filtriranja datumskega obsega v izolaciji:
 - Razred 4 (`5 000–10 000 km`): qrb 5 000 in 9 999.
 - Razred 5 (`≥ 10 000 km`): qrb 10 000 in 15 000.
 - `qrb === 0` ne spade v noben razred (pomeni neznano razdaljo).
+
+#### 23 · `computeStats — byGrid4` (12 testov)
+
+- `byGrid4` prazna ko QSO-ji nimajo podatkov o lokatorju.
+- Šteje QSO-je per 4-znakovni Maidenhead lokator.
+- Unikatni klicni znaki per lokator (isti klicni znak dvakrat = 1).
+- 6-znakovni kvadrati sledeni znotraj 4-znakovnega vnosa prek Map `sq6`.
+- 4-znakovni lokator šteje, `sq6` pa je prazna.
+- Lokator krajši od 4 znakov se ne šteje.
+- `myGrid` zajet iz prvega QSO z `MY_GRIDSQUARE`; prazen ko ni nobenega.
+- Več lokatorjev se akumulira neodvisno.
+- Map `modes` inicializirana ob prvem QSO (ima metodo `.get`).
+- Načini šteti per lokator (dva SSB + en CW → `modes.get('SSB') === 2`, `modes.get('CW') === 1`).
+- Načini neodvisni med 4-znakovnimi lokatorji (ni medlokatorskega onesnaževanja).
 
 ---
 

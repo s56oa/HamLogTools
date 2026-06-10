@@ -74,7 +74,7 @@ const {
   baseCall, levenshtein, normBand,
   locToLatLon, haversine, calcBearing,
   buildEdi, applyBaseline, lookupCall,
-  isDupe, recalcDupes,
+  isDupe, recalcDupes, cmpQsoNrS,
   parseEdiForImport, makeZip, validateBackup,
   _setCurrentForTest, _getCurrentForTest,
   _getEditingExistingForTest, _getI18nValueForTest,
@@ -345,7 +345,7 @@ describe('recalcDupes', () => {
         { _id:'a', band:'2m', nrS:1, call:'S59DGO', dupe:false },
       ],
     });
-    _getCurrentForTest().qsos.sort((a,b)=>a.nrS!==b.nrS?a.nrS-b.nrS:(a.utcDate+a.utcTime)<(b.utcDate+b.utcTime)?-1:1);
+    _getCurrentForTest().qsos.sort(cmpQsoNrS);
     recalcDupes();
     const q = _getCurrentForTest().qsos;
     assert.equal(q[0].nrS, 1,     'nrS=1 must be first after sort');

@@ -47,6 +47,27 @@ const {
   t,
 } = ctx;
 
+// Expose let-scoped vm vars for applyFilters tests
+vm.runInContext(`
+  globalThis._getFiltered = () => _filtered;
+  globalThis._setQsos = q => { _qsos = q; };
+`, ctx);
+
+const { _qrbColor, _qsoGradColor, _modeColor, _dominantMode } = ctx;
+
+// Helper: calls the real applyFilters in the vm with the given qsos and filter values
+function runApplyFilters(qsos, {band='', mode='', from='', to=''} = {}) {
+  ctx._setQsos(qsos);
+  const origGet = ctx.document.getElementById;
+  ctx.document.getElementById = id => {
+    const vals = {fBand:band, fMode:mode, fFrom:from, fTo:to};
+    return id in vals ? {value: vals[id]} : origGet(id);
+  };
+  vm.runInContext('applyFilters()', ctx);
+  ctx.document.getElementById = origGet;
+  return ctx._getFiltered();
+}
+
 // ─── ADIF test fixture helper ─────────────────────────────────────
 function adif(fields, withEoh=true) {
   const hdr = withEoh ? 'Test log\n<EOH>\n' : '';
@@ -443,45 +464,58 @@ describe('computeStats — aggregates', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-describe('applyFilters — date filter', () => {
-  function q(call, date) {
-    return {call, band:'2m', mode:'SSB', date, time:'1200',
+describe('applyFilters', () => {
+  function q(call, date, band='2m', mode='SSB') {
+    return {call, band, mode, date, time:'1200',
             cont:'EU', country:'Slovenia', qrb:0, grid:'', myGrid:'', src:'f.adi'};
-  }
-  function filter(qsos, from, to) {
-    // replicate applyFilters logic in isolation
-    return qsos.filter(qq => {
-      if(from && (!qq.date || qq.date < from)) return false;
-      if(to   && (!qq.date || qq.date > to))   return false;
-      return true;
-    });
   }
 
   it('QSO without date excluded when from is set', () => {
-    const res = filter([q('A',''), q('B','20240315')], '20240101', '');
+    const res = runApplyFilters([q('A',''), q('B','20240315')], {from:'20240101'});
     assert.equal(res.length, 1);
     assert.equal(res[0].call, 'B');
   });
   it('QSO without date excluded when to is set', () => {
-    const res = filter([q('A',''), q('B','20240315')], '', '20241231');
+    const res = runApplyFilters([q('A',''), q('B','20240315')], {to:'20241231'});
     assert.equal(res.length, 1);
     assert.equal(res[0].call, 'B');
   });
   it('QSO in range passes', () => {
-    const res = filter([q('A','20240315')], '20240101', '20241231');
+    const res = runApplyFilters([q('A','20240315')], {from:'20240101', to:'20241231'});
     assert.equal(res.length, 1);
   });
   it('QSO before from excluded', () => {
-    const res = filter([q('A','20231201')], '20240101', '');
+    const res = runApplyFilters([q('A','20231201')], {from:'20240101'});
     assert.equal(res.length, 0);
   });
   it('QSO after to excluded', () => {
-    const res = filter([q('A','20250101')], '', '20241231');
+    const res = runApplyFilters([q('A','20250101')], {to:'20241231'});
     assert.equal(res.length, 0);
   });
   it('no filter passes all', () => {
-    const res = filter([q('A','20240315'), q('B','')], '', '');
+    const res = runApplyFilters([q('A','20240315'), q('B','')]);
     assert.equal(res.length, 2);
+  });
+  it('band filter matches exact band', () => {
+    const res = runApplyFilters([q('A','20240101','2m'), q('B','20240101','70cm')], {band:'2m'});
+    assert.equal(res.length, 1);
+    assert.equal(res[0].call, 'A');
+  });
+  it('band filter empty passes all bands', () => {
+    const res = runApplyFilters([q('A','20240101','2m'), q('B','20240101','70cm')]);
+    assert.equal(res.length, 2);
+  });
+  it('mode filter matches exact mode', () => {
+    const res = runApplyFilters([q('A','20240101','2m','SSB'), q('B','20240101','2m','CW')], {mode:'CW'});
+    assert.equal(res.length, 1);
+    assert.equal(res[0].call, 'B');
+  });
+  it('band and mode filters combined', () => {
+    const res = runApplyFilters([
+      q('A','20240101','2m','SSB'), q('B','20240101','2m','CW'), q('C','20240101','70cm','CW'),
+    ], {band:'2m', mode:'CW'});
+    assert.equal(res.length, 1);
+    assert.equal(res[0].call, 'B');
   });
 });
 
@@ -575,6 +609,81 @@ describe('svgVBar', () => {
     const textMatches = (r.match(/>0</g)||[]).length + (r.match(/>5</g)||[]).length;
     assert.ok(r.includes('>5<'), 'val=5 should have label');
     assert.ok(!r.includes('>0<'), 'val=0 should not have label');
+  });
+  it('null color produces fill="null" (documented trap)', () => {
+    const r = svgVBar([{label:'a',val:5}], null, 280);
+    assert.ok(r.includes('fill="null"'), 'null color should produce literal fill="null"');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+describe('color helpers', () => {
+  describe('_qrbColor', () => {
+    it('≤100 km → first band color', () => {
+      assert.equal(_qrbColor(50),  _qrbColor(100));
+    });
+    it('boundary: 100 km falls in first band', () => {
+      const c100 = _qrbColor(100);
+      const c101 = _qrbColor(101);
+      assert.notEqual(c100, c101);
+    });
+    it('returns a string starting with #', () => {
+      assert.ok(_qrbColor(300).startsWith('#'));
+    });
+    it('all 8 bands return distinct colors', () => {
+      const colors = [50,150,250,350,450,550,650,800].map(_qrbColor);
+      assert.equal(new Set(colors).size, 8);
+    });
+  });
+
+  describe('_qsoGradColor', () => {
+    it('returns a CSS hsl() string', () => {
+      assert.ok(_qsoGradColor(5, 10).startsWith('hsl('));
+    });
+    it('maxQso=1 → ratio=1, full-saturation color', () => {
+      const c = _qsoGradColor(1, 1);
+      assert.ok(c.includes('80%'), 'saturation at max');
+    });
+    it('lower count is lighter than higher count', () => {
+      const low  = _qsoGradColor(1,  100);
+      const high = _qsoGradColor(99, 100);
+      // lightness is embedded as "XX%" — parse it
+      const L = s => parseInt(s.match(/,(\d+)%\)/)[1]);
+      assert.ok(L(low) > L(high), 'low count should be lighter');
+    });
+  });
+
+  describe('_modeColor', () => {
+    it('SSB → blue family', () => assert.equal(_modeColor('SSB'), '#4d9de0'));
+    it('CW  → green family', () => assert.equal(_modeColor('CW'),  '#2ecc8a'));
+    it('FM  → orange family', () => assert.equal(_modeColor('FM'),  '#f0a500'));
+    it('FT8 → purple family', () => assert.equal(_modeColor('FT8'), '#a855f7'));
+    it('unknown mode → fallback color', () => {
+      const c = _modeColor('UNKNOWN');
+      assert.ok(typeof c === 'string' && c.length > 0);
+      assert.notEqual(c, _modeColor('SSB'));
+    });
+    it('lowercase input handled', () => assert.equal(_modeColor('ssb'), _modeColor('SSB')));
+    it('empty string returns fallback', () => {
+      const c = _modeColor('');
+      assert.ok(typeof c === 'string' && c.length > 0);
+    });
+  });
+
+  describe('_dominantMode', () => {
+    it('returns mode with highest count', () => {
+      const m = new Map([['SSB',5],['CW',2]]);
+      assert.equal(_dominantMode(m), 'SSB');
+    });
+    it('single mode entry', () => {
+      assert.equal(_dominantMode(new Map([['CW',3]])), 'CW');
+    });
+    it('empty map → empty string', () => {
+      assert.equal(_dominantMode(new Map()), '');
+    });
+    it('null → empty string', () => {
+      assert.equal(_dominantMode(null), '');
+    });
   });
 });
 
@@ -750,5 +859,79 @@ describe('computeStats — qrbBuckets', () => {
   it('qrb=0 not bucketed', () => {
     const s = computeStats([q(0)]);
     assert.equal(s.qrbBuckets.reduce((a,b)=>a+b,0), 0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+describe('computeStats — byGrid4', () => {
+  function q(grid, call='DL1ABC', myGrid='') {
+    return {call,band:'2m',mode:'SSB',date:'20240601',time:'1200',cont:'EU',country:'Germany',qrb:100,grid,myGrid,src:'f.adi'};
+  }
+  it('byGrid4 empty when no grid data', () => {
+    const s = computeStats([q('')]);
+    assert.equal(s.byGrid4.size, 0);
+  });
+  it('counts QSOs per 4-char field', () => {
+    const s = computeStats([q('JN65vp'),q('JN65ab'),q('JO42aa')]);
+    assert.equal(s.byGrid4.get('JN65').qso, 2);
+    assert.equal(s.byGrid4.get('JO42').qso, 1);
+  });
+  it('unique calls per field', () => {
+    const s = computeStats([q('JN65vp','DL1'),q('JN65ab','DL1'),q('JN65vp','OE5')]);
+    assert.equal(s.byGrid4.get('JN65').calls.size, 2);
+  });
+  it('6-char squares tracked within 4-char entry', () => {
+    // grid is uppercase as produced by buildQso
+    const s = computeStats([q('JN65VP'),q('JN65VP'),q('JN65AB')]);
+    const g = s.byGrid4.get('JN65');
+    assert.equal(g.sq6.get('JN65VP'), 2);
+    assert.equal(g.sq6.get('JN65AB'), 1);
+    assert.equal(g.sq6.size, 2);
+  });
+  it('4-char-only grid (no 6-char) counted but sq6 empty', () => {
+    const s = computeStats([q('JN65')]);
+    assert.equal(s.byGrid4.get('JN65').qso, 1);
+    assert.equal(s.byGrid4.get('JN65').sq6.size, 0);
+  });
+  it('grid shorter than 4 chars not counted', () => {
+    const s = computeStats([q('JN')]);
+    assert.equal(s.byGrid4.size, 0);
+  });
+  it('myGrid captured from first QSO with myGrid', () => {
+    const s = computeStats([q('JN65VP','DL1',''),q('JO42AA','OE5','JN76HD')]);
+    assert.equal(s.myGrid, 'JN76HD');
+  });
+  it('myGrid empty when no QSO has myGrid', () => {
+    const s = computeStats([q('JN65VP','DL1','')]);
+    assert.equal(s.myGrid, '');
+  });
+  it('multiple fields accumulated independently', () => {
+    const s = computeStats([q('JN65VP'),q('KO12AB'),q('IO91AA')]);
+    assert.equal(s.byGrid4.size, 3);
+    assert.equal(s.byGrid4.get('KO12').qso, 1);
+  });
+  it('modes map initialised on first QSO', () => {
+    const s = computeStats([q('JN65VP')]);
+    assert.equal(typeof s.byGrid4.get('JN65').modes.get, 'function');
+  });
+  it('modes counted per field', () => {
+    const qsos = [
+      {...q('JN65VP'), mode:'SSB'},
+      {...q('JN65AB'), mode:'SSB'},
+      {...q('JN65VP'), mode:'CW'},
+    ];
+    const g = computeStats(qsos).byGrid4.get('JN65');
+    assert.equal(g.modes.get('SSB'), 2);
+    assert.equal(g.modes.get('CW'), 1);
+  });
+  it('modes independent across 4-char fields', () => {
+    const qsos = [
+      {...q('JN65VP'), mode:'SSB'},
+      {...q('JO42AB'), mode:'CW'},
+    ];
+    const s = computeStats(qsos);
+    assert.equal(s.byGrid4.get('JN65').modes.get('SSB'), 1);
+    assert.equal(s.byGrid4.get('JO42').modes.get('CW'), 1);
+    assert.ok(!s.byGrid4.get('JO42').modes.has('SSB'));
   });
 });

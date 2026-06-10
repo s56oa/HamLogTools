@@ -339,7 +339,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
 
 <header>
   <div class="logo">S56OA VHF<span class="icon">◉</span>Logger</div>
-  <span class="version">v1.15</span>
+  <span class="version">v1.16</span>
   <div class="hdr-info" id="hdrInfo"></div>
   <div class="lang-wrap">
     <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" aria-label="Preklopi temo / Toggle theme">☀</button>
@@ -1896,10 +1896,15 @@ function resetForm(){
 // ════════════════════════════════════════
 const MODE_NUM={SSB:1,CW:2,FM:6,AM:5,RTTY:7};
 
+function cmpQsoNrS(a,b){
+  if(a.nrS!==b.nrS) return a.nrS-b.nrS;
+  const ta=a.utcDate+a.utcTime, tb=b.utcDate+b.utcTime;
+  return ta<tb?-1:ta>tb?1:0;
+}
+
 function buildEdi(session,band){
   const bc=session.bands.find(b=>b.band===band)||{};
-  const qsos=session.qsos.filter(q=>q.band===band)
-    .sort((a,b)=>a.nrS!==b.nrS?a.nrS-b.nrS:(a.utcDate+a.utcTime)<(b.utcDate+b.utcTime)?-1:1);
+  const qsos=session.qsos.filter(q=>q.band===band).sort(cmpQsoNrS);
   if(!qsos.length) return null;
   const opt=BAND_OPTS.find(o=>o.band===band);
   const ediBand=opt?opt.edi:(bc.freq?bc.freq+' MHz':band);
@@ -2318,7 +2323,8 @@ function importEdi(text){
     });
     added++;
   }
-  _current.qsos.sort((a,b)=>a.nrS!==b.nrS?a.nrS-b.nrS:(a.utcDate+a.utcTime)<(b.utcDate+b.utcTime)?-1:1);
+  const bQsos=_current.qsos.filter(q=>q.band===band).sort(cmpQsoNrS);
+  let bi=0; _current.qsos.forEach((q,i)=>{if(q.band===band) _current.qsos[i]=bQsos[bi++];});
   recalcDupes();
   syncCurrent();
   renderTable(); renderStats(); renderBandTabs(); updateNrS();
