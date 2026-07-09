@@ -339,7 +339,7 @@ tr:hover td{background:rgba(77,157,224,.04)}
 
 <header>
   <div class="logo">S56OA VHF<span class="icon">◉</span>Logger</div>
-  <span class="version">v1.16</span>
+  <span class="version">v1.17</span>
   <div class="hdr-info" id="hdrInfo"></div>
   <div class="lang-wrap">
     <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" aria-label="Preklopi temo / Toggle theme">☀</button>
@@ -639,7 +639,6 @@ sl:{
   lblRstS:'RST↑',lblRstR:'RST↓',
   lblNrS:'Nr↑ (auto)',lblNrR:'Nr↓',
   lblLocal:'Lokalni čas',
-  lblBaseline:'Baseline:',
   statSq:'kvadratov',
   dupeWarn:'⚠ DUPLIKAT na tem pasu!',
   fAllBands:'— vsi pasovi —',
@@ -661,13 +660,11 @@ sl:{
   confirmDelQso:'Izbriši QSO z ${call}?',
   noLogs:'Ni shranjenih dnevnikov',
   noLogsSub:'Klikni "+ Nov dnevnik" za začetek.',
-  baseLine:'Baseline: ${n} znakov (${v})',
   baseLineShort:'Baseline: ${n}',
   thNr:'#',thCall:'Klicni znak',thWwl:'WWL',thMode:'Način',thBand:'Pas',
   thRst:'RST',thNrQ:'Nr',thKm:'km',thBrg:'°',thUtc:'UTC',thDel:'',
   xhHist:'Hist.:',xhSim:'Podoben:',xhNone:'Ni v bazi',
   btnCont:'▶ Nadaljuj',btnDel:'✕',
-  resuming:'Nadaljevanje dnevnika',
   btnSaveEdit:'✓ Shrani popravek',
   btnCancelEdit:'✕ Prekliči',
   editBadge:'✎ Urejanje',
@@ -738,7 +735,6 @@ en:{
   lblRstS:'RST↑',lblRstR:'RST↓',
   lblNrS:'Nr↑ (auto)',lblNrR:'Nr↓',
   lblLocal:'Local time',
-  lblBaseline:'Baseline:',
   statSq:'squares',
   dupeWarn:'⚠ DUPLICATE on this band!',
   fAllBands:'— all bands —',
@@ -760,13 +756,11 @@ en:{
   confirmDelQso:'Delete QSO with ${call}?',
   noLogs:'No saved logs',
   noLogsSub:'Click "+ New log" to begin.',
-  baseLine:'Baseline: ${n} calls (${v})',
   baseLineShort:'Baseline: ${n}',
   thNr:'#',thCall:'Callsign',thWwl:'WWL',thMode:'Mode',thBand:'Band',
   thRst:'RST',thNrQ:'Nr',thKm:'km',thBrg:'°',thUtc:'UTC',thDel:'',
   xhHist:'Hist.:',xhSim:'Similar:',xhNone:'Not in DB',
   btnCont:'▶ Resume',btnDel:'✕',
-  resuming:'Resuming log',
   btnSaveEdit:'✓ Save correction',
   btnCancelEdit:'✕ Cancel',
   editBadge:'✎ Editing',
@@ -901,6 +895,16 @@ function calcBearing(la1,lo1,la2,lo2){
 //  UTILITIES
 // ════════════════════════════════════════
 function htmlEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// EDI spec §Characters: only 7-bit ASCII allowed. Transliterate diacritics, drop the rest (keep CR/LF).
+function toAscii(s){
+  if(s==null) return s;
+  return String(s)
+    .replace(/đ/g,'d').replace(/Đ/g,'D').replace(/ø/g,'o').replace(/Ø/g,'O')
+    .replace(/ł/g,'l').replace(/Ł/g,'L').replace(/ß/g,'ss')
+    .replace(/æ/g,'ae').replace(/Æ/g,'AE').replace(/œ/g,'oe').replace(/Œ/g,'OE')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')   // strip combining accents
+    .replace(/[^\x20-\x7E\r\n]/g,'');                   // drop any remaining non-ASCII
+}
 function baseCall(c){
   const u=c.toUpperCase(), i=u.lastIndexOf('/');
   if(i<=0) return u;
@@ -1009,6 +1013,20 @@ function searchCalls(prefix){
   }
   res.sort((a,b)=>b.total-a.total);
   return res.slice(0,6);
+}
+
+// Crosscheck flags for a logged/edited QSO — single source of truth (used by logQso + saveEditedQso).
+function computeXFlags(call,wwl){
+  const xFlags=[];
+  if(_baselineCalls>0&&wwl.length===6){
+    const lk=lookupCall(call);
+    if(lk.found&&lk.modeLoc&&lk.modeLoc!==wwl.toUpperCase()){
+      xFlags.push({type:'LOC_MISMATCH',histLoc:lk.modeLoc});
+    } else if(!lk.found&&lk.similar&&lk.similar.length){
+      xFlags.push({type:'CALL_SIMILAR',similar:lk.similar.slice(0,2)});
+    }
+  }
+  return xFlags;
 }
 
 // ════════════════════════════════════════
@@ -1410,8 +1428,9 @@ function startSession(){
 // ════════════════════════════════════════
 function nextSerial(band){
   if(!_current) return 1;
-  const used=_current.qsos.filter(q=>q.band===band).map(q=>q.nrS);
-  return used.length===0 ? 1 : Math.max(...used)+1;
+  let mx=0;
+  for(const q of _current.qsos) if(q.band===band&&q.nrS>mx) mx=q.nrS;
+  return mx+1;
 }
 function isDupe(call,band,excludeId){
   if(!_current) return false;
@@ -1455,13 +1474,18 @@ function renderBandTabs(){
   }).join('');
 }
 
+// Pure aggregation — km/squares/ODX from non-dupe QSOs, 4-char WWL (matches buildEdi scoring).
+function computeLogStats(qsos){
+  const valid=qsos.filter(q=>!q.dupe);
+  const totalQso=qsos.length;
+  const totalKm=valid.reduce((s,q)=>s+(q.qrb||0),0);
+  const squares=new Set(valid.filter(q=>q.wwl&&q.wwl.length>=4).map(q=>q.wwl.slice(0,4).toUpperCase())).size;
+  const maxKm=valid.reduce((m,q)=>Math.max(m,q.qrb||0),0);
+  return {totalQso,totalKm,squares,maxKm};
+}
 function renderStats(){
   if(!_current) return;
-  const qsos=_current.qsos;
-  const totalQso=qsos.length;
-  const totalKm=qsos.reduce((s,q)=>s+(q.qrb||0),0);
-  const squares=new Set(qsos.filter(q=>q.wwl&&q.wwl.length===6).map(q=>q.wwl.slice(0,4).toUpperCase())).size;
-  const maxKm=qsos.reduce((m,q)=>Math.max(m,q.qrb||0),0);
+  const {totalQso,totalKm,squares,maxKm}=computeLogStats(_current.qsos);
   document.getElementById('stQso').textContent=totalQso;
   document.getElementById('stKm').textContent=Math.round(totalKm).toLocaleString();
   document.getElementById('stSq').textContent=squares;
@@ -1577,15 +1601,7 @@ function saveEditedQso(){
   const utcDate=rawDate.slice(0,8).padEnd(8,'0');
   const utcTime=rawTime.slice(0,4).padEnd(4,'0');
   const mode=document.getElementById('inMode').value;
-  const xFlags=[];
-  if(_baselineCalls>0&&wwl.length===6){
-    const lk=lookupCall(call);
-    if(lk.found&&lk.modeLoc&&lk.modeLoc!==wwl.toUpperCase()){
-      xFlags.push({type:'LOC_MISMATCH',histLoc:lk.modeLoc});
-    } else if(!lk.found&&lk.similar&&lk.similar.length){
-      xFlags.push({type:'CALL_SIMILAR',similar:lk.similar.slice(0,2)});
-    }
-  }
+  const xFlags=computeXFlags(call,wwl);
   Object.assign(_editingQso,{
     call, wwl, mode,
     rstS:document.getElementById('inRstS').value||(mode==='CW'?'599':'59'),
@@ -1850,17 +1866,7 @@ function logQso(force=false){
   const rstR=document.getElementById('inRstR').value||(mode==='CW'?'599':'59');
   const nrS=nextSerial(band);
   const dupe=isDupe(call,band);
-
-  // Crosscheck flags
-  const xFlags=[];
-  if(_baselineCalls>0&&wwl.length===6){
-    const lk=lookupCall(call);
-    if(lk.found&&lk.modeLoc&&lk.modeLoc!==wwl.toUpperCase()){
-      xFlags.push({type:'LOC_MISMATCH',histLoc:lk.modeLoc});
-    } else if(!lk.found&&lk.similar&&lk.similar.length){
-      xFlags.push({type:'CALL_SIMILAR',similar:lk.similar.slice(0,2)});
-    }
-  }
+  const xFlags=computeXFlags(call,wwl);
 
   const qso={
     _id:genId(),band,mode,call,wwl,rstS,rstR,nrS,nrR,
@@ -1894,7 +1900,13 @@ function resetForm(){
 // ════════════════════════════════════════
 //  EDI EXPORT
 // ════════════════════════════════════════
-const MODE_NUM={SSB:1,CW:2,FM:6,AM:5,RTTY:7};
+const MODE_NUM={SSB:1,CW:2,FM:6,AM:5,RTTY:7,SSTV:8,ATV:9};
+
+// Filename slug — with band for per-band files, without for the whole-session ZIP.
+function exportSlug(session,band){
+  const parts=band?[session.myCall,band,session.contest]:[session.myCall,session.contest];
+  return parts.join('_').replace(/[^\w]/g,'_');
+}
 
 function cmpQsoNrS(a,b){
   if(a.nrS!==b.nrS) return a.nrS-b.nrS;
@@ -1921,8 +1933,8 @@ function buildEdi(session,band){
   const dxSet=new Set();
   for(const q of valid){const m=baseCall(q.call).match(/^([A-Z]+[0-9])/);if(m)dxSet.add(m[1]);}
   const cDXCs=dxSet.size;
-  // IARU-R1 VHF: total score = sum of QRB × (locator squares + DXCC countries)
-  const cToSc=cQSOP*(cWWLs+cDXCs);
+  // IARU-R1 VHF: total score = sum of QRB (km), 1 pt/km, no multipliers
+  const cToSc=cQSOP;
   const odx=valid.reduce((best,q)=>(!best||(q.qrb||0)>(best.qrb||0))?q:best,null);
   const cODXC=odx?`${odx.call};${(odx.wwl||'').toUpperCase()};${Math.round(odx.qrb||0)}`:';;0';
   const antH=bc.antH||'';
@@ -1955,13 +1967,14 @@ function buildEdi(session,band){
   out+=`SRXEq=${bc.rxEq||''}\r\n`;
   out+=`SAnte=${bc.antenna||''}\r\n`;
   out+=`SAntH=${antH};${antHASL}\r\n`;
-  out+=`CQSOs=${cQSOs};${cWWLs+cDXCs}\r\n`;
+  // Spec: 2nd/3rd args are bonus;multiplier — no bonus, no multiplication → ;0;1 (band mult 1).
+  out+=`CQSOs=${cQSOs};1\r\n`;
   out+=`CQSOP=${cQSOP}\r\n`;
-  out+=`CWWLs=${cWWLs};0;${cWWLs}\r\n`;
+  out+=`CWWLs=${cWWLs};0;1\r\n`;
   out+=`CWWLB=0\r\n`;
-  out+=`CExcs=${cExcs};0;${cExcs}\r\n`;
+  out+=`CExcs=${cExcs};0;1\r\n`;
   out+=`CExcB=0\r\n`;
-  out+=`CDXCs=${cDXCs};0;${cDXCs}\r\n`;
+  out+=`CDXCs=${cDXCs};0;1\r\n`;
   out+=`CDXCB=0\r\n`;
   out+=`CToSc=${cToSc}\r\n`;
   out+=`CODXC=${cODXC}\r\n`;
@@ -1973,11 +1986,11 @@ function buildEdi(session,band){
     const ns=String(q.nrS).padStart(3,'0');
     const nr=String(q.nrR||0).padStart(3,'0');
     const wwl=(q.wwl||'').toUpperCase();
-    const qrb=Math.round(q.qrb||0);
+    const qrb=q.dupe?0:Math.round(q.qrb||0); // spec: duplicate QSO-Points must be 0
     out+=`${d};${q.utcTime};${q.call};${mn};${q.rstS};${ns};${q.rstR};${nr};;${wwl};${qrb};;;;${q.dupe?'D':''}\r\n`;
   }
   out+=`[END;S56OA HamLogTools VHF Logger]\r\n`;
-  return out;
+  return toAscii(out); // spec §Characters: enforce 7-bit ASCII across the whole file
 }
 
 function showExportModal(){
@@ -2025,8 +2038,7 @@ function _exportBand(sessionId,band){
   _warnEdiMissing(session);
   const content=buildEdi(session,band);
   if(!content){ showToast(t('errNoBand'),true); return; }
-  const slug=`${session.myCall}_${band}_${session.contest}`.replace(/[^\w]/g,'_');
-  dl(content,`${slug}.edi`);
+  dl(content,`${exportSlug(session,band)}.edi`);
   closeModal();
 }
 
@@ -2216,8 +2228,7 @@ function exportAllZip(){
   for(const b of bands){
     const content=buildEdi(session,b);
     if(content){
-      const slug=`${session.myCall}_${b}_${session.contest}`.replace(/[^\w]/g,'_');
-      files.push({name:`${slug}.edi`,data:content});
+      files.push({name:`${exportSlug(session,b)}.edi`,data:content});
     }
   }
   if(!files.length){ showToast(t('errNoBand'),true); return; }
@@ -2225,8 +2236,7 @@ function exportAllZip(){
   const blob=new Blob([zip],{type:'application/zip'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  const slug=`${session.myCall}_${session.contest}`.replace(/[^\w]/g,'_');
-  a.download=`${slug}_EDI.zip`;
+  a.download=`${exportSlug(session)}_EDI.zip`;
   a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),5000);
   closeModal();

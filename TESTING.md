@@ -14,7 +14,7 @@ All tests run in Node.js using the built-in `node:test` runner — no external d
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 87 | 10 |
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 222 | 17 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 241 | 21 |
 | `adif-stats.test.js` | `adif-stats.html` | 168 | 27 |
 | `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
 | `edi-validator.test.js` | `edi-validator.html` | 124 | 23 |
@@ -80,7 +80,7 @@ band names and nominal frequencies.
 | 6 m – 23 cm | Each band matched by frequency (MHz), wavelength (e.g. `2m`), and GHz strings with both dot and comma decimal separators. |
 | Microwave bands | 13 cm through 1 mm — band name verified for all ten entries. Anchored patterns prevent false matches (e.g. `147000` does not match as `6mm`). |
 
-### 2 · `parseEDI` (36 tests)
+### 2 · `parseEDI` (37 tests)
 Exercises the EDI-to-QSO parser across header fields, record parsing, edge
 cases, and error handling.
 
@@ -201,7 +201,7 @@ Vsi testi tečejo v Node.js z vgrajenim izvajalcem `node:test` — brez zunanjih
 | `edi-crosscheck.test.js` | `edi-crosscheck.html` | 87 | 10 |
 | `adif-merge.test.js` | `adif-merge.html` | 112 | 21 |
 | `adif-qrz-filter.test.js` | `adif-qrz-filter.js` | 48 | 4 |
-| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 222 | 17 |
+| `vhf-logger/vhf-logger.test.js` | `vhf-logger/vhf-logger.html` | 241 | 21 |
 | `adif-stats.test.js` | `adif-stats.html` | 168 | 27 |
 | `adif2cab.test.js` | `adif2cab.html` | 191 | 31 |
 | `edi-validator.test.js` | `edi-validator.html` | 124 | 23 |
@@ -266,7 +266,7 @@ kanonična imena pasov ADIF in nominalne frekvence.
 | 6 m – 23 cm | Vsak pas se ujema po frekvenci (MHz), valovni dolžini (npr. `2m`) in nizih GHz z decimalno piko in vejico. |
 | Mikrovalovni pasovi | 13 cm do 1 mm — ime pasu preverjeno za vseh deset vnosov. Zasidrani vzorci preprečijo lažna ujemanja (npr. `147000` se ne ujema kot `6mm`). |
 
-### 2 · `parseEDI` (36 testov)
+### 2 · `parseEDI` (37 testov)
 Preverja razčlenjevalnik EDI v QSO prek polj glave, razčlenjevanja zapisov,
 robnih primerov in obravnavanja napak.
 
@@ -645,9 +645,9 @@ The CLI tool is evaluated inside a `node:vm` context that stubs `fs`, `https`, `
 
 ---
 
-## `vhf-logger/vhf-logger.test.js` — 222 tests · 17 groups
+## `vhf-logger/vhf-logger.test.js` — 241 tests · 21 groups
 
-Covers the pure logic of `vhf-logger/vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build, crosscheck lookup, EDI import parsing, ZIP generation, band colors, manual time state, and backup/restore validation.
+Covers the pure logic of `vhf-logger/vhf-logger.html`: callsign normalization, band mapping, geo utilities, dupe detection, dupe recalculation, EDI build (spec-compliant scoring + 7-bit ASCII enforcement), crosscheck lookup, headline stats aggregation, filename slug building, crosscheck flags, EDI import parsing, ZIP generation, band colors, manual time state, and backup/restore validation.
 
 ### How the tests work
 
@@ -728,7 +728,7 @@ Verifies full dupe-flag recalculation across a session.
 - After `recalcDupes`, the `_current.qsos` array is mutated in place.
 - After sort-by-nrS the lower nrS is the original (not dupe) — `importEdi` contract.
 
-#### 9 · `buildEdi` (59 tests)
+#### 9 · `buildEdi` (73 tests)
 Verifies REG1TEST EDI v1 output format.
 
 - File starts with `[REG1TEST;1]` header.
@@ -736,9 +736,12 @@ Verifies REG1TEST EDI v1 output format.
 - `TName`, `PCall`, `PWWLo`, `PBand`, `PClub`, `PSect`, `MOpe1` headers present and correct.
 - Equipment headers: `SPowe`, `SAnte`, `STXEq`, `SRXEq`, `SAntH` populated from band config.
 - C* summary block: `CQSOs`, `CQSOP`, `CWWLs`, `CWWLB`, `CExcs`, `CExcB`, `CDXCs`, `CDXCB`, `CToSc`, `CODXC` — computed from non-dupe QSOs.
+- Spec-compliant claimed multipliers: `CQSOs=n;1` (band multiplier 1); `CWWLs`/`CExcs`/`CDXCs` = `n;0;1` (bonus 0, multiplier 1).
+- `CToSc` equals `CQSOP` (sum of QRB in km, 1 pt/km, no multipliers) — matches the accepted reference log.
 - `[QSORecords N]` section present with correct count.
 - QSO line has exactly 15 semicolon-separated fields (col 0–14).
-- Dupe flag at col 14: `D` for duped QSO, empty for normal QSO.
+- Dupe flag at col 14: `D` for duped QSO, empty for normal QSO; a dupe's QSO-Points (col 10) is `0` per spec, a normal QSO's is the real distance.
+- Output is forced to 7-bit ASCII (`toAscii`) — non-ASCII header text is transliterated (`Č`→`C`).
 - `nrS` / `nrR` zero-padded to 3 digits.
 - `WWL` in QSO line is 6 characters uppercase.
 - `PClub` header populated from `session.club`; empty when not set.
@@ -758,7 +761,42 @@ Verifies crosscheck lookup against the weighted+raw baseline DB.
 - `similar` list sorted by distance ASC, then count DESC.
 - Call completely unknown with no close match → `found=false`, `similar=[]`.
 
-#### 11 · `sessionEdit` (10 tests)
+#### 11 · `computeLogStats` (5 tests)
+Verifies the headline aggregation (non-dupe QSOs, 4-char WWL — matches `buildEdi` scoring).
+
+- Empty log → all zeros.
+- `totalQso` counts all QSOs incl. dupes; km/squares/ODX exclude dupes.
+- Squares count unique 4-char prefixes across 6-char locators.
+- A bare 4-char locator counts as a square (`>=4`, matching `CWWLs`).
+- Locators shorter than 4 chars are ignored.
+
+#### 12 · `toAscii` (7 tests)
+Verifies 7-bit ASCII enforcement for EDI output (spec §Characters).
+
+- Slovenian diacritics transliterated (`č`→`c`, `š`→`s`, `ž`→`z`).
+- Special letters handled (`đ`→`d`, `ø`→`o`, `ß`→`ss`, `æ`→`ae`).
+- Accents stripped from common European letters.
+- CR/LF and plain ASCII preserved.
+- Remaining non-ASCII (emoji, Cyrillic) dropped.
+- `null`/`undefined` pass through unchanged.
+- End-to-end: `buildEdi` output is pure 7-bit ASCII even with non-ASCII header fields.
+
+#### 13 · `exportSlug` (3 tests)
+Verifies the EDI filename slug builder.
+
+- With band → `call_band_contest`; non-word chars replaced with `_`.
+- Without band → `call_contest` (used for the whole-session ZIP name).
+- Dots sanitised (`2.5mm` → `2_5mm`).
+
+#### 14 · `computeXFlags` (4 tests)
+Verifies the crosscheck flags (single source of truth for `logQso` + edit).
+
+- No flags when the locator is not 6 characters.
+- No flag when the locator matches the baseline (case-insensitive).
+- `LOC_MISMATCH` when a 6-char locator differs from the baseline mode locator.
+- `CALL_SIMILAR` for an unknown call near a baseline call.
+
+#### 15 · `sessionEdit` (10 tests)
 Verifies state and i18n coverage for the session-editing feature.
 
 - `_editingExisting` flag initialises to `false`.
@@ -766,7 +804,7 @@ Verifies state and i18n coverage for the session-editing feature.
 - Four new EN i18n keys (same set) are non-empty strings.
 - `sl.setupEdit` and `en.setupEdit` are distinct strings (translation exists).
 
-#### 12 · `parseEdiForImport` (10 tests)
+#### 16 · `parseEdiForImport` (12 tests)
 Verifies EDI file parsing for the import feature.
 
 - Correct QSO count from a 3-record EDI fragment.
@@ -777,7 +815,7 @@ Verifies EDI file parsing for the import feature.
 - Header fields (`PBand`, `PCall`) extracted.
 - UTC time parsed correctly from `HHMM`.
 
-#### 13 · `makeZip` (5 tests)
+#### 17 · `makeZip` (5 tests)
 Verifies the minimal ZIP generator (STORE/no-compression).
 
 - Returns a `Uint8Array`.
@@ -786,14 +824,14 @@ Verifies the minimal ZIP generator (STORE/no-compression).
 - EOCD entry count field matches the number of files passed in.
 - Empty file list produces a valid minimal ZIP (≥ 22 bytes).
 
-#### 14 · `bandColors` (4 tests)
+#### 18 · `bandColors` (4 tests)
 Verifies the `BAND_COLORS` map used to colour band tabs.
 
 - Map has entries for `2m` and `70cm`.
 - `2m` and `70cm` have distinct colour values.
 - All values are 7-character `#rrggbb` hex strings.
 
-#### 15 · `manualTime` (7 tests)
+#### 19 · `manualTime` (9 tests)
 Verifies manual UTC time override state and i18n keys for new features.
 
 - `_manualTime` initialises to `null`.
@@ -803,7 +841,7 @@ Verifies manual UTC time override state and i18n keys for new features.
 - `sl.btnExportAll` and `en.btnExportAll` are non-empty strings.
 - `sl.btnImport` and `en.btnImport` are non-empty strings.
 
-#### 16 · `backup` (32 tests)
+#### 20 · `backup` (32 tests)
 Verifies `validateBackup()` structure checks and i18n strings for the backup/restore feature.
 
 - Valid backup object (correct `app`, `sessions` array, valid sessions and QSOs) returns the sessions array.
@@ -817,7 +855,7 @@ Verifies `validateBackup()` structure checks and i18n strings for the backup/res
 - `sl.confirmRestore` and `en.confirmRestore` contain `${n}` placeholder.
 - `sl.toastRestoreDone` and `en.toastRestoreDone` contain `${n}` placeholder.
 
-#### 17 · `I18N` (3 tests)
+#### 21 · `I18N` (3 tests)
 Verifies i18n key symmetry between SL and EN translations.
 
 - All SL keys present in EN (no orphaned SL-only translations).
@@ -969,7 +1007,7 @@ Calls the real `applyFilters()` function in the vm via `runApplyFilters()`, whic
 - Zero-value bar has no value label; non-zero bar has its label.
 - **`null` color trap** — `svgVBar(items, null, w)` produces `fill="null"` (invisible bars); documented in CLAUDE.md as a known footgun.
 
-#### 17 · `color helpers` (14 tests · 4 sub-groups)
+#### 17 · `color helpers` (18 tests · 4 sub-groups)
 
 Tests the four pure grid-map color helper functions exposed by `adif-stats.html`.
 
@@ -1259,7 +1297,7 @@ Maps ADIF mode to CSS badge class for the preview table.
 - `FM` → `badge-fm`.
 - `FT8`, `RTTY`, `''` → `badge-digi`.
 
-#### 30 · `CONTESTS — structure` (11 tests)
+#### 30 · `CONTESTS — structure` (12 tests)
 
 - Array contains exactly 9 entries.
 - Each entry has required fields: `id`, `name`, `exchSentLbl`, `exchRcvdLbl`, `exchRcvdField`, `exchW > 0`.
@@ -1774,9 +1812,9 @@ CLI orodje se izvede znotraj konteksta `node:vm`, ki nadomesti `fs`, `https`, `p
 
 ---
 
-## `vhf-logger/vhf-logger.test.js` — 222 testov · 17 skupin
+## `vhf-logger/vhf-logger.test.js` — 241 testov · 21 skupin
 
-Pokriva čisto logiko `vhf-logger/vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI, crosscheck poizvedbe, razčlenjevanje uvoza EDI, generiranje ZIP, barve pasov, stanje ročnega časa in validacijo backup/obnovi.
+Pokriva čisto logiko `vhf-logger/vhf-logger.html`: normalizacijo klicnih znakov, mapiranje pasov, geo pomožnike, zaznavanje duplikatov, preračun duplikatov, gradnjo EDI (spec-skladno točkanje + prisila 7-bit ASCII), crosscheck poizvedbe, agregacijo vrhnjih statistik, gradnjo sluga imena datoteke, crosscheck zastavice, razčlenjevanje uvoza EDI, generiranje ZIP, barve pasov, stanje ročnega časa in validacijo backup/obnovi.
 
 ### Kako testi delujejo
 
@@ -1857,7 +1895,7 @@ Preverja popolni preračun zastavic duplikatov v seji.
 - Po `recalcDupes` je polje `_current.qsos` mutirano na mestu.
 - Po razvrstitvi po nrS je tisti z nižjim nrS original (ne duplikat) — pogodba `importEdi`.
 
-#### 9 · `buildEdi` (59 testov)
+#### 9 · `buildEdi` (73 testov)
 Preverja izhodni format REG1TEST EDI v1.
 
 - Datoteka se začne z glavo `[REG1TEST;1]`.
@@ -1865,9 +1903,12 @@ Preverja izhodni format REG1TEST EDI v1.
 - Prisotne in pravilne glave `TName`, `PCall`, `PWWLo`, `PBand`, `PClub`, `PSect`, `MOpe1`.
 - Glave opreme: `SPowe`, `SAnte`, `STXEq`, `SRXEq`, `SAntH` izpolnjene iz konfiguracije pasu.
 - Blok C*: `CQSOs`, `CQSOP`, `CWWLs`, `CWWLB`, `CExcs`, `CExcB`, `CDXCs`, `CDXCB`, `CToSc`, `CODXC` — izračunani iz QSO-jev brez duplikatov.
+- Spec-skladni prijavljeni multiplikatorji: `CQSOs=n;1` (band multiplikator 1); `CWWLs`/`CExcs`/`CDXCs` = `n;0;1` (bonus 0, multiplikator 1).
+- `CToSc` je enak `CQSOP` (vsota QRB v km, 1 točka/km, brez multiplikatorjev) — sklada se s sprejetim referenčnim logom.
 - Razdelek `[QSORecords N]` prisoten s pravilnim številom.
 - Vrstica QSO ima natanko 15 polj, ločenih s podpičji (stolpci 0–14).
-- Zastavica duplikata v stolpcu 14: `D` za podvojeni QSO, prazno za normalnega.
+- Zastavica duplikata v stolpcu 14: `D` za podvojeni QSO, prazno za normalnega; QSO-Points duplikata (stolpec 10) je `0` po specifikaciji, pri normalnem QSO je dejanska razdalja.
+- Izhod je prisiljen na 7-bit ASCII (`toAscii`) — ne-ASCII besedilo v glavi se transliterira (`Č`→`C`).
 - `nrS` / `nrR` dopolnjeni z ničlami na 3 znake.
 - `WWL` v vrstici QSO je 6 znakov z velikimi črkami.
 - Glava `PClub` izpolnjena iz `session.club`; prazna, ko ni nastavljena.
@@ -1887,7 +1928,42 @@ Preverja crosscheck poizvedbo v uteženi+raw baseline bazi.
 - Seznam `similar` razvrščen po razdalji naraščajoče, nato po številu padajoče.
 - Povsem neznan klicni znak brez bližnjega ujemanja → `found=false`, `similar=[]`.
 
-#### 11 · `sessionEdit` (10 testov)
+#### 11 · `computeLogStats` (5 testov)
+Preverja agregacijo za vrhnjo letvico (QSO-ji brez duplikatov, 4-znakovni WWL — sklada se s točkanjem v `buildEdi`).
+
+- Prazen dnevnik → same ničle.
+- `totalQso` šteje vse QSO-je vključno z duplikati; km/kvadrati/ODX izključujejo duplikate.
+- Kvadrati štejejo unikatne 4-znakovne predpone čez 6-znakovne lokatorje.
+- Goli 4-znakovni lokator šteje kot kvadrat (`>=4`, skladno s `CWWLs`).
+- Lokatorji, krajši od 4 znakov, se ignorirajo.
+
+#### 12 · `toAscii` (7 testov)
+Preverja prisilo 7-bit ASCII za EDI izhod (spec §Characters).
+
+- Slovenski diakritični znaki transliterirani (`č`→`c`, `š`→`s`, `ž`→`z`).
+- Posebne črke obravnavane (`đ`→`d`, `ø`→`o`, `ß`→`ss`, `æ`→`ae`).
+- Naglasi odstranjeni s pogostih evropskih črk.
+- CR/LF in navadni ASCII ohranjeni.
+- Preostali ne-ASCII (emoji, cirilica) odvrženi.
+- `null`/`undefined` gresta nespremenjena skozi.
+- Od konca do konca: izhod `buildEdi` je čisti 7-bit ASCII tudi ob ne-ASCII poljih glave.
+
+#### 13 · `exportSlug` (3 testi)
+Preverja gradnjo sluga imena EDI datoteke.
+
+- S pasom → `call_band_contest`; ne-besedni znaki zamenjani z `_`.
+- Brez pasu → `call_contest` (ime ZIP za celo sejo).
+- Pike sanitizirane (`2.5mm` → `2_5mm`).
+
+#### 14 · `computeXFlags` (4 testi)
+Preverja crosscheck zastavice (edini vir resnice za `logQso` + urejanje).
+
+- Brez zastavic, ko lokator ni 6-znakovni.
+- Brez zastavice, ko se lokator ujema z baseline (neobčutljivo na velikost).
+- `LOC_MISMATCH`, ko se 6-znakovni lokator razlikuje od baseline mode lokatorja.
+- `CALL_SIMILAR` za neznan klicni znak blizu baseline klicnega znaka.
+
+#### 15 · `sessionEdit` (10 testov)
 Preverja stanje in i18n pokritost za funkcijo urejanja seje.
 
 - Zastavica `_editingExisting` se inicializira na `false`.
@@ -1895,7 +1971,44 @@ Preverja stanje in i18n pokritost za funkcijo urejanja seje.
 - Štirje novi EN i18n ključi (ista množica) so neprazni nizi.
 - `sl.setupEdit` in `en.setupEdit` sta različna niza (prevod obstaja).
 
-#### 16 · `backup` (32 testov)
+#### 16 · `parseEdiForImport` (12 testov)
+Preverja razčlenjevanje EDI datoteke za funkcijo uvoza.
+
+- Pravilno število QSO iz 3-zapisnega EDI fragmenta.
+- Datum `YYMMDD` v QSO zapisih pretvorjen v polni `YYYYMMDD` (YY ≥ 80 → 19xx, YY < 80 → 20xx).
+- Številka načina `1` → `SSB`, `2` → `CW`.
+- Zastavica duplikata `D` v stolpcu 13 zaznana; čisti QSO-ji imajo `dupe=false`.
+- Klicni znak z velikimi črkami; lokator normaliziran na 4-velike + 2-male mešane črke.
+- Polja glave (`PBand`, `PCall`) izluščena.
+- UTC čas pravilno razčlenjen iz `HHMM`.
+
+#### 17 · `makeZip` (5 testov)
+Preverja minimalni ZIP generator (STORE/brez kompresije).
+
+- Vrne `Uint8Array`.
+- Prvi 4 bajti so magični niz ZIP lokalne glave datoteke `PK\x03\x04`.
+- Zadnjih 22 bajtov se začne z magičnim nizom konca centralnega imenika `PK\x05\x06`.
+- Polje števila vnosov v EOCD se ujema s številom podanih datotek.
+- Prazen seznam datotek proizvede veljaven minimalni ZIP (≥ 22 bajtov).
+
+#### 18 · `bandColors` (4 testi)
+Preverja mapo `BAND_COLORS`, uporabljeno za barvanje zavihkov pasov.
+
+- Mapa ima vnose za `2m` in `70cm`.
+- `2m` in `70cm` imata različni barvni vrednosti.
+- Vse vrednosti so 7-znakovni `#rrggbb` hex nizi.
+
+#### 19 · `manualTime` (9 testov)
+Preverja stanje ročnega UTC časa in i18n ključe za nove funkcije.
+
+- `_manualTime` se inicializira na `null`.
+- Stanje je mogoče nastaviti in prebrati prek pomožnih funkcij.
+- `sl.toastImported` vsebuje `${n}` placeholder.
+- `sl.errImportBand` vsebuje `${band}` placeholder.
+- `sl.btnExportAll` in `en.btnExportAll` sta neprazna niza.
+- `sl.btnImport` in `en.btnImport` sta neprazna niza.
+
+#### 20 · `backup` (32 testov)
 Preverja strukturno validacijo `validateBackup()` in i18n nize za funkcijo backup/obnovi.
 
 - Veljaven backup objekt (pravilen `app`, polje `sessions`, veljavne seje in QSO-ji) vrne polje sej.
@@ -1909,7 +2022,7 @@ Preverja strukturno validacijo `validateBackup()` in i18n nize za funkcijo backu
 - `sl.confirmRestore` in `en.confirmRestore` vsebujeta `${n}` placeholder.
 - `sl.toastRestoreDone` in `en.toastRestoreDone` vsebujeta `${n}` placeholder.
 
-#### 17 · `I18N` (3 testi)
+#### 21 · `I18N` (3 testi)
 Preverja simetričnost i18n ključev med SL in EN prevodi.
 
 - Vsi SL ključi prisotni v EN (brez osamelih SL-only prevodov).
@@ -2060,7 +2173,7 @@ Kliče pravi `applyFilters()` v vm prek `runApplyFilters()`, ki popravi `documen
 - Nič-vrednostna palica nima oznake vrednosti; palica brez nič ima svojo oznako.
 - **Past `null` barve** — `svgVBar(items, null, w)` ustvari `fill="null"` (nevidne palice); dokumentirano v CLAUDE.md kot znana past.
 
-#### 17 · `color helpers` (14 testov · 4 podskupine)
+#### 17 · `color helpers` (18 testov · 4 podskupine)
 
 Testira štiri čiste barvne pomočnike grid mape razkrije `adif-stats.html`.
 
@@ -2325,7 +2438,7 @@ Cabrillo v3 specifikacija določa `RY` za RTTY (ne splošnega `DG`).
 
 - `SSB`, `USB`, `LSB`, `AM` → `badge-ssb`; `CW` → `badge-cw`; `FM` → `badge-fm`; `FT8`, `RTTY`, `''` → `badge-digi`.
 
-#### 30 · `CONTESTS — struktura` (11 testov)
+#### 30 · `CONTESTS — struktura` (12 testov)
 
 - Polje vsebuje točno 9 vnosov; vsak ima zahtevana polja in `exchW > 0`.
 - `exchRcvdField` pravilen per tekmovanje: `CQ-WW-SSB`/`CQ-WW-CW`/`CQ-WW-RTTY` → `CQZONE`, `IARU-HF` → `ITUZ`, `IARU-VHF` → `GRIDSQUARE`, `ARRL-DX` → `STATE`, `CQ-WPX-SSB`/`CQ-WPX-CW`/`GENERIC` → `SRX_STRING`.

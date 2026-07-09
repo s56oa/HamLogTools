@@ -76,6 +76,7 @@ const {
   buildEdi, applyBaseline, lookupCall,
   isDupe, recalcDupes, cmpQsoNrS,
   parseEdiForImport, makeZip, validateBackup,
+  computeLogStats, exportSlug, computeXFlags, toAscii,
   _setCurrentForTest, _getCurrentForTest,
   _getEditingExistingForTest, _getI18nValueForTest,
   _getManualTimeForTest, _setManualTimeForTest,
@@ -516,18 +517,16 @@ describe('buildEdi', () => {
     assert.ok(!out.includes('OPEqu'), `OPEqu must not appear (use SRXEq)`);
   });
 
-  it('CQSOs counts non-dupe QSOs with multiplier (CWWLs+CDXCs)', () => {
+  it('CQSOs counts non-dupe QSOs with band multiplier 1 (spec)', () => {
     const out = buildEdi(session, '2m');
-    // q1 S59DGO, q2 OE5VRL/P valid; q3 dupe. DXCCs: S59→S5(1), OE5→OE(1) = 2; WWLs = 2; mult = 4
-    assert.ok(out.includes('CQSOs=2;'), `CQSOs=2; not found; got: ${out.match(/CQSOs=.*/)?.[0]}`);
-    const m = out.match(/CQSOs=(\d+);(\d+)/);
-    assert.ok(m && m[1]==='2', `CQSOs count should be 2; got: ${m?.[1]}`);
+    // q1 S59DGO, q2 OE5VRL/P valid; q3 dupe → 2 valid QSOs; band multiplier = 1 per spec
+    assert.ok(out.includes('CQSOs=2;1'), `CQSOs should be 2;1; got: ${out.match(/CQSOs=.*/)?.[0]}`);
   });
 
-  it('CWWLs counts unique 4-char grid squares with format count;0;count', () => {
+  it('CWWLs counts unique 4-char grid squares with format count;0;1 (mult 1)', () => {
     const out = buildEdi(session, '2m');
-    // q1: JN65vp → JN65, q2: JN78dg → JN78, q3 is dupe → excluded → 2 squares
-    assert.ok(out.includes('CWWLs=2;0;2'), `CWWLs should be 2;0;2; got: ${out.match(/CWWLs=.*/)?.[0]}`);
+    // q1: JN65vp → JN65, q2: JN78dg → JN78, q3 is dupe → excluded → 2 squares; multiplier 1 per spec
+    assert.ok(out.includes('CWWLs=2;0;1'), `CWWLs should be 2;0;1; got: ${out.match(/CWWLs=.*/)?.[0]}`);
   });
 
   it('CWWLB is 0', () => {
@@ -535,10 +534,10 @@ describe('buildEdi', () => {
     assert.ok(out.includes('CWWLB=0\r\n'), `CWWLB should be 0; got: ${out.match(/CWWLB=.*/)?.[0]}`);
   });
 
-  it('CDXCs format is count;0;count', () => {
+  it('CDXCs format is count;0;1 (multiplier 1 per spec)', () => {
     const out = buildEdi(session, '2m');
-    const m = out.match(/CDXCs=(\d+);0;(\d+)/);
-    assert.ok(m && m[1]===m[2], `CDXCs count and multiplier should match; got: ${out.match(/CDXCs=.*/)?.[0]}`);
+    // S59→S5, OE5→OE = 2 DXCCs; bonus 0; multiplier 1
+    assert.ok(out.includes('CDXCs=2;0;1'), `CDXCs should be 2;0;1; got: ${out.match(/CDXCs=.*/)?.[0]}`);
   });
 
   it('CDXCB is 0', () => {
@@ -546,10 +545,10 @@ describe('buildEdi', () => {
     assert.ok(out.includes('CDXCB=0\r\n'), `CDXCB should be 0; got: ${out.match(/CDXCB=.*/)?.[0]}`);
   });
 
-  it('CExcs format is count;0;count', () => {
+  it('CExcs format is count;0;1 (multiplier 1 per spec)', () => {
     const out = buildEdi(session, '2m');
-    const m = out.match(/CExcs=(\d+);0;(\d+)/);
-    assert.ok(m && m[1]===m[2], `CExcs count and multiplier should match; got: ${out.match(/CExcs=.*/)?.[0]}`);
+    // q1 nrR=1, q2 nrR=7 → 2 exchanges received; bonus 0; multiplier 1
+    assert.ok(out.includes('CExcs=2;0;1'), `CExcs should be 2;0;1; got: ${out.match(/CExcs=.*/)?.[0]}`);
   });
 
   it('CExcB is 0', () => {
@@ -568,14 +567,13 @@ describe('buildEdi', () => {
     assert.ok(out.includes('CODXC=OE5VRL/P;JN78DG;180'), `CODXC not correct; got: ${out.match(/CODXC=.*/)?.[0]}`);
   });
 
-  it('CToSc is CQSOP × (CWWLs + CDXCs)', () => {
+  it('CToSc equals CQSOP (sum of QRB, IARU R1 std, no multipliers)', () => {
     const out = buildEdi(session, '2m');
     // q1: S59DGO JN65vp 50km, q2: OE5VRL/P JN78dg 180km (valid); q3 dupe
-    // CQSOP=230, CWWLs=2 (JN65,JN78), CDXCs=2 (S5,OE) → CToSc=230×4=920
+    // IARU R1 VHF: 1 pt/km, no multipliers → CToSc = CQSOP = 230
     const m = out.match(/CToSc=(\d+)/);
     assert.ok(m, 'CToSc not found');
-    const cqsop = 230, cwwls = 2, cdxcs = 2;
-    assert.equal(parseInt(m[1]), cqsop * (cwwls + cdxcs), `CToSc should be ${cqsop*(cwwls+cdxcs)}, got ${m[1]}`);
+    assert.equal(parseInt(m[1]), 230, `CToSc should equal CQSOP=230, got ${m[1]}`);
   });
 
   it('PClub populated from session.club (LOW-EDI)', () => {
@@ -597,15 +595,17 @@ describe('buildEdi', () => {
     const fields = dupeLine.split(';');
     assert.equal(fields.length, 15, `dupe line should have 15 fields, got ${fields.length}: ${dupeLine}`);
     assert.equal(fields[14], 'D', `dupe flag should be at col 14, got: ${fields[14]}`);
+    assert.equal(fields[10], '0', `dupe QSO-Points (col 10) must be 0 per spec, got: ${fields[10]}`);
   });
 
-  it('non-dupe QSO has empty col 14', () => {
+  it('non-dupe QSO has empty col 14 and real QSO-Points (col 10)', () => {
     const out = buildEdi(session, '2m');
     const lines = out.split('\r\n').filter(l => l.startsWith('260510'));
-    const cleanLine = lines[0]; // q1 — not a dupe
+    const cleanLine = lines[0]; // q1 — not a dupe, qrb 50
     const fields = cleanLine.split(';');
     assert.equal(fields.length, 15, `clean line should have 15 fields, got ${fields.length}: ${cleanLine}`);
     assert.equal(fields[14], '', `col 14 should be empty for non-dupe, got: ${fields[14]}`);
+    assert.equal(fields[10], '50', `non-dupe QSO-Points (col 10) should be the distance, got: ${fields[10]}`);
   });
 
   it('QSO record has exactly 15 fields (col 0–14)', () => {
@@ -653,7 +653,7 @@ describe('buildEdi', () => {
     ['4mm',   '76032.100', '76 GHz' ],
     ['2.5mm', '122250.100','122 GHz'],
     ['2mm',   '134928.100','134 GHz'],
-    ['1mm',   '241000.100','248 GHz'],
+    ['1mm',   '248000.100','248 GHz'],
   ];
   for (const [band, freq, expected] of pbandCases) {
     it(`PBand=${expected} for ${band} band`, () => {
@@ -838,6 +838,133 @@ describe('lookupCall', () => {
   it('case-insensitive lookup', () => {
     const lk = lookupCall('s59dgo');
     assert.equal(lk.found, true);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  computeLogStats — headline aggregation (non-dupe, 4-char WWL; matches buildEdi)
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('computeLogStats', () => {
+  it('empty log → all zeros', () => {
+    const s = computeLogStats([]);
+    assert.equal(s.totalQso, 0);
+    assert.equal(s.totalKm, 0);
+    assert.equal(s.squares, 0);
+    assert.equal(s.maxKm, 0);
+  });
+
+  it('totalQso counts all incl dupes; km/squares/ODX exclude dupes', () => {
+    const qsos = [
+      { call:'A', band:'2m', wwl:'JN65vp', qrb:100, dupe:false },
+      { call:'B', band:'2m', wwl:'JN78dg', qrb:200, dupe:false },
+      { call:'A', band:'2m', wwl:'JN65vp', qrb:100, dupe:true  }, // dupe
+    ];
+    const s = computeLogStats(qsos);
+    assert.equal(s.totalQso, 3,  'totalQso counts dupes');
+    assert.equal(s.totalKm, 300, 'km excludes dupe');
+    assert.equal(s.squares, 2,   'squares excludes dupe');
+    assert.equal(s.maxKm, 200,   'ODX excludes dupe');
+  });
+
+  it('squares counts unique 4-char prefix across 6-char locators', () => {
+    const qsos = [
+      { call:'A', wwl:'JN65vp', qrb:10, dupe:false },
+      { call:'B', wwl:'JN65ar', qrb:20, dupe:false }, // same JN65 square
+      { call:'C', wwl:'JN78dg', qrb:30, dupe:false },
+    ];
+    assert.equal(computeLogStats(qsos).squares, 2);
+  });
+
+  it('4-char locator counts as a square (>=4, matches buildEdi CWWLs)', () => {
+    assert.equal(computeLogStats([{ call:'A', wwl:'JN65', qrb:10, dupe:false }]).squares, 1);
+  });
+
+  it('locators shorter than 4 chars are ignored', () => {
+    assert.equal(computeLogStats([{ call:'A', wwl:'JN', qrb:10, dupe:false }]).squares, 0);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  toAscii — 7-bit ASCII enforcement for EDI (spec §Characters)
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('toAscii', () => {
+  it('transliterates Slovenian diacritics (č š ž)', () =>
+    assert.equal(toAscii('Črnomelj Škofja Žiri'), 'Crnomelj Skofja Ziri'));
+  it('handles đ ø ß æ', () =>
+    assert.equal(toAscii('đ Ø ß æ'), 'd O ss ae'));
+  it('strips accents from common European letters', () =>
+    assert.equal(toAscii('áàäé ñ ç ü'), 'aaae n c u'));
+  it('preserves CR/LF and plain ASCII', () =>
+    assert.equal(toAscii('AB\r\nCD'), 'AB\r\nCD'));
+  it('drops remaining non-ASCII (e.g. emoji, cyrillic)', () =>
+    assert.equal(toAscii('OK✓ Мир'), 'OK '));
+  it('null/undefined passthrough', () => {
+    assert.equal(toAscii(null), null);
+    assert.equal(toAscii(undefined), undefined);
+  });
+
+  it('buildEdi output is pure 7-bit ASCII even with non-ASCII header', () => {
+    const s = {
+      id:'t', myCall:'S56OA', myLoc:'JN65VP',
+      contest:'ZRS Julijsko Črnomelj', operator:'S56OA', club:'S59DGO',
+      sect:'A', qthName:'Žiri', rCall:'S56OA', rName:'Ognjen Antonić', rCity:'Ljubljana',
+      rCoun:'SLOVENIJA', rEmail:'', padr2:'', pExch:'', rPoCo:'', rPhon:'',
+      bands:[{ band:'2m', freq:'144.300', power:100, antenna:'Yagi' }],
+      qsos:[{ _id:'q1', band:'2m', mode:'SSB', call:'S59DGO', wwl:'JN65vp',
+        rstS:'59', rstR:'59', nrS:1, nrR:1, utcDate:'20260510', utcTime:'1030',
+        qrb:50, brg:45, dupe:false, xFlags:[] }],
+    };
+    const out = buildEdi(s, '2m');
+    assert.ok(!/[^\x20-\x7E\r\n]/.test(out), 'EDI output contains non-ASCII characters');
+    assert.ok(out.includes('TName=ZRS Julijsko Crnomelj'), `contest not transliterated; got: ${out.match(/TName=.*/)?.[0]}`);
+    assert.ok(out.includes('RName=Ognjen Antonic'), `RName not transliterated; got: ${out.match(/RName=.*/)?.[0]}`);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  exportSlug — filename slug builder
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('exportSlug', () => {
+  const sess = { myCall:'S56OA', contest:'IARU R1 VHF' };
+  it('with band → call_band_contest, non-word chars → _', () =>
+    assert.equal(exportSlug(sess, '2m'), 'S56OA_2m_IARU_R1_VHF'));
+  it('without band → call_contest', () =>
+    assert.equal(exportSlug(sess), 'S56OA_IARU_R1_VHF'));
+  it('sanitises dot in band (2.5mm → 2_5mm)', () =>
+    assert.equal(exportSlug({ myCall:'S56OA', contest:'X' }, '2.5mm'), 'S56OA_2_5mm_X'));
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  computeXFlags — crosscheck flags (single source of truth for logQso + edit)
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('computeXFlags', () => {
+  before(() => applyBaseline({
+    v:'t', b:['2m'],
+    c:{ 'S59DGO': { '0': [['JN65VP', 10, false]] } },
+  }));
+
+  it('no flags when locator is not 6 chars', () =>
+    assert.equal(computeXFlags('S59DGO', 'JN65').length, 0));
+
+  it('no flag when locator matches baseline (case-insensitive)', () =>
+    assert.equal(computeXFlags('S59DGO', 'JN65vp').length, 0));
+
+  it('LOC_MISMATCH when 6-char locator differs from baseline', () => {
+    const f = computeXFlags('S59DGO', 'JO65aa');
+    assert.equal(f.length, 1);
+    assert.equal(f[0].type, 'LOC_MISMATCH');
+    assert.equal(f[0].histLoc, 'JN65VP');
+  });
+
+  it('CALL_SIMILAR for unknown call near a baseline call', () => {
+    const f = computeXFlags('S59DGA', 'JO00aa'); // Levenshtein 1 from S59DGO
+    assert.equal(f.length, 1);
+    assert.equal(f[0].type, 'CALL_SIMILAR');
+    assert.ok(f[0].similar.some(s => s.call === 'S59DGO'));
   });
 });
 

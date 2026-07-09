@@ -152,7 +152,7 @@ Mirrors output to `vhf-logger/crosscheck-baseline.json`. Rebuild quarterly or af
 
 ## Architecture of vhf-logger/vhf-logger.html
 
-**Key functions:** `isDupe(call, band, excludeId)` — `baseCall()` both sides, `excludeId` prevents false-dupe on edited QSO; `recalcDupes()` full rebuild per-band from `_current.qsos`; `buildEdi()` — REG1TEST v1 spec-compliant; `validateBackup()` — security + data checks: `_SAFE_ID=/^[a-z0-9]+$/` on `id`/`_id`, 6-char Maidenhead regex on `myLoc`, non-empty `contest`.
+**Key functions:** `isDupe(call, band, excludeId)` — `baseCall()` both sides, `excludeId` prevents false-dupe on edited QSO; `recalcDupes()` full rebuild per-band from `_current.qsos`; `buildEdi()` — REG1TEST v1 spec-compliant, output wrapped in `toAscii()`; `computeLogStats(qsos)` — pure headline aggregation (non-dupe, 4-char WWL — matches `buildEdi` scoring; drives `renderStats`); `computeXFlags(call, wwl)` — crosscheck flags, single source of truth for `logQso` + `saveEditedQso`; `exportSlug(session, band)` — filename slug (band omitted → whole-session ZIP name); `toAscii(s)` — 7-bit ASCII transliteration (spec §Characters); `nextSerial(band)` — max `nrS`+1 via loop (no spread); `validateBackup()` — security + data checks: `_SAFE_ID=/^[a-z0-9]+$/` on `id`/`_id`, 6-char Maidenhead regex on `myLoc`, non-empty `contest`.
 
 **Session shape:** `{ id, contest, myCall, myLoc, operator, club, sect, qthName, padr2, pExch, rCall, rName, rCity, rCoun, rEmail, rPoCo, rPhon, created, modified, activeBand, bands:[{band,freq,power,antenna,txEq,rxEq,antH,antHASL}], qsos:[] }`
 
@@ -162,7 +162,7 @@ Mirrors output to `vhf-logger/crosscheck-baseline.json`. Rebuild quarterly or af
 ```
 YYMMDD;HHMM;CALL;MODE_NUM;RST_S;NR_S;RST_R;NR_R;;WWL;QRB;;;;DUPE_FLAG
 ```
-Col 8 = exchange (empty), col 11–13 = reserved (empty), col 14 = `D` if dupe.
+Col 8 = received exchange (empty). Col 10 = QSO-Points (km); **0 for dupes** (spec). Col 11 = New-Exchange (N), col 12 = New-WWL (N), col 13 = New-DXCC (N) — spec-defined but left empty (tolerated, as in reference logs). Col 14 = `D` if dupe. C-field multipliers per spec: `CQSOs=n;1`, `CWWLs/CExcs/CDXCs=n;0;1` (bonus 0, multiplier 1); `CToSc=CQSOP` (sum of km, 1 pt/km, no multipliers). Whole file forced to 7-bit ASCII via `toAscii()` (spec §Characters).
 
 **EDI header field order** (spec 15.3.1): `[REG1TEST;1]` → `TName` → `TDate` → `PCall` → `PWWLo` → `PExch` → `PAdr1` → `PAdr2` → `PSect` → `PBand` → `PClub` → `RName` → `RCall` → `RAdr1` → `RAdr2` → `RPoCo` → `RCity` → `RCoun` → `RPhon` → `RHBBS` → `MOpe1` → `MOpe2` → `STXEq` → `SPowe` → `SRXEq` → `SAnte` → `SAntH` → `CQSOs` → `CQSOP` → `CWWLs` → `CWWLB` → `CExcs` → `CExcB` → `CDXCs` → `CDXCB` → `CToSc` → `CODXC` → `[Remarks]` → `[QSORecords;N]` → `[END;S56OA HamLogTools VHF Logger]`
 
@@ -177,7 +177,7 @@ Col 8 = exchange (empty), col 11–13 = reserved (empty), col 14 = `D` if dupe.
 - `_manualTime = {date:'YYYYMMDD', time:'HHMM'} | null` — read by `logQso()`.
 - `_exportingSession` — set by `_showExportFor()` so `exportAllZip()` targets the correct session from home screen.
 
-**Tests:** `vhf-logger/vhf-logger.test.js` — 222 tests, 17 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`).
+**Tests:** `vhf-logger/vhf-logger.test.js` — 241 tests, 21 groups (`baseCall`, `normBand`, `locToLatLon`, `haversine`, `calcBearing`, `levenshtein`, `isDupe`, `recalcDupes`, `buildEdi`, `lookupCall`, `computeLogStats`, `toAscii`, `exportSlug`, `computeXFlags`, `sessionEdit`, `parseEdiForImport`, `makeZip`, `bandColors`, `manualTime`, `backup`, `I18N`).
 
 ---
 

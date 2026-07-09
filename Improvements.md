@@ -1,6 +1,6 @@
 # Izboljšave — HamLogTools
 
-*Datum pregleda: 2026-06-10 · Različica: v1.16*
+*Datum pregleda: 2026-06-10 · Različica: v1.17*
 
 Dokument zajema odprte predloge izboljšav za vsa orodja projekta. Gre samo naprej — brez zgodovine opravljenih popravkov.
 
@@ -228,8 +228,8 @@ Skripta agregira vse CSV-je z enako težo ne glede na starost tekmovanja. Sinhro
 | `edi-crosscheck.test.js` | 87 | Osnovna — pokrita algoritem, render/UI ne |
 | `adif-merge.test.js` | 112 | Dobra — razčlenjevanje, dedup, izvoz, i18n |
 | `adif-qrz-filter.test.js` | 48 | Dobra za logiko; API mock ni realen |
-| `vhf-logger/vhf-logger.test.js` | 222 | Dobra — jedro, backup, EDI uvoz/izvoz, i18n |
-| `adif-stats.test.js` | 133 | Dobra — DXCC, statistike, SVG, i18n |
+| `vhf-logger/vhf-logger.test.js` | 241 | Dobra — jedro, backup, EDI uvoz/izvoz, i18n |
+| `adif-stats.test.js` | 168 | Dobra — DXCC, statistike, SVG, i18n |
 | `adif2cab.test.js` | 191 | Dobra — Cabrillo logika, izmenjave, i18n |
 | `edi-validator.test.js` | 124 | Dobra — spec validacija, per-QSO preverbe, i18n |
 
